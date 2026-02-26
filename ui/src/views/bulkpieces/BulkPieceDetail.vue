@@ -1,0 +1,194 @@
+<template>
+  <div>
+    <RouterLink class="back-link" to="/bulkpieces">← Back to Bulk Pieces</RouterLink>
+
+    <p v-if="loading">Loading…</p>
+    <p v-else-if="error" class="error">{{ error }}</p>
+
+    <template v-else-if="piece">
+      <h1>{{ piece.legoId }} — {{ piece.legoColor }}</h1>
+
+      <div class="card">
+        <h2>Edit Piece</h2>
+        <form class="form-row" @submit.prevent="submitEdit">
+          <div class="form-field">
+            <label>Lego ID *</label>
+            <input v-model="editForm.legoId" required />
+          </div>
+          <div class="form-field">
+            <label>Color *</label>
+            <input v-model="editForm.legoColor" required />
+          </div>
+          <div class="form-field">
+            <label>Description *</label>
+            <input v-model="editForm.description" required />
+          </div>
+          <button class="primary" type="submit">Save</button>
+        </form>
+        <p v-if="editError" class="error">{{ editError }}</p>
+      </div>
+
+      <div class="card">
+        <h2>Storage</h2>
+        <p v-if="piece.boxId">
+          Stored in box: <RouterLink :to="`/boxes/${piece.boxId}`">{{ piece.boxId }}</RouterLink>
+        </p>
+        <p v-else-if="piece.drawerId">
+          Stored in drawer: <RouterLink :to="`/drawers/${piece.drawerId}`">{{ piece.drawerId }}</RouterLink>
+        </p>
+        <p v-else>Not stored anywhere.</p>
+
+        <div class="form-row" style="margin-top: 0.75rem; align-items: flex-start; flex-direction: column; gap: 0.75rem">
+          <form class="form-row" style="width:100%" @submit.prevent="submitBoxStorage">
+            <div class="form-field">
+              <label>Assign to Box</label>
+              <select v-model="selectedBoxId">
+                <option value="">— select box —</option>
+                <option v-for="b in boxes" :key="b.id" :value="b.id">{{ b.name }}</option>
+              </select>
+            </div>
+            <button class="primary" type="submit" :disabled="!selectedBoxId">Assign to Box</button>
+          </form>
+
+          <form class="form-row" style="width:100%" @submit.prevent="submitDrawerStorage">
+            <div class="form-field">
+              <label>Assign to Drawer</label>
+              <select v-model="selectedDrawerId">
+                <option value="">— select drawer —</option>
+                <option v-for="d in drawers" :key="d.id" :value="d.id">
+                  {{ d.label || `Position ${d.position}` }} ({{ d.drawerContainerId }})
+                </option>
+              </select>
+            </div>
+            <button class="primary" type="submit" :disabled="!selectedDrawerId">Assign to Drawer</button>
+          </form>
+
+          <button v-if="piece.boxId || piece.drawerId" type="button" class="danger" @click="clearStorage">
+            Clear Storage
+          </button>
+        </div>
+        <p v-if="storageError" class="error">{{ storageError }}</p>
+      </div>
+
+      <div class="card">
+        <button class="danger" @click="showConfirm = true">Delete Piece</button>
+      </div>
+    </template>
+
+    <ConfirmDialog
+      :open="showConfirm"
+      :message="`Delete ${piece?.legoId} (${piece?.legoColor})?`"
+      @confirm="doDelete"
+      @cancel="showConfirm = false"
+    />
+  </div>
+</template>
+
+<script setup>
+import { ref, onMounted } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import {
+  getBulkPiece, updateBulkPiece, deleteBulkPiece,
+  assignBulkPieceToBox, assignBulkPieceToDrawer, removeBulkPieceStorage,
+} from '../../api/bulkpieces.js'
+import { getAllBoxes } from '../../api/boxes.js'
+import { getAllDrawerContainers, getDrawerContainerDrawers } from '../../api/drawercontainers.js'
+import ConfirmDialog from '../../components/ConfirmDialog.vue'
+
+const route = useRoute()
+const router = useRouter()
+const id = route.params.id
+
+const piece = ref(null)
+const boxes = ref([])
+const drawers = ref([])
+const loading = ref(true)
+const error = ref('')
+const editError = ref('')
+const storageError = ref('')
+const showConfirm = ref(false)
+const selectedBoxId = ref('')
+const selectedDrawerId = ref('')
+const editForm = ref({ legoId: '', legoColor: '', description: '' })
+
+async function load() {
+  loading.value = true
+  error.value = ''
+  try {
+    const [p, allBoxes, allContainers] = await Promise.all([
+      getBulkPiece(id),
+      getAllBoxes(),
+      getAllDrawerContainers(),
+    ])
+    piece.value = p
+    boxes.value = allBoxes
+    editForm.value = { legoId: p.legoId, legoColor: p.legoColor, description: p.description }
+    selectedBoxId.value = p.boxId ?? ''
+    selectedDrawerId.value = p.drawerId ?? ''
+
+    // load all drawers from all containers
+    const drawerLists = await Promise.all(allContainers.map((c) => getDrawerContainerDrawers(c.id)))
+    drawers.value = drawerLists.flat()
+  } catch (e) {
+    error.value = e.message
+  } finally {
+    loading.value = false
+  }
+}
+
+async function submitEdit() {
+  editError.value = ''
+  try {
+    const updated = await updateBulkPiece(id, { ...editForm.value })
+    piece.value = updated
+  } catch (e) {
+    editError.value = e.message
+  }
+}
+
+async function submitBoxStorage() {
+  storageError.value = ''
+  try {
+    const updated = await assignBulkPieceToBox(id, selectedBoxId.value)
+    piece.value = updated
+    selectedDrawerId.value = ''
+  } catch (e) {
+    storageError.value = e.message
+  }
+}
+
+async function submitDrawerStorage() {
+  storageError.value = ''
+  try {
+    const updated = await assignBulkPieceToDrawer(id, selectedDrawerId.value)
+    piece.value = updated
+    selectedBoxId.value = ''
+  } catch (e) {
+    storageError.value = e.message
+  }
+}
+
+async function clearStorage() {
+  storageError.value = ''
+  try {
+    await removeBulkPieceStorage(id)
+    piece.value = { ...piece.value, boxId: null, drawerId: null }
+    selectedBoxId.value = ''
+    selectedDrawerId.value = ''
+  } catch (e) {
+    storageError.value = e.message
+  }
+}
+
+async function doDelete() {
+  try {
+    await deleteBulkPiece(id)
+    router.push('/bulkpieces')
+  } catch (e) {
+    error.value = e.message
+    showConfirm.value = false
+  }
+}
+
+onMounted(load)
+</script>
