@@ -1,13 +1,94 @@
+using MongoDB.Driver;
 using TroveKeep.Core.Interfaces.Repositories;
 using TroveKeep.Core.Models;
+using TroveKeep.Repositories.Documents;
 
 namespace TroveKeep.Repositories;
 
 public class DrawerRepository : IDrawerRepository
 {
-    public Task<Drawer?> GetByIdAsync(Guid id) => throw new NotImplementedException();
-    public Task<Drawer?> GetByIdWithContentsAsync(Guid id) => throw new NotImplementedException();
-    public Task<Drawer> CreateAsync(Drawer drawer) => throw new NotImplementedException();
-    public Task<Drawer?> UpdateAsync(Drawer drawer) => throw new NotImplementedException();
-    public Task<bool> DeleteAsync(Guid id) => throw new NotImplementedException();
+    private readonly IMongoCollection<DrawerDocument> _drawers;
+    private readonly IMongoCollection<BulkPieceDocument> _bulkPieces;
+
+    public DrawerRepository(IMongoDatabase database)
+    {
+        _drawers = database.GetCollection<DrawerDocument>("drawers");
+        _bulkPieces = database.GetCollection<BulkPieceDocument>("bulkpieces");
+    }
+
+    public async Task<Drawer?> GetByIdAsync(Guid id)
+    {
+        var doc = await _drawers.Find(x => x.Id == id).FirstOrDefaultAsync();
+        if (doc is null) return null;
+
+        var pieces = await _bulkPieces.Find(x => x.DrawerId == id).ToListAsync();
+        return ToModel(doc, pieces);
+    }
+
+    public async Task<Drawer?> GetByIdWithContentsAsync(Guid id)
+    {
+        return await GetByIdAsync(id);
+    }
+
+    public async Task<Drawer> CreateAsync(Drawer drawer)
+    {
+        var doc = ToDocument(drawer);
+        doc.Id = Guid.NewGuid();
+        var now = DateTime.UtcNow;
+        doc.CreatedAt = now;
+        doc.UpdatedAt = now;
+        await _drawers.InsertOneAsync(doc);
+        return ToModel(doc, []);
+    }
+
+    public async Task<Drawer?> UpdateAsync(Drawer drawer)
+    {
+        var existing = await _drawers.Find(x => x.Id == drawer.Id).FirstOrDefaultAsync();
+        if (existing is null) return null;
+
+        var doc = ToDocument(drawer);
+        doc.CreatedAt = existing.CreatedAt;
+        doc.UpdatedAt = DateTime.UtcNow;
+        await _drawers.ReplaceOneAsync(x => x.Id == drawer.Id, doc);
+
+        var pieces = await _bulkPieces.Find(x => x.DrawerId == drawer.Id).ToListAsync();
+        return ToModel(doc, pieces);
+    }
+
+    public async Task<bool> DeleteAsync(Guid id)
+    {
+        var result = await _drawers.DeleteOneAsync(x => x.Id == id);
+        return result.DeletedCount > 0;
+    }
+
+    private static Drawer ToModel(DrawerDocument doc, List<BulkPieceDocument> pieceDocs) => new()
+    {
+        Id = doc.Id,
+        Position = doc.Position,
+        Label = doc.Label,
+        DrawerContainerId = doc.DrawerContainerId,
+        CreatedAt = new DateTimeOffset(DateTime.SpecifyKind(doc.CreatedAt, DateTimeKind.Utc)),
+        UpdatedAt = new DateTimeOffset(DateTime.SpecifyKind(doc.UpdatedAt, DateTimeKind.Utc)),
+        BulkPieces = pieceDocs.Select(p => new BulkPiece
+        {
+            Id = p.Id,
+            LegoId = p.LegoId,
+            LegoColor = p.LegoColor,
+            Description = p.Description,
+            BoxId = p.BoxId,
+            DrawerId = p.DrawerId,
+            CreatedAt = new DateTimeOffset(DateTime.SpecifyKind(p.CreatedAt, DateTimeKind.Utc)),
+            UpdatedAt = new DateTimeOffset(DateTime.SpecifyKind(p.UpdatedAt, DateTimeKind.Utc)),
+        }).ToList(),
+    };
+
+    private static DrawerDocument ToDocument(Drawer model) => new()
+    {
+        Id = model.Id,
+        Position = model.Position,
+        Label = model.Label,
+        DrawerContainerId = model.DrawerContainerId,
+        CreatedAt = model.CreatedAt.UtcDateTime,
+        UpdatedAt = model.UpdatedAt.UtcDateTime,
+    };
 }
