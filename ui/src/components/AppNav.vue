@@ -7,6 +7,7 @@
     <RouterLink to="/drawercontainers">Drawer Containers</RouterLink>
     <RouterLink to="/search">Search</RouterLink>
     <RouterLink to="/archives">Archives</RouterLink>
+    <RouterLink to="/settings">Settings</RouterLink>
   </nav>
 </template>
 

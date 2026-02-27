@@ -40,6 +40,7 @@ builder.Services.AddScoped<IDrawerService, DrawerService>();
 builder.Services.AddScoped<ISearchService, SearchService>();
 builder.Services.AddScoped<IArchiveService, ArchiveService>();
 builder.Services.AddScoped<ISetImageService, SetImageService>();
+builder.Services.AddScoped<IBackupService, BackupService>();
 builder.Services.AddHttpClient("SetImages");
 
 var app = builder.Build();

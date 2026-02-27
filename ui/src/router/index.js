@@ -11,6 +11,7 @@ import DrawerContainerDetail from '../views/drawercontainers/DrawerContainerDeta
 import DrawerDetail from '../views/drawers/DrawerDetail.vue'
 import SearchView from '../views/SearchView.vue'
 import ArchivesView from '../views/ArchivesView.vue'
+import SettingsView from '../views/SettingsView.vue'
 
 const routes = [
   { path: '/', redirect: '/sets' },
@@ -25,6 +26,7 @@ const routes = [
   { path: '/drawers/:id', component: DrawerDetail },
   { path: '/search', component: SearchView },
   { path: '/archives', component: ArchivesView },
+  { path: '/settings', component: SettingsView },
 ]
 
 export default createRouter({
