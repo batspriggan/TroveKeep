@@ -23,6 +23,10 @@
             <label>Photo URL</label>
             <input v-model="editForm.photoUrl" />
           </div>
+          <div class="form-field" style="max-width: 80px">
+            <label>Qty *</label>
+            <input v-model.number="editForm.quantity" type="number" min="1" required />
+          </div>
           <button class="primary" type="submit">Save</button>
         </form>
         <p v-if="editError" class="error">{{ editError }}</p>
@@ -83,7 +87,7 @@ const editError = ref('')
 const storageError = ref('')
 const showConfirm = ref(false)
 const selectedBoxId = ref('')
-const editForm = ref({ setNumber: '', description: '', photoUrl: '' })
+const editForm = ref({ setNumber: '', description: '', photoUrl: '', quantity: 1 })
 
 async function load() {
   loading.value = true
@@ -92,7 +96,7 @@ async function load() {
     const [s, b] = await Promise.all([getSet(id), getAllBoxes()])
     set.value = s
     boxes.value = b
-    editForm.value = { setNumber: s.setNumber, description: s.description, photoUrl: s.photoUrl ?? '' }
+    editForm.value = { setNumber: s.setNumber, description: s.description, photoUrl: s.photoUrl ?? '', quantity: s.quantity }
     selectedBoxId.value = s.boxId ?? ''
   } catch (e) {
     error.value = e.message
@@ -108,6 +112,7 @@ async function submitEdit() {
       setNumber: editForm.value.setNumber,
       description: editForm.value.description,
       photoUrl: editForm.value.photoUrl || null,
+      quantity: editForm.value.quantity,
     })
     set.value = updated
   } catch (e) {

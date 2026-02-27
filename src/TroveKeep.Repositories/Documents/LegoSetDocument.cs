@@ -12,6 +12,7 @@ public class LegoSetDocument
     public string SetNumber { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;
     public string? PhotoUrl { get; set; }
+    public int Quantity { get; set; } = 1;
 
     [BsonGuidRepresentation(GuidRepresentation.Standard)]
     public Guid? BoxId { get; set; }

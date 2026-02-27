@@ -6,6 +6,7 @@ public class BulkPiece
     public string LegoId { get; set; } = string.Empty;
     public string LegoColor { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;
+    public int Quantity { get; set; } = 1;
     public Guid? BoxId { get; set; }
     public Box? Box { get; set; }
     public Guid? DrawerId { get; set; }

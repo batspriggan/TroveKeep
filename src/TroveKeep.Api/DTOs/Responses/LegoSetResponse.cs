@@ -5,6 +5,7 @@ public record LegoSetResponse(
     string SetNumber,
     string Description,
     string? PhotoUrl,
+    int Quantity,
     Guid? BoxId,
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt);

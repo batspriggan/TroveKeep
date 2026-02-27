@@ -15,6 +15,10 @@
         <label>Description *</label>
         <input v-model="form.description" required placeholder="Description" />
       </div>
+      <div class="form-field" style="max-width: 80px">
+        <label>Qty *</label>
+        <input v-model.number="form.quantity" type="number" min="1" required />
+      </div>
       <button class="primary" type="submit">Add Piece</button>
     </form>
 
@@ -28,6 +32,7 @@
           <th>Lego ID</th>
           <th>Color</th>
           <th>Description</th>
+          <th>Qty</th>
           <th>Storage</th>
           <th></th>
         </tr>
@@ -39,13 +44,14 @@
           </td>
           <td>{{ p.legoColor }}</td>
           <td>{{ p.description }}</td>
+          <td>{{ p.quantity }}</td>
           <td>{{ p.boxId ? 'Box' : p.drawerId ? 'Drawer' : '—' }}</td>
           <td>
             <button class="danger" @click="confirmDelete(p)">Delete</button>
           </td>
         </tr>
         <tr v-if="pieces.length === 0">
-          <td colspan="5">No bulk pieces yet.</td>
+          <td colspan="6">No bulk pieces yet.</td>
         </tr>
       </tbody>
     </table>
@@ -68,7 +74,7 @@ const pieces = ref([])
 const loading = ref(true)
 const error = ref('')
 const deleteTarget = ref(null)
-const form = ref({ legoId: '', legoColor: '', description: '' })
+const form = ref({ legoId: '', legoColor: '', description: '', quantity: 1 })
 
 async function load() {
   loading.value = true
@@ -86,7 +92,7 @@ async function submit() {
   error.value = ''
   try {
     await createBulkPiece({ ...form.value })
-    form.value = { legoId: '', legoColor: '', description: '' }
+    form.value = { legoId: '', legoColor: '', description: '', quantity: 1 }
     await load()
   } catch (e) {
     error.value = e.message

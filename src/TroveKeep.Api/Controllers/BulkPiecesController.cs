@@ -44,7 +44,8 @@ public class BulkPiecesController : ControllerBase
         {
             LegoId = request.LegoId,
             LegoColor = request.LegoColor,
-            Description = request.Description
+            Description = request.Description,
+            Quantity = request.Quantity,
         };
         var created = await _service.CreateAsync(model);
         return CreatedAtAction(nameof(GetById), new { id = created.Id }, MapToResponse(created));
@@ -61,7 +62,8 @@ public class BulkPiecesController : ControllerBase
             Id = id,
             LegoId = request.LegoId,
             LegoColor = request.LegoColor,
-            Description = request.Description
+            Description = request.Description,
+            Quantity = request.Quantity,
         };
         var updated = await _service.UpdateAsync(model);
         if (updated is null) return NotFound();
@@ -122,7 +124,7 @@ public class BulkPiecesController : ControllerBase
     }
 
     private static BulkPieceResponse MapToResponse(BulkPiece p) =>
-        new(p.Id, p.LegoId, p.LegoColor, p.Description, p.BoxId, p.DrawerId, p.CreatedAt, p.UpdatedAt);
+        new(p.Id, p.LegoId, p.LegoColor, p.Description, p.Quantity, p.BoxId, p.DrawerId, p.CreatedAt, p.UpdatedAt);
 
     private static StorageLocationResponse MapStorageToResponse(StorageLocation s) =>
         new(s.Type.ToString(), s.StorageId, s.StorageName, s.DrawerContainerId, s.DrawerContainerName, s.DrawerPosition);

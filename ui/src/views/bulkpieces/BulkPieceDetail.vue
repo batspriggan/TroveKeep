@@ -23,6 +23,10 @@
             <label>Description *</label>
             <input v-model="editForm.description" required />
           </div>
+          <div class="form-field" style="max-width: 80px">
+            <label>Qty *</label>
+            <input v-model.number="editForm.quantity" type="number" min="1" required />
+          </div>
           <button class="primary" type="submit">Save</button>
         </form>
         <p v-if="editError" class="error">{{ editError }}</p>
@@ -109,7 +113,7 @@ const storageError = ref('')
 const showConfirm = ref(false)
 const selectedBoxId = ref('')
 const selectedDrawerId = ref('')
-const editForm = ref({ legoId: '', legoColor: '', description: '' })
+const editForm = ref({ legoId: '', legoColor: '', description: '', quantity: 1 })
 
 async function load() {
   loading.value = true
@@ -122,13 +126,13 @@ async function load() {
     ])
     piece.value = p
     boxes.value = allBoxes
-    editForm.value = { legoId: p.legoId, legoColor: p.legoColor, description: p.description }
+    editForm.value = { legoId: p.legoId, legoColor: p.legoColor, description: p.description, quantity: p.quantity }
     selectedBoxId.value = p.boxId ?? ''
     selectedDrawerId.value = p.drawerId ?? ''
 
     // load all drawers from all containers
-    const drawerLists = await Promise.all(allContainers.map((c) => getDrawerContainerDrawers(c.id)))
-    drawers.value = drawerLists.flat()
+    const containerDetails = await Promise.all(allContainers.map((c) => getDrawerContainerDrawers(c.id)))
+    drawers.value = containerDetails.flatMap((c) => c.drawers ?? [])
   } catch (e) {
     error.value = e.message
   } finally {
@@ -139,7 +143,7 @@ async function load() {
 async function submitEdit() {
   editError.value = ''
   try {
-    const updated = await updateBulkPiece(id, { ...editForm.value })
+    const updated = await updateBulkPiece(id, { legoId: editForm.value.legoId, legoColor: editForm.value.legoColor, description: editForm.value.description, quantity: editForm.value.quantity })
     piece.value = updated
   } catch (e) {
     editError.value = e.message

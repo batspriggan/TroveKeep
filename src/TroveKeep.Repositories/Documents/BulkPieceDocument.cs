@@ -12,6 +12,7 @@ public class BulkPieceDocument
     public string LegoId { get; set; } = string.Empty;
     public string LegoColor { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;
+    public int Quantity { get; set; } = 1;
 
     [BsonGuidRepresentation(GuidRepresentation.Standard)]
     public Guid? BoxId { get; set; }

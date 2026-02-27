@@ -82,7 +82,7 @@ public class BoxesController : ControllerBase
 
     private static BoxDetailResponse MapToDetailResponse(Box b) =>
         new(b.Id, b.Name, b.PhotoUrl,
-            b.Sets.Select(s => new LegoSetResponse(s.Id, s.SetNumber, s.Description, s.PhotoUrl, s.BoxId, s.CreatedAt, s.UpdatedAt)),
-            b.BulkPieces.Select(p => new BulkPieceResponse(p.Id, p.LegoId, p.LegoColor, p.Description, p.BoxId, p.DrawerId, p.CreatedAt, p.UpdatedAt)),
+            b.Sets.Select(s => new LegoSetResponse(s.Id, s.SetNumber, s.Description, s.PhotoUrl, s.Quantity, s.BoxId, s.CreatedAt, s.UpdatedAt)),
+            b.BulkPieces.Select(p => new BulkPieceResponse(p.Id, p.LegoId, p.LegoColor, p.Description, p.Quantity, p.BoxId, p.DrawerId, p.CreatedAt, p.UpdatedAt)),
             b.CreatedAt, b.UpdatedAt);
 }

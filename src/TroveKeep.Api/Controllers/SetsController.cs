@@ -44,7 +44,8 @@ public class SetsController : ControllerBase
         {
             SetNumber = request.SetNumber,
             Description = request.Description,
-            PhotoUrl = request.PhotoUrl
+            PhotoUrl = request.PhotoUrl,
+            Quantity = request.Quantity,
         };
         var created = await _service.CreateAsync(model);
         return CreatedAtAction(nameof(GetById), new { id = created.Id }, MapToResponse(created));
@@ -61,7 +62,8 @@ public class SetsController : ControllerBase
             Id = id,
             SetNumber = request.SetNumber,
             Description = request.Description,
-            PhotoUrl = request.PhotoUrl
+            PhotoUrl = request.PhotoUrl,
+            Quantity = request.Quantity,
         };
         var updated = await _service.UpdateAsync(model);
         if (updated is null) return NotFound();
@@ -112,7 +114,7 @@ public class SetsController : ControllerBase
     }
 
     private static LegoSetResponse MapToResponse(LegoSet s) =>
-        new(s.Id, s.SetNumber, s.Description, s.PhotoUrl, s.BoxId, s.CreatedAt, s.UpdatedAt);
+        new(s.Id, s.SetNumber, s.Description, s.PhotoUrl, s.Quantity, s.BoxId, s.CreatedAt, s.UpdatedAt);
 
     private static StorageLocationResponse MapStorageToResponse(StorageLocation s) =>
         new(s.Type.ToString(), s.StorageId, s.StorageName, s.DrawerContainerId, s.DrawerContainerName, s.DrawerPosition);

@@ -5,6 +5,7 @@ public record BulkPieceResponse(
     string LegoId,
     string LegoColor,
     string Description,
+    int Quantity,
     Guid? BoxId,
     Guid? DrawerId,
     DateTimeOffset CreatedAt,

@@ -15,6 +15,10 @@
         <label>Photo URL</label>
         <input v-model="form.photoUrl" placeholder="https://..." />
       </div>
+      <div class="form-field" style="max-width: 80px">
+        <label>Qty *</label>
+        <input v-model.number="form.quantity" type="number" min="1" required />
+      </div>
       <button class="primary" type="submit">Add Set</button>
     </form>
 
@@ -27,6 +31,7 @@
         <tr>
           <th>Set Number</th>
           <th>Description</th>
+          <th>Qty</th>
           <th>Box</th>
           <th></th>
         </tr>
@@ -37,13 +42,14 @@
             <RouterLink :to="`/sets/${s.id}`">{{ s.setNumber }}</RouterLink>
           </td>
           <td>{{ s.description }}</td>
+          <td>{{ s.quantity }}</td>
           <td>{{ s.boxId ? '✓' : '—' }}</td>
           <td>
             <button class="danger" @click="confirmDelete(s)">Delete</button>
           </td>
         </tr>
         <tr v-if="sets.length === 0">
-          <td colspan="4">No sets yet.</td>
+          <td colspan="5">No sets yet.</td>
         </tr>
       </tbody>
     </table>
@@ -66,7 +72,7 @@ const sets = ref([])
 const loading = ref(true)
 const error = ref('')
 const deleteTarget = ref(null)
-const form = ref({ setNumber: '', description: '', photoUrl: '' })
+const form = ref({ setNumber: '', description: '', photoUrl: '', quantity: 1 })
 
 async function load() {
   loading.value = true
@@ -87,8 +93,9 @@ async function submit() {
       setNumber: form.value.setNumber,
       description: form.value.description,
       photoUrl: form.value.photoUrl || null,
+      quantity: form.value.quantity,
     })
-    form.value = { setNumber: '', description: '', photoUrl: '' }
+    form.value = { setNumber: '', description: '', photoUrl: '', quantity: 1 }
     await load()
   } catch (e) {
     error.value = e.message

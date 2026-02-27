@@ -75,6 +75,7 @@ public class DrawerRepository : IDrawerRepository
             LegoId = p.LegoId,
             LegoColor = p.LegoColor,
             Description = p.Description,
+            Quantity = p.Quantity,
             BoxId = p.BoxId,
             DrawerId = p.DrawerId,
             CreatedAt = new DateTimeOffset(DateTime.SpecifyKind(p.CreatedAt, DateTimeKind.Utc)),
