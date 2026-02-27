@@ -14,7 +14,9 @@ public record SetSearchResponse(
 public record PieceSearchResponse(
     Guid Id,
     string LegoId,
-    string LegoColor,
+    int LegoColorId,
+    string? LegoColorName,
+    string? LegoColorRgb,
     string Description,
     int Quantity,
     IEnumerable<ResolvedAllocationResponse> Allocations);

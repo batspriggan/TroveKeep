@@ -118,7 +118,7 @@ public class BulkPieceRepository : IBulkPieceRepository
     {
         Id = doc.Id,
         LegoId = doc.LegoId,
-        LegoColor = doc.LegoColor,
+        LegoColorId = doc.LegoColorId,
         Description = doc.Description,
         Quantity = doc.Quantity,
         StorageAllocations = doc.StorageAllocations.Select(a => new StorageAllocation
@@ -135,7 +135,7 @@ public class BulkPieceRepository : IBulkPieceRepository
     {
         Id = model.Id,
         LegoId = model.LegoId,
-        LegoColor = model.LegoColor,
+        LegoColorId = model.LegoColorId,
         Description = model.Description,
         Quantity = model.Quantity,
         StorageAllocations = model.StorageAllocations.Select(a => new StorageAllocationDocument

@@ -3,7 +3,9 @@ namespace TroveKeep.Api.DTOs.Responses;
 public record BulkPieceResponse(
     Guid Id,
     string LegoId,
-    string LegoColor,
+    int LegoColorId,
+    string? LegoColorName,
+    string? LegoColorRgb,
     string Description,
     int Quantity,
     IEnumerable<StorageAllocationResponse> StorageAllocations,

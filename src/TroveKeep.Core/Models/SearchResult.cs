@@ -19,7 +19,7 @@ public class PieceSearchResult
 {
     public Guid Id { get; set; }
     public string LegoId { get; set; } = string.Empty;
-    public string LegoColor { get; set; } = string.Empty;
+    public int LegoColorId { get; set; }
     public string Description { get; set; } = string.Empty;
     public int Quantity { get; set; }
     public List<ResolvedAllocation> Allocations { get; set; } = [];

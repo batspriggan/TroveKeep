@@ -9,7 +9,7 @@
       </div>
       <div class="form-field">
         <label>Color *</label>
-        <input v-model="form.legoColor" required placeholder="e.g. Red" />
+        <ColorSelect v-model="form.legoColorId" :colors="colors" />
       </div>
       <div class="form-field">
         <label>Description *</label>
@@ -19,7 +19,7 @@
         <label>Qty *</label>
         <input v-model.number="form.quantity" type="number" min="1" required />
       </div>
-      <button class="primary" type="submit">Add Piece</button>
+      <button class="primary" type="submit" :disabled="!form.legoColorId">Add Piece</button>
     </form>
 
     <p v-if="error" class="error">{{ error }}</p>
@@ -45,7 +45,10 @@
           <td>
             <RouterLink :to="`/bulkpieces/${p.id}`">{{ p.legoId }}</RouterLink>
           </td>
-          <td>{{ p.legoColor }}</td>
+          <td>
+            <span v-if="p.legoColorRgb" class="swatch" :style="{ background: '#' + p.legoColorRgb }"></span>
+            <span>{{ p.legoColorName ?? `#${p.legoColorId}` }}</span>
+          </td>
           <td>{{ p.description }}</td>
           <td>{{ p.quantity }}</td>
           <td>{{ (p.storageAllocations && p.storageAllocations.length) ? `${p.storageAllocations.length} location(s)` : '—' }}</td>
@@ -65,7 +68,7 @@
 
     <ConfirmDialog
       :open="!!deleteTarget"
-      :message="`Delete ${deleteTarget?.legoId} (${deleteTarget?.legoColor})?`"
+      :message="`Delete ${deleteTarget?.legoId} (${deleteTarget?.legoColorName ?? deleteTarget?.legoColorId})?`"
       @confirm="doDelete"
       @cancel="deleteTarget = null"
     />
@@ -75,9 +78,12 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { getAllBulkPieces, createBulkPiece, deleteBulkPiece } from '../../api/bulkpieces.js'
+import { getColorsList } from '../../api/archives.js'
 import ConfirmDialog from '../../components/ConfirmDialog.vue'
+import ColorSelect from '../../components/ColorSelect.vue'
 
 const pieces = ref([])
+const colors = ref([])
 const filterText = ref('')
 const filteredPieces = computed(() => {
   const q = filterText.value.trim().toLowerCase()
@@ -90,13 +96,15 @@ const filteredPieces = computed(() => {
 const loading = ref(true)
 const error = ref('')
 const deleteTarget = ref(null)
-const form = ref({ legoId: '', legoColor: '', description: '', quantity: 1 })
+const form = ref({ legoId: '', legoColorId: 0, description: '', quantity: 1 })
 
 async function load() {
   loading.value = true
   error.value = ''
   try {
-    pieces.value = await getAllBulkPieces()
+    const [allPieces, allColors] = await Promise.all([getAllBulkPieces(), getColorsList()])
+    pieces.value = allPieces
+    colors.value = allColors
   } catch (e) {
     error.value = e.message
   } finally {
@@ -107,8 +115,8 @@ async function load() {
 async function submit() {
   error.value = ''
   try {
-    await createBulkPiece({ ...form.value })
-    form.value = { legoId: '', legoColor: '', description: '', quantity: 1 }
+    await createBulkPiece({ legoId: form.value.legoId, legoColorId: form.value.legoColorId, description: form.value.description, quantity: form.value.quantity })
+    form.value = { legoId: '', legoColorId: 0, description: '', quantity: 1 }
     await load()
   } catch (e) {
     error.value = e.message
@@ -133,3 +141,15 @@ async function doDelete() {
 
 onMounted(load)
 </script>
+
+<style scoped>
+.swatch {
+  display: inline-block;
+  width: 0.9rem;
+  height: 0.9rem;
+  border-radius: 2px;
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  vertical-align: middle;
+  margin-right: 0.35rem;
+}
+</style>

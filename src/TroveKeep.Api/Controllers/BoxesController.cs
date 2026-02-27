@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using TroveKeep.Api.DTOs.Requests;
 using TroveKeep.Api.DTOs.Responses;
+using TroveKeep.Core.Interfaces.Repositories;
 using TroveKeep.Core.Interfaces.Services;
 using TroveKeep.Core.Models;
 
@@ -11,10 +12,12 @@ namespace TroveKeep.Api.Controllers;
 public class BoxesController : ControllerBase
 {
     private readonly IBoxService _service;
+    private readonly IColorRepository _colorRepo;
 
-    public BoxesController(IBoxService service)
+    public BoxesController(IBoxService service, IColorRepository colorRepo)
     {
         _service = service;
+        _colorRepo = colorRepo;
     }
 
     [HttpGet]
@@ -42,7 +45,8 @@ public class BoxesController : ControllerBase
     {
         var box = await _service.GetByIdWithContentsAsync(id);
         if (box is null) return NotFound();
-        return Ok(MapToDetailResponse(box));
+        var colors = await BuildColorLookupAsync();
+        return Ok(MapToDetailResponse(box, colors));
     }
 
     [HttpPost]
@@ -77,16 +81,28 @@ public class BoxesController : ControllerBase
         return NoContent();
     }
 
+    private async Task<Dictionary<int, (string Name, string Rgb)>> BuildColorLookupAsync()
+    {
+        var colors = await _colorRepo.GetAllAsync();
+        return colors.ToDictionary(c => c.Id, c => (c.Name, c.Rgb));
+    }
+
     private static BoxResponse MapToResponse(Box b) =>
         new(b.Id, b.Name, b.PhotoUrl, b.Sets.Count, b.BulkPieces.Count, b.CreatedAt, b.UpdatedAt);
 
-    private static BoxDetailResponse MapToDetailResponse(Box b) =>
+    private static BoxDetailResponse MapToDetailResponse(Box b, Dictionary<int, (string Name, string Rgb)> colors) =>
         new(b.Id, b.Name, b.PhotoUrl,
             b.Sets.Select(s => new LegoSetResponse(s.Id, s.SetNumber, s.Description, s.PhotoUrl, s.Quantity,
                 s.StorageAllocations.Select(a => new StorageAllocationResponse(a.StorageId, a.Type.ToString(), a.Quantity)),
                 s.CreatedAt, s.UpdatedAt)),
-            b.BulkPieces.Select(p => new BulkPieceResponse(p.Id, p.LegoId, p.LegoColor, p.Description, p.Quantity,
-                p.StorageAllocations.Select(a => new StorageAllocationResponse(a.StorageId, a.Type.ToString(), a.Quantity)),
-                p.CreatedAt, p.UpdatedAt)),
+            b.BulkPieces.Select(p =>
+            {
+                colors.TryGetValue(p.LegoColorId, out var color);
+                return new BulkPieceResponse(p.Id, p.LegoId,
+                    p.LegoColorId, color.Name, color.Rgb,
+                    p.Description, p.Quantity,
+                    p.StorageAllocations.Select(a => new StorageAllocationResponse(a.StorageId, a.Type.ToString(), a.Quantity)),
+                    p.CreatedAt, p.UpdatedAt);
+            }),
             b.CreatedAt, b.UpdatedAt);
 }

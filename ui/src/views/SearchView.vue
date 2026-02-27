@@ -62,7 +62,10 @@
           <tbody>
             <tr v-for="p in results.pieces" :key="p.id">
               <td><RouterLink :to="`/bulkpieces/${p.id}`">{{ p.legoId }}</RouterLink></td>
-              <td>{{ p.legoColor }}</td>
+              <td>
+                <span v-if="p.legoColorRgb" class="color-swatch" :style="{ background: '#' + p.legoColorRgb }"></span>
+                {{ p.legoColorName ?? `#${p.legoColorId}` }}
+              </td>
               <td>{{ p.description }}</td>
               <td>{{ p.quantity }}</td>
               <td>
@@ -142,5 +145,15 @@ async function submit() {
   margin-left: 0.4rem;
   color: #64748b;
   font-size: 0.8rem;
+}
+
+.color-swatch {
+  display: inline-block;
+  width: 0.9rem;
+  height: 0.9rem;
+  border-radius: 2px;
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  vertical-align: middle;
+  margin-right: 0.3rem;
 }
 </style>

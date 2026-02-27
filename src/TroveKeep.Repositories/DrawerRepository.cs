@@ -85,7 +85,7 @@ public class DrawerRepository : IDrawerRepository
         {
             Id = p.Id,
             LegoId = p.LegoId,
-            LegoColor = p.LegoColor,
+            LegoColorId = p.LegoColorId,
             Description = p.Description,
             Quantity = p.Quantity,
             StorageAllocations = p.StorageAllocations.Select(a => new StorageAllocation

@@ -6,7 +6,11 @@
     <p v-else-if="error" class="error">{{ error }}</p>
 
     <template v-else-if="piece">
-      <h1>{{ piece.legoId }} — {{ piece.legoColor }}</h1>
+      <h1>
+        {{ piece.legoId }} —
+        <span v-if="piece.legoColorRgb" class="swatch-title" :style="{ background: '#' + piece.legoColorRgb }"></span>
+        {{ piece.legoColorName ?? `Color #${piece.legoColorId}` }}
+      </h1>
 
       <div class="card">
         <h2>Edit Piece</h2>
@@ -17,7 +21,7 @@
           </div>
           <div class="form-field">
             <label>Color *</label>
-            <input v-model="editForm.legoColor" required />
+            <ColorSelect v-model="editForm.legoColorId" :colors="colors" />
           </div>
           <div class="form-field">
             <label>Description *</label>
@@ -27,7 +31,7 @@
             <label>Qty *</label>
             <input v-model.number="editForm.quantity" type="number" min="1" required />
           </div>
-          <button class="primary" type="submit">Save</button>
+          <button class="primary" type="submit" :disabled="!editForm.legoColorId">Save</button>
         </form>
         <p v-if="editError" class="error">{{ editError }}</p>
       </div>
@@ -114,7 +118,7 @@
 
     <ConfirmDialog
       :open="showConfirm"
-      :message="`Delete ${piece?.legoId} (${piece?.legoColor})?`"
+      :message="`Delete ${piece?.legoId} (${piece?.legoColorName ?? piece?.legoColorId})?`"
       @confirm="doDelete"
       @cancel="showConfirm = false"
     />
@@ -130,13 +134,16 @@ import {
 } from '../../api/bulkpieces.js'
 import { getAllBoxes } from '../../api/boxes.js'
 import { getAllDrawerContainers, getDrawerContainerDrawers } from '../../api/drawercontainers.js'
+import { getColorsList } from '../../api/archives.js'
 import ConfirmDialog from '../../components/ConfirmDialog.vue'
+import ColorSelect from '../../components/ColorSelect.vue'
 
 const route = useRoute()
 const router = useRouter()
 const id = route.params.id
 
 const piece = ref(null)
+const colors = ref([])
 const boxes = ref([])
 const drawers = ref([])
 const loading = ref(true)
@@ -148,7 +155,7 @@ const selectedBoxId = ref('')
 const selectedDrawerId = ref('')
 const boxAllocQty = ref(1)
 const drawerAllocQty = ref(1)
-const editForm = ref({ legoId: '', legoColor: '', description: '', quantity: 1 })
+const editForm = ref({ legoId: '', legoColorId: 0, description: '', quantity: 1 })
 
 const boxNameMap = computed(() => Object.fromEntries(boxes.value.map(b => [b.id, b.name])))
 const drawerLabelMap = computed(() =>
@@ -164,14 +171,16 @@ async function load() {
   loading.value = true
   error.value = ''
   try {
-    const [p, allBoxes, allContainers] = await Promise.all([
+    const [p, allBoxes, allContainers, allColors] = await Promise.all([
       getBulkPiece(id),
       getAllBoxes(),
       getAllDrawerContainers(),
+      getColorsList(),
     ])
     piece.value = p
     boxes.value = allBoxes
-    editForm.value = { legoId: p.legoId, legoColor: p.legoColor, description: p.description, quantity: p.quantity }
+    colors.value = allColors
+    editForm.value = { legoId: p.legoId, legoColorId: p.legoColorId, description: p.description, quantity: p.quantity }
 
     const containerDetails = await Promise.all(allContainers.map((c) => getDrawerContainerDrawers(c.id)))
     drawers.value = containerDetails.flatMap((c) => c.drawers ?? [])
@@ -185,7 +194,12 @@ async function load() {
 async function submitEdit() {
   editError.value = ''
   try {
-    const updated = await updateBulkPiece(id, { legoId: editForm.value.legoId, legoColor: editForm.value.legoColor, description: editForm.value.description, quantity: editForm.value.quantity })
+    const updated = await updateBulkPiece(id, {
+      legoId: editForm.value.legoId,
+      legoColorId: editForm.value.legoColorId,
+      description: editForm.value.description,
+      quantity: editForm.value.quantity,
+    })
     piece.value = updated
   } catch (e) {
     editError.value = e.message
@@ -248,3 +262,15 @@ async function doDelete() {
 
 onMounted(load)
 </script>
+
+<style scoped>
+.swatch-title {
+  display: inline-block;
+  width: 1rem;
+  height: 1rem;
+  border-radius: 3px;
+  border: 1px solid rgba(0, 0, 0, 0.2);
+  vertical-align: middle;
+  margin-right: 0.2rem;
+}
+</style>

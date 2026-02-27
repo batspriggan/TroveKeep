@@ -75,7 +75,7 @@ public class SearchService : ISearchService
             {
                 Id = p.Id,
                 LegoId = p.LegoId,
-                LegoColor = p.LegoColor,
+                LegoColorId = p.LegoColorId,
                 Description = p.Description,
                 Quantity = p.Quantity,
                 Allocations = p.StorageAllocations

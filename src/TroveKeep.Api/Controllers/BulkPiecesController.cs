@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using TroveKeep.Api.DTOs.Requests;
 using TroveKeep.Api.DTOs.Responses;
+using TroveKeep.Core.Interfaces.Repositories;
 using TroveKeep.Core.Interfaces.Services;
 using TroveKeep.Core.Models;
 
@@ -11,10 +12,12 @@ namespace TroveKeep.Api.Controllers;
 public class BulkPiecesController : ControllerBase
 {
     private readonly IBulkPieceService _service;
+    private readonly IColorRepository _colorRepo;
 
-    public BulkPiecesController(IBulkPieceService service)
+    public BulkPiecesController(IBulkPieceService service, IColorRepository colorRepo)
     {
         _service = service;
+        _colorRepo = colorRepo;
     }
 
     [HttpGet]
@@ -22,7 +25,8 @@ public class BulkPiecesController : ControllerBase
     public async Task<IActionResult> GetAll()
     {
         var pieces = await _service.GetAllAsync();
-        return Ok(pieces.Select(MapToResponse));
+        var colors = await BuildColorLookupAsync();
+        return Ok(pieces.Select(p => MapToResponse(p, colors)));
     }
 
     [HttpGet("{id:guid}")]
@@ -32,7 +36,8 @@ public class BulkPiecesController : ControllerBase
     {
         var piece = await _service.GetByIdAsync(id);
         if (piece is null) return NotFound();
-        return Ok(MapToResponse(piece));
+        var colors = await BuildColorLookupAsync();
+        return Ok(MapToResponse(piece, colors));
     }
 
     [HttpPost]
@@ -43,12 +48,13 @@ public class BulkPiecesController : ControllerBase
         var model = new BulkPiece
         {
             LegoId = request.LegoId,
-            LegoColor = request.LegoColor,
+            LegoColorId = request.LegoColorId,
             Description = request.Description,
             Quantity = request.Quantity,
         };
         var created = await _service.CreateAsync(model);
-        return CreatedAtAction(nameof(GetById), new { id = created.Id }, MapToResponse(created));
+        var colors = await BuildColorLookupAsync();
+        return CreatedAtAction(nameof(GetById), new { id = created.Id }, MapToResponse(created, colors));
     }
 
     [HttpPut("{id:guid}")]
@@ -61,13 +67,14 @@ public class BulkPiecesController : ControllerBase
         {
             Id = id,
             LegoId = request.LegoId,
-            LegoColor = request.LegoColor,
+            LegoColorId = request.LegoColorId,
             Description = request.Description,
             Quantity = request.Quantity,
         };
         var updated = await _service.UpdateAsync(model);
         if (updated is null) return NotFound();
-        return Ok(MapToResponse(updated));
+        var colors = await BuildColorLookupAsync();
+        return Ok(MapToResponse(updated, colors));
     }
 
     [HttpDelete("{id:guid}")]
@@ -90,7 +97,8 @@ public class BulkPiecesController : ControllerBase
         {
             var updated = await _service.AllocateToBoxAsync(id, boxId, request.Quantity);
             if (updated is null) return NotFound();
-            return Ok(MapToResponse(updated));
+            var colors = await BuildColorLookupAsync();
+            return Ok(MapToResponse(updated, colors));
         }
         catch (InvalidOperationException ex)
         {
@@ -108,7 +116,8 @@ public class BulkPiecesController : ControllerBase
         {
             var updated = await _service.AllocateToDrawerAsync(id, drawerId, request.Quantity);
             if (updated is null) return NotFound();
-            return Ok(MapToResponse(updated));
+            var colors = await BuildColorLookupAsync();
+            return Ok(MapToResponse(updated, colors));
         }
         catch (InvalidOperationException ex)
         {
@@ -123,7 +132,8 @@ public class BulkPiecesController : ControllerBase
     {
         var updated = await _service.DeallocateStorageAsync(id, storageId);
         if (updated is null) return NotFound();
-        return Ok(MapToResponse(updated));
+        var colors = await BuildColorLookupAsync();
+        return Ok(MapToResponse(updated, colors));
     }
 
     [HttpDelete("{id:guid}/storage")]
@@ -133,11 +143,26 @@ public class BulkPiecesController : ControllerBase
     {
         var updated = await _service.ClearStorageAsync(id);
         if (updated is null) return NotFound();
-        return Ok(MapToResponse(updated));
+        var colors = await BuildColorLookupAsync();
+        return Ok(MapToResponse(updated, colors));
     }
 
-    private static BulkPieceResponse MapToResponse(BulkPiece p) =>
-        new(p.Id, p.LegoId, p.LegoColor, p.Description, p.Quantity,
+    private async Task<Dictionary<int, (string Name, string Rgb)>> BuildColorLookupAsync()
+    {
+        var colors = await _colorRepo.GetAllAsync();
+        return colors.ToDictionary(c => c.Id, c => (c.Name, c.Rgb));
+    }
+
+    private static BulkPieceResponse MapToResponse(
+        BulkPiece p,
+        Dictionary<int, (string Name, string Rgb)> colors)
+    {
+        colors.TryGetValue(p.LegoColorId, out var color);
+        return new BulkPieceResponse(
+            p.Id, p.LegoId,
+            p.LegoColorId, color.Name, color.Rgb,
+            p.Description, p.Quantity,
             p.StorageAllocations.Select(a => new StorageAllocationResponse(a.StorageId, a.Type.ToString(), a.Quantity)),
             p.CreatedAt, p.UpdatedAt);
+    }
 }
