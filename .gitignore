@@ -483,3 +483,6 @@ $RECYCLE.BIN/
 
 ui/dist/*
 src/archives/*
+
+# Local development settings — contain credentials, never commit
+appsettings.Development.json
