@@ -1,3 +1,5 @@
+using System.Text.RegularExpressions;
+using MongoDB.Bson;
 using MongoDB.Driver;
 using TroveKeep.Core.Interfaces.Repositories;
 using TroveKeep.Core.Models;
@@ -43,6 +45,17 @@ public class SetArchiveRepository : ISetArchiveRepository
         var doc = await _meta.Find(x => x.Key == "sets").FirstOrDefaultAsync();
         if (doc is null) return null;
         return new DateTimeOffset(DateTime.SpecifyKind(doc.LastImportedAt, DateTimeKind.Utc));
+    }
+
+    public async Task<IEnumerable<RebrickableSet>> SearchAsync(string query, int limit)
+    {
+        var escaped = Regex.Escape(query);
+        var regex = new BsonRegularExpression(escaped, "i");
+        var filter = Builders<SetArchiveDocument>.Filter.Or(
+            Builders<SetArchiveDocument>.Filter.Regex(x => x.SetNum, regex),
+            Builders<SetArchiveDocument>.Filter.Regex(x => x.Name, regex));
+        var docs = await _collection.Find(filter).Limit(limit).ToListAsync();
+        return docs.Select(ToModel);
     }
 
     private static RebrickableSet ToModel(SetArchiveDocument doc) => new()

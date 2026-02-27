@@ -13,4 +13,5 @@ public interface ILegoSetRepository
     Task<LegoSet?> RemoveStorageAsync(Guid id, Guid storageId);
     Task<LegoSet?> ClearStorageAsync(Guid id);
     Task<IEnumerable<LegoSet>> SearchAsync(string query);
+    Task UpdateImageCachedAsync(Guid id);
 }

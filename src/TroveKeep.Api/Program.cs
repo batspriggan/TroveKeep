@@ -29,6 +29,7 @@ builder.Services.AddScoped<IDrawerContainerRepository, DrawerContainerRepository
 builder.Services.AddScoped<IDrawerRepository, DrawerRepository>();
 builder.Services.AddScoped<IColorRepository, ColorRepository>();
 builder.Services.AddScoped<ISetArchiveRepository, SetArchiveRepository>();
+builder.Services.AddScoped<ISetImageRepository, SetImageRepository>();
 
 // Services
 builder.Services.AddScoped<ILegoSetService, LegoSetService>();
@@ -38,6 +39,8 @@ builder.Services.AddScoped<IDrawerContainerService, DrawerContainerService>();
 builder.Services.AddScoped<IDrawerService, DrawerService>();
 builder.Services.AddScoped<ISearchService, SearchService>();
 builder.Services.AddScoped<IArchiveService, ArchiveService>();
+builder.Services.AddScoped<ISetImageService, SetImageService>();
+builder.Services.AddHttpClient("SetImages");
 
 var app = builder.Build();
 

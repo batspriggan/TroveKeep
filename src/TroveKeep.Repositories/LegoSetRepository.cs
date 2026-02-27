@@ -45,6 +45,7 @@ public class LegoSetRepository : ILegoSetRepository
 
         var doc = ToDocument(legoSet);
         doc.StorageAllocations = existing.StorageAllocations;
+        doc.ImageCached = existing.ImageCached;
         doc.CreatedAt = existing.CreatedAt;
         doc.UpdatedAt = DateTime.UtcNow;
         await _collection.ReplaceOneAsync(x => x.Id == legoSet.Id, doc);
@@ -104,6 +105,12 @@ public class LegoSetRepository : ILegoSetRepository
         return doc is null ? null : ToModel(doc);
     }
 
+    public async Task UpdateImageCachedAsync(Guid id)
+    {
+        var update = Builders<LegoSetDocument>.Update.Set(x => x.ImageCached, true);
+        await _collection.UpdateOneAsync(x => x.Id == id, update);
+    }
+
     public async Task<IEnumerable<LegoSet>> SearchAsync(string query)
     {
         var regex = new BsonRegularExpression(query, "i");
@@ -121,6 +128,7 @@ public class LegoSetRepository : ILegoSetRepository
         Description = doc.Description,
         PhotoUrl = doc.PhotoUrl,
         Quantity = doc.Quantity,
+        ImageCached = doc.ImageCached,
         StorageAllocations = doc.StorageAllocations.Select(a => new StorageAllocation
         {
             StorageId = a.StorageId,
@@ -138,6 +146,7 @@ public class LegoSetRepository : ILegoSetRepository
         Description = model.Description,
         PhotoUrl = model.PhotoUrl,
         Quantity = model.Quantity,
+        ImageCached = model.ImageCached,
         StorageAllocations = model.StorageAllocations.Select(a => new StorageAllocationDocument
         {
             StorageId = a.StorageId,

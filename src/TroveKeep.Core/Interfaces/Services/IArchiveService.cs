@@ -10,4 +10,5 @@ public interface IArchiveService
 
     Task<(int count, DateTimeOffset importedAt)> ImportSetsAsync();
     Task<(int count, DateTimeOffset? importedAt)> GetSetsStatusAsync();
+    Task<IEnumerable<RebrickableSet>> SearchSetsAsync(string query, int limit);
 }

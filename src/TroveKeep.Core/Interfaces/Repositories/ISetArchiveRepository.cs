@@ -7,4 +7,5 @@ public interface ISetArchiveRepository
     Task<IEnumerable<RebrickableSet>> GetAllAsync();
     Task<int> ReplaceAllAsync(IEnumerable<RebrickableSet> sets);
     Task<DateTimeOffset?> GetLastImportedAtAsync();
+    Task<IEnumerable<RebrickableSet>> SearchAsync(string query, int limit);
 }

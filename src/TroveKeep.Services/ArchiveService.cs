@@ -140,6 +140,9 @@ public class ArchiveService : IArchiveService
         return (count, importedAt);
     }
 
+    public Task<IEnumerable<RebrickableSet>> SearchSetsAsync(string query, int limit) =>
+        _setRepository.SearchAsync(query, limit);
+
     private static Dictionary<string, int> BuildColumnIndex(string[] headers)
     {
         var index = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);

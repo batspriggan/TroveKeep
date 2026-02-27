@@ -8,6 +8,14 @@
     <template v-else-if="set">
       <h1>{{ set.setNumber }}</h1>
 
+      <div v-if="set.imageCached" class="card set-image-card">
+        <img
+          :src="`/api/sets/${id}/image`"
+          class="set-image"
+          alt=""
+        />
+      </div>
+
       <div class="card">
         <h2>Edit Set</h2>
         <form class="form-row" @submit.prevent="submitEdit">
@@ -198,3 +206,16 @@ async function doDelete() {
 
 onMounted(load)
 </script>
+
+<style scoped>
+.set-image-card {
+  display: flex;
+  justify-content: center;
+  padding: 0.75rem;
+}
+
+.set-image {
+  max-height: 200px;
+  object-fit: contain;
+}
+</style>

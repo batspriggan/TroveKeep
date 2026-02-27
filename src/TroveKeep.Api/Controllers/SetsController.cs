@@ -11,10 +11,12 @@ namespace TroveKeep.Api.Controllers;
 public class SetsController : ControllerBase
 {
     private readonly ILegoSetService _service;
+    private readonly ISetImageService _imageService;
 
-    public SetsController(ILegoSetService service)
+    public SetsController(ILegoSetService service, ISetImageService imageService)
     {
         _service = service;
+        _imageService = imageService;
     }
 
     [HttpGet]
@@ -48,7 +50,21 @@ public class SetsController : ControllerBase
             Quantity = request.Quantity,
         };
         var created = await _service.CreateAsync(model);
+        if (!string.IsNullOrWhiteSpace(request.PhotoUrl))
+            _ = _imageService.DownloadAndStoreAsync(created.Id, created.SetNumber, request.PhotoUrl);
         return CreatedAtAction(nameof(GetById), new { id = created.Id }, MapToResponse(created));
+    }
+
+    [HttpGet("{id:guid}/image")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetImage(Guid id)
+    {
+        var set = await _service.GetByIdAsync(id);
+        if (set is null) return NotFound();
+        var image = await _imageService.GetImageAsync(set.SetNumber);
+        if (image is null) return NotFound();
+        return File(image.Data, image.ContentType);
     }
 
     [HttpPut("{id:guid}")]
@@ -119,7 +135,7 @@ public class SetsController : ControllerBase
     }
 
     private static LegoSetResponse MapToResponse(LegoSet s) =>
-        new(s.Id, s.SetNumber, s.Description, s.PhotoUrl, s.Quantity,
+        new(s.Id, s.SetNumber, s.Description, s.PhotoUrl, s.Quantity, s.ImageCached,
             s.StorageAllocations.Select(a => new StorageAllocationResponse(a.StorageId, a.Type.ToString(), a.Quantity)),
             s.CreatedAt, s.UpdatedAt);
 }

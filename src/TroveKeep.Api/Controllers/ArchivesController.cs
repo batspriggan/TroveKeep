@@ -56,6 +56,18 @@ public class ArchivesController : ControllerBase
         return Ok(new ArchiveStatusResponse(count, importedAt));
     }
 
+    [HttpGet("sets/search")]
+    [ProducesResponseType(typeof(IEnumerable<SetArchiveSearchResponse>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> SearchSets([FromQuery] string? q, [FromQuery] int limit = 10)
+    {
+        if (string.IsNullOrWhiteSpace(q))
+            return Ok(Array.Empty<SetArchiveSearchResponse>());
+
+        var cap = Math.Min(limit, 20);
+        var results = await _service.SearchSetsAsync(q, cap);
+        return Ok(results.Select(s => new SetArchiveSearchResponse(s.SetNum, s.Name, s.Year, s.NumParts, s.ImgUrl)));
+    }
+
     [HttpPost("sets/reload")]
     [ProducesResponseType(typeof(ArchiveStatusResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
