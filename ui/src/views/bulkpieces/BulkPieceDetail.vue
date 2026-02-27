@@ -34,29 +34,55 @@
 
       <div class="card">
         <h2>Storage</h2>
-        <p v-if="piece.boxId">
-          Stored in box: <RouterLink :to="`/boxes/${piece.boxId}`">{{ piece.boxId }}</RouterLink>
-        </p>
-        <p v-else-if="piece.drawerId">
-          Stored in drawer: <RouterLink :to="`/drawers/${piece.drawerId}`">{{ piece.drawerId }}</RouterLink>
-        </p>
+
+        <table v-if="piece.storageAllocations && piece.storageAllocations.length">
+          <thead>
+            <tr>
+              <th>Location</th>
+              <th>Type</th>
+              <th>Qty</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="a in piece.storageAllocations" :key="a.storageId">
+              <td>
+                <RouterLink v-if="a.storageType === 'Box'" :to="`/boxes/${a.storageId}`">
+                  {{ boxNameMap[a.storageId] ?? a.storageId }}
+                </RouterLink>
+                <RouterLink v-else :to="`/drawers/${a.storageId}`">
+                  {{ drawerLabelMap[a.storageId] ?? a.storageId }}
+                </RouterLink>
+              </td>
+              <td>{{ a.storageType }}</td>
+              <td>{{ a.quantity }}</td>
+              <td><button class="danger" @click="deallocate(a.storageId)">Remove</button></td>
+            </tr>
+          </tbody>
+        </table>
         <p v-else>Not stored anywhere.</p>
+
+        <p style="margin-top: 0.5rem">Unallocated: {{ unallocated }} of {{ piece.quantity }}</p>
 
         <div class="form-row" style="margin-top: 0.75rem; align-items: flex-start; flex-direction: column; gap: 0.75rem">
           <form class="form-row" style="width:100%" @submit.prevent="submitBoxStorage">
             <div class="form-field">
-              <label>Assign to Box</label>
+              <label>Box</label>
               <select v-model="selectedBoxId">
                 <option value="">— select box —</option>
                 <option v-for="b in boxes" :key="b.id" :value="b.id">{{ b.name }}</option>
               </select>
             </div>
-            <button class="primary" type="submit" :disabled="!selectedBoxId">Assign to Box</button>
+            <div class="form-field" style="max-width: 80px">
+              <label>Qty</label>
+              <input v-model.number="boxAllocQty" type="number" min="1" required />
+            </div>
+            <button class="primary" type="submit" :disabled="!selectedBoxId || boxAllocQty < 1">Allocate to Box</button>
           </form>
 
           <form class="form-row" style="width:100%" @submit.prevent="submitDrawerStorage">
             <div class="form-field">
-              <label>Assign to Drawer</label>
+              <label>Drawer</label>
               <select v-model="selectedDrawerId">
                 <option value="">— select drawer —</option>
                 <option v-for="d in drawers" :key="d.id" :value="d.id">
@@ -64,12 +90,19 @@
                 </option>
               </select>
             </div>
-            <button class="primary" type="submit" :disabled="!selectedDrawerId">Assign to Drawer</button>
+            <div class="form-field" style="max-width: 80px">
+              <label>Qty</label>
+              <input v-model.number="drawerAllocQty" type="number" min="1" required />
+            </div>
+            <button class="primary" type="submit" :disabled="!selectedDrawerId || drawerAllocQty < 1">Allocate to Drawer</button>
           </form>
 
-          <button v-if="piece.boxId || piece.drawerId" type="button" class="danger" @click="clearStorage">
-            Clear Storage
-          </button>
+          <button
+            v-if="piece.storageAllocations && piece.storageAllocations.length"
+            type="button"
+            class="danger"
+            @click="clearStorage"
+          >Clear All</button>
         </div>
         <p v-if="storageError" class="error">{{ storageError }}</p>
       </div>
@@ -89,11 +122,11 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   getBulkPiece, updateBulkPiece, deleteBulkPiece,
-  assignBulkPieceToBox, assignBulkPieceToDrawer, removeBulkPieceStorage,
+  allocatePieceToBox, allocatePieceToDrawer, deallocatePieceStorage, clearPieceStorage,
 } from '../../api/bulkpieces.js'
 import { getAllBoxes } from '../../api/boxes.js'
 import { getAllDrawerContainers, getDrawerContainerDrawers } from '../../api/drawercontainers.js'
@@ -113,7 +146,19 @@ const storageError = ref('')
 const showConfirm = ref(false)
 const selectedBoxId = ref('')
 const selectedDrawerId = ref('')
+const boxAllocQty = ref(1)
+const drawerAllocQty = ref(1)
 const editForm = ref({ legoId: '', legoColor: '', description: '', quantity: 1 })
+
+const boxNameMap = computed(() => Object.fromEntries(boxes.value.map(b => [b.id, b.name])))
+const drawerLabelMap = computed(() =>
+  Object.fromEntries(drawers.value.map(d => [d.id, d.label || `Position ${d.position}`])))
+
+const unallocated = computed(() => {
+  if (!piece.value) return 0
+  const allocated = (piece.value.storageAllocations ?? []).reduce((sum, a) => sum + a.quantity, 0)
+  return piece.value.quantity - allocated
+})
 
 async function load() {
   loading.value = true
@@ -127,10 +172,7 @@ async function load() {
     piece.value = p
     boxes.value = allBoxes
     editForm.value = { legoId: p.legoId, legoColor: p.legoColor, description: p.description, quantity: p.quantity }
-    selectedBoxId.value = p.boxId ?? ''
-    selectedDrawerId.value = p.drawerId ?? ''
 
-    // load all drawers from all containers
     const containerDetails = await Promise.all(allContainers.map((c) => getDrawerContainerDrawers(c.id)))
     drawers.value = containerDetails.flatMap((c) => c.drawers ?? [])
   } catch (e) {
@@ -153,9 +195,10 @@ async function submitEdit() {
 async function submitBoxStorage() {
   storageError.value = ''
   try {
-    const updated = await assignBulkPieceToBox(id, selectedBoxId.value)
+    const updated = await allocatePieceToBox(id, selectedBoxId.value, boxAllocQty.value)
     piece.value = updated
-    selectedDrawerId.value = ''
+    selectedBoxId.value = ''
+    boxAllocQty.value = 1
   } catch (e) {
     storageError.value = e.message
   }
@@ -164,9 +207,20 @@ async function submitBoxStorage() {
 async function submitDrawerStorage() {
   storageError.value = ''
   try {
-    const updated = await assignBulkPieceToDrawer(id, selectedDrawerId.value)
+    const updated = await allocatePieceToDrawer(id, selectedDrawerId.value, drawerAllocQty.value)
     piece.value = updated
-    selectedBoxId.value = ''
+    selectedDrawerId.value = ''
+    drawerAllocQty.value = 1
+  } catch (e) {
+    storageError.value = e.message
+  }
+}
+
+async function deallocate(storageId) {
+  storageError.value = ''
+  try {
+    const updated = await deallocatePieceStorage(id, storageId)
+    piece.value = updated
   } catch (e) {
     storageError.value = e.message
   }
@@ -175,10 +229,8 @@ async function submitDrawerStorage() {
 async function clearStorage() {
   storageError.value = ''
   try {
-    await removeBulkPieceStorage(id)
-    piece.value = { ...piece.value, boxId: null, drawerId: null }
-    selectedBoxId.value = ''
-    selectedDrawerId.value = ''
+    const updated = await clearPieceStorage(id)
+    piece.value = updated
   } catch (e) {
     storageError.value = e.message
   }

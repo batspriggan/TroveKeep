@@ -80,52 +80,64 @@ public class BulkPiecesController : ControllerBase
         return NoContent();
     }
 
-    [HttpGet("{id:guid}/storage")]
-    [ProducesResponseType(typeof(StorageLocationResponse), StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [HttpPost("{id:guid}/storage/box/{boxId:guid}")]
+    [ProducesResponseType(typeof(BulkPieceResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetStorage(Guid id)
+    public async Task<IActionResult> AllocateToBox(Guid id, Guid boxId, [FromBody] AllocateStorageRequest request)
     {
-        var piece = await _service.GetByIdAsync(id);
-        if (piece is null) return NotFound();
-        var storage = await _service.GetStorageAsync(id);
-        if (storage is null) return NoContent();
-        return Ok(MapStorageToResponse(storage));
+        try
+        {
+            var updated = await _service.AllocateToBoxAsync(id, boxId, request.Quantity);
+            if (updated is null) return NotFound();
+            return Ok(MapToResponse(updated));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
     }
 
-    [HttpPut("{id:guid}/storage/box/{boxId:guid}")]
+    [HttpPost("{id:guid}/storage/drawer/{drawerId:guid}")]
     [ProducesResponseType(typeof(BulkPieceResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> AssignToBox(Guid id, Guid boxId)
+    public async Task<IActionResult> AllocateToDrawer(Guid id, Guid drawerId, [FromBody] AllocateStorageRequest request)
     {
-        var updated = await _service.AssignToBoxAsync(id, boxId);
-        if (updated is null) return NotFound();
-        return Ok(MapToResponse(updated));
+        try
+        {
+            var updated = await _service.AllocateToDrawerAsync(id, drawerId, request.Quantity);
+            if (updated is null) return NotFound();
+            return Ok(MapToResponse(updated));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
     }
 
-    [HttpPut("{id:guid}/storage/drawer/{drawerId:guid}")]
+    [HttpDelete("{id:guid}/storage/{storageId:guid}")]
     [ProducesResponseType(typeof(BulkPieceResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> AssignToDrawer(Guid id, Guid drawerId)
+    public async Task<IActionResult> DeallocateStorage(Guid id, Guid storageId)
     {
-        var updated = await _service.AssignToDrawerAsync(id, drawerId);
+        var updated = await _service.DeallocateStorageAsync(id, storageId);
         if (updated is null) return NotFound();
         return Ok(MapToResponse(updated));
     }
 
     [HttpDelete("{id:guid}/storage")]
-    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(BulkPieceResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> RemoveStorage(Guid id)
+    public async Task<IActionResult> ClearStorage(Guid id)
     {
-        var removed = await _service.RemoveStorageAsync(id);
-        if (!removed) return NotFound();
-        return NoContent();
+        var updated = await _service.ClearStorageAsync(id);
+        if (updated is null) return NotFound();
+        return Ok(MapToResponse(updated));
     }
 
     private static BulkPieceResponse MapToResponse(BulkPiece p) =>
-        new(p.Id, p.LegoId, p.LegoColor, p.Description, p.Quantity, p.BoxId, p.DrawerId, p.CreatedAt, p.UpdatedAt);
-
-    private static StorageLocationResponse MapStorageToResponse(StorageLocation s) =>
-        new(s.Type.ToString(), s.StorageId, s.StorageName, s.DrawerContainerId, s.DrawerContainerName, s.DrawerPosition);
+        new(p.Id, p.LegoId, p.LegoColor, p.Description, p.Quantity,
+            p.StorageAllocations.Select(a => new StorageAllocationResponse(a.StorageId, a.Type.ToString(), a.Quantity)),
+            p.CreatedAt, p.UpdatedAt);
 }

@@ -31,12 +31,14 @@
             <tr>
               <th>Set Number</th>
               <th>Description</th>
+              <th>Qty in box</th>
             </tr>
           </thead>
           <tbody>
             <tr v-for="s in box.sets" :key="s.id">
               <td><RouterLink :to="`/sets/${s.id}`">{{ s.setNumber }}</RouterLink></td>
               <td>{{ s.description }}</td>
+              <td>{{ getAllocQty(s, id) }}</td>
             </tr>
           </tbody>
         </table>
@@ -51,6 +53,7 @@
               <th>Lego ID</th>
               <th>Color</th>
               <th>Description</th>
+              <th>Qty in box</th>
             </tr>
           </thead>
           <tbody>
@@ -58,6 +61,7 @@
               <td><RouterLink :to="`/bulkpieces/${p.id}`">{{ p.legoId }}</RouterLink></td>
               <td>{{ p.legoColor }}</td>
               <td>{{ p.description }}</td>
+              <td>{{ getAllocQty(p, id) }}</td>
             </tr>
           </tbody>
         </table>
@@ -118,6 +122,11 @@ async function submitEdit() {
   } catch (e) {
     editError.value = e.message
   }
+}
+
+function getAllocQty(item, boxId) {
+  const alloc = (item.storageAllocations ?? []).find(a => a.storageId === boxId)
+  return alloc?.quantity ?? '—'
 }
 
 async function doDelete() {

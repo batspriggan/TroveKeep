@@ -43,7 +43,7 @@
           </td>
           <td>{{ s.description }}</td>
           <td>{{ s.quantity }}</td>
-          <td>{{ s.boxId ? '✓' : '—' }}</td>
+          <td>{{ (s.storageAllocations && s.storageAllocations.length) ? `${s.storageAllocations.length} location(s)` : '—' }}</td>
           <td>
             <button class="danger" @click="confirmDelete(s)">Delete</button>
           </td>

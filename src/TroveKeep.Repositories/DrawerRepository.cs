@@ -21,7 +21,9 @@ public class DrawerRepository : IDrawerRepository
         var doc = await _drawers.Find(x => x.Id == id).FirstOrDefaultAsync();
         if (doc is null) return null;
 
-        var pieces = await _bulkPieces.Find(x => x.DrawerId == id).ToListAsync();
+        var filter = Builders<BulkPieceDocument>.Filter.ElemMatch(x => x.StorageAllocations,
+            a => a.StorageId == id && a.StorageType == "Drawer");
+        var pieces = await _bulkPieces.Find(filter).ToListAsync();
         return ToModel(doc, pieces);
     }
 
@@ -51,7 +53,9 @@ public class DrawerRepository : IDrawerRepository
         doc.UpdatedAt = DateTime.UtcNow;
         await _drawers.ReplaceOneAsync(x => x.Id == drawer.Id, doc);
 
-        var pieces = await _bulkPieces.Find(x => x.DrawerId == drawer.Id).ToListAsync();
+        var filter = Builders<BulkPieceDocument>.Filter.ElemMatch(x => x.StorageAllocations,
+            a => a.StorageId == drawer.Id && a.StorageType == "Drawer");
+        var pieces = await _bulkPieces.Find(filter).ToListAsync();
         return ToModel(doc, pieces);
     }
 
@@ -76,8 +80,12 @@ public class DrawerRepository : IDrawerRepository
             LegoColor = p.LegoColor,
             Description = p.Description,
             Quantity = p.Quantity,
-            BoxId = p.BoxId,
-            DrawerId = p.DrawerId,
+            StorageAllocations = p.StorageAllocations.Select(a => new StorageAllocation
+            {
+                StorageId = a.StorageId,
+                Type = Enum.Parse<StorageType>(a.StorageType),
+                Quantity = a.Quantity,
+            }).ToList(),
             CreatedAt = new DateTimeOffset(DateTime.SpecifyKind(p.CreatedAt, DateTimeKind.Utc)),
             UpdatedAt = new DateTimeOffset(DateTime.SpecifyKind(p.UpdatedAt, DateTimeKind.Utc)),
         }).ToList(),

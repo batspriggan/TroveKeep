@@ -80,42 +80,46 @@ public class SetsController : ControllerBase
         return NoContent();
     }
 
-    [HttpGet("{id:guid}/storage")]
-    [ProducesResponseType(typeof(StorageLocationResponse), StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [HttpPost("{id:guid}/storage/box/{boxId:guid}")]
+    [ProducesResponseType(typeof(LegoSetResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetStorage(Guid id)
+    public async Task<IActionResult> AllocateToBox(Guid id, Guid boxId, [FromBody] AllocateStorageRequest request)
     {
-        var set = await _service.GetByIdAsync(id);
-        if (set is null) return NotFound();
-        var storage = await _service.GetStorageAsync(id);
-        if (storage is null) return NoContent();
-        return Ok(MapStorageToResponse(storage));
+        try
+        {
+            var updated = await _service.AllocateToBoxAsync(id, boxId, request.Quantity);
+            if (updated is null) return NotFound();
+            return Ok(MapToResponse(updated));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
     }
 
-    [HttpPut("{id:guid}/storage/box/{boxId:guid}")]
+    [HttpDelete("{id:guid}/storage/{storageId:guid}")]
     [ProducesResponseType(typeof(LegoSetResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> AssignToBox(Guid id, Guid boxId)
+    public async Task<IActionResult> DeallocateStorage(Guid id, Guid storageId)
     {
-        var updated = await _service.AssignToBoxAsync(id, boxId);
+        var updated = await _service.DeallocateStorageAsync(id, storageId);
         if (updated is null) return NotFound();
         return Ok(MapToResponse(updated));
     }
 
     [HttpDelete("{id:guid}/storage")]
-    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(LegoSetResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> RemoveStorage(Guid id)
+    public async Task<IActionResult> ClearStorage(Guid id)
     {
-        var removed = await _service.RemoveStorageAsync(id);
-        if (!removed) return NotFound();
-        return NoContent();
+        var updated = await _service.ClearStorageAsync(id);
+        if (updated is null) return NotFound();
+        return Ok(MapToResponse(updated));
     }
 
     private static LegoSetResponse MapToResponse(LegoSet s) =>
-        new(s.Id, s.SetNumber, s.Description, s.PhotoUrl, s.Quantity, s.BoxId, s.CreatedAt, s.UpdatedAt);
-
-    private static StorageLocationResponse MapStorageToResponse(StorageLocation s) =>
-        new(s.Type.ToString(), s.StorageId, s.StorageName, s.DrawerContainerId, s.DrawerContainerName, s.DrawerPosition);
+        new(s.Id, s.SetNumber, s.Description, s.PhotoUrl, s.Quantity,
+            s.StorageAllocations.Select(a => new StorageAllocationResponse(a.StorageId, a.Type.ToString(), a.Quantity)),
+            s.CreatedAt, s.UpdatedAt);
 }

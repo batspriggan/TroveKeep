@@ -3,6 +3,7 @@ using MongoDB.Bson;
 
 namespace TroveKeep.Repositories.Documents;
 
+[BsonIgnoreExtraElements]
 public class BulkPieceDocument
 {
     [BsonId]
@@ -13,12 +14,7 @@ public class BulkPieceDocument
     public string LegoColor { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;
     public int Quantity { get; set; } = 1;
-
-    [BsonGuidRepresentation(GuidRepresentation.Standard)]
-    public Guid? BoxId { get; set; }
-
-    [BsonGuidRepresentation(GuidRepresentation.Standard)]
-    public Guid? DrawerId { get; set; }
+    public List<StorageAllocationDocument> StorageAllocations { get; set; } = [];
 
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }

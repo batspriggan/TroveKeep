@@ -9,8 +9,8 @@ public interface IBulkPieceService
     Task<BulkPiece> CreateAsync(BulkPiece bulkPiece);
     Task<BulkPiece?> UpdateAsync(BulkPiece bulkPiece);
     Task<bool> DeleteAsync(Guid id);
-    Task<StorageLocation?> GetStorageAsync(Guid id);
-    Task<BulkPiece?> AssignToBoxAsync(Guid id, Guid boxId);
-    Task<BulkPiece?> AssignToDrawerAsync(Guid id, Guid drawerId);
-    Task<bool> RemoveStorageAsync(Guid id);
+    Task<BulkPiece?> AllocateToBoxAsync(Guid id, Guid boxId, int quantity);
+    Task<BulkPiece?> AllocateToDrawerAsync(Guid id, Guid drawerId, int quantity);
+    Task<BulkPiece?> DeallocateStorageAsync(Guid id, Guid storageId);
+    Task<BulkPiece?> ClearStorageAsync(Guid id);
 }

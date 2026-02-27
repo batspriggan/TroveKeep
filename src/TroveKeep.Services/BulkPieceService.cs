@@ -9,18 +9,15 @@ public class BulkPieceService : IBulkPieceService
     private readonly IBulkPieceRepository _pieceRepo;
     private readonly IBoxRepository _boxRepo;
     private readonly IDrawerRepository _drawerRepo;
-    private readonly IDrawerContainerRepository _containerRepo;
 
     public BulkPieceService(
         IBulkPieceRepository pieceRepo,
         IBoxRepository boxRepo,
-        IDrawerRepository drawerRepo,
-        IDrawerContainerRepository containerRepo)
+        IDrawerRepository drawerRepo)
     {
         _pieceRepo = pieceRepo;
         _boxRepo = boxRepo;
         _drawerRepo = drawerRepo;
-        _containerRepo = containerRepo;
     }
 
     public Task<IEnumerable<BulkPiece>> GetAllAsync() => _pieceRepo.GetAllAsync();
@@ -29,59 +26,41 @@ public class BulkPieceService : IBulkPieceService
     public Task<BulkPiece?> UpdateAsync(BulkPiece bulkPiece) => _pieceRepo.UpdateAsync(bulkPiece);
     public Task<bool> DeleteAsync(Guid id) => _pieceRepo.DeleteAsync(id);
 
-    public async Task<StorageLocation?> GetStorageAsync(Guid id)
-    {
-        var piece = await _pieceRepo.GetByIdAsync(id);
-        if (piece is null) return null;
-
-        if (piece.BoxId.HasValue)
-        {
-            var box = await _boxRepo.GetByIdAsync(piece.BoxId.Value);
-            if (box is null) return null;
-            return new StorageLocation
-            {
-                Type = StorageType.Box,
-                StorageId = box.Id,
-                StorageName = box.Name,
-            };
-        }
-
-        if (piece.DrawerId.HasValue)
-        {
-            var drawer = await _drawerRepo.GetByIdAsync(piece.DrawerId.Value);
-            if (drawer is null) return null;
-            var container = await _containerRepo.GetByIdAsync(drawer.DrawerContainerId);
-            return new StorageLocation
-            {
-                Type = StorageType.Drawer,
-                StorageId = drawer.Id,
-                StorageName = drawer.Label ?? $"Position {drawer.Position}",
-                DrawerContainerId = container?.Id,
-                DrawerContainerName = container?.Name,
-                DrawerPosition = drawer.Position,
-            };
-        }
-
-        return null;
-    }
-
-    public async Task<BulkPiece?> AssignToBoxAsync(Guid id, Guid boxId)
+    public async Task<BulkPiece?> AllocateToBoxAsync(Guid id, Guid boxId, int quantity)
     {
         var box = await _boxRepo.GetByIdAsync(boxId);
         if (box is null) return null;
-        return await _pieceRepo.AssignToBoxAsync(id, boxId);
+
+        var piece = await _pieceRepo.GetByIdAsync(id);
+        if (piece is null) return null;
+
+        var currentlyAllocated = piece.StorageAllocations.Sum(a => a.Quantity);
+        if (currentlyAllocated + quantity > piece.Quantity)
+            throw new InvalidOperationException(
+                $"Cannot allocate {quantity}: total would be {currentlyAllocated + quantity}, exceeding piece quantity {piece.Quantity}.");
+
+        return await _pieceRepo.AddStorageAsync(id, boxId, StorageType.Box, quantity);
     }
 
-    public async Task<BulkPiece?> AssignToDrawerAsync(Guid id, Guid drawerId)
+    public async Task<BulkPiece?> AllocateToDrawerAsync(Guid id, Guid drawerId, int quantity)
     {
         var drawer = await _drawerRepo.GetByIdAsync(drawerId);
         if (drawer is null) return null;
-        return await _pieceRepo.AssignToDrawerAsync(id, drawerId);
+
+        var piece = await _pieceRepo.GetByIdAsync(id);
+        if (piece is null) return null;
+
+        var currentlyAllocated = piece.StorageAllocations.Sum(a => a.Quantity);
+        if (currentlyAllocated + quantity > piece.Quantity)
+            throw new InvalidOperationException(
+                $"Cannot allocate {quantity}: total would be {currentlyAllocated + quantity}, exceeding piece quantity {piece.Quantity}.");
+
+        return await _pieceRepo.AddStorageAsync(id, drawerId, StorageType.Drawer, quantity);
     }
 
-    public async Task<bool> RemoveStorageAsync(Guid id)
-    {
-        var result = await _pieceRepo.RemoveStorageAsync(id);
-        return result is not null;
-    }
+    public Task<BulkPiece?> DeallocateStorageAsync(Guid id, Guid storageId) =>
+        _pieceRepo.RemoveStorageAsync(id, storageId);
+
+    public Task<BulkPiece?> ClearStorageAsync(Guid id) =>
+        _pieceRepo.ClearStorageAsync(id);
 }

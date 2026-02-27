@@ -9,7 +9,7 @@ public interface ILegoSetService
     Task<LegoSet> CreateAsync(LegoSet legoSet);
     Task<LegoSet?> UpdateAsync(LegoSet legoSet);
     Task<bool> DeleteAsync(Guid id);
-    Task<StorageLocation?> GetStorageAsync(Guid id);
-    Task<LegoSet?> AssignToBoxAsync(Guid id, Guid boxId);
-    Task<bool> RemoveStorageAsync(Guid id);
+    Task<LegoSet?> AllocateToBoxAsync(Guid id, Guid boxId, int quantity);
+    Task<LegoSet?> DeallocateStorageAsync(Guid id, Guid storageId);
+    Task<LegoSet?> ClearStorageAsync(Guid id);
 }

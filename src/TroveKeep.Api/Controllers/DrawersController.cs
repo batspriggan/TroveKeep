@@ -64,6 +64,8 @@ public class DrawersController : ControllerBase
 
     private static DrawerDetailResponse MapToDetailResponse(Drawer d) =>
         new(d.Id, d.Position, d.Label, d.DrawerContainerId,
-            d.BulkPieces.Select(p => new BulkPieceResponse(p.Id, p.LegoId, p.LegoColor, p.Description, p.Quantity, p.BoxId, p.DrawerId, p.CreatedAt, p.UpdatedAt)),
+            d.BulkPieces.Select(p => new BulkPieceResponse(p.Id, p.LegoId, p.LegoColor, p.Description, p.Quantity,
+                p.StorageAllocations.Select(a => new StorageAllocationResponse(a.StorageId, a.Type.ToString(), a.Quantity)),
+                p.CreatedAt, p.UpdatedAt)),
             d.CreatedAt, d.UpdatedAt);
 }

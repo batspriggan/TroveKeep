@@ -25,11 +25,40 @@ public class BoxRepository : IBoxRepository
 
         var boxIds = boxDocs.Select(b => b.Id).ToList();
 
-        var setDocs = await _legoSets.Find(x => x.BoxId.HasValue && boxIds.Contains(x.BoxId.Value)).ToListAsync();
-        var pieceDocs = await _bulkPieces.Find(x => x.BoxId.HasValue && boxIds.Contains(x.BoxId.Value)).ToListAsync();
+        var setFilter = Builders<LegoSetDocument>.Filter.ElemMatch(x => x.StorageAllocations,
+            Builders<StorageAllocationDocument>.Filter.And(
+                Builders<StorageAllocationDocument>.Filter.In(a => a.StorageId, boxIds),
+                Builders<StorageAllocationDocument>.Filter.Eq(a => a.StorageType, "Box")));
+        var setDocs = await _legoSets.Find(setFilter).ToListAsync();
 
-        var setsByBox = setDocs.GroupBy(s => s.BoxId!.Value).ToDictionary(g => g.Key, g => g.ToList());
-        var piecesByBox = pieceDocs.GroupBy(p => p.BoxId!.Value).ToDictionary(g => g.Key, g => g.ToList());
+        var pieceFilter = Builders<BulkPieceDocument>.Filter.ElemMatch(x => x.StorageAllocations,
+            Builders<StorageAllocationDocument>.Filter.And(
+                Builders<StorageAllocationDocument>.Filter.In(a => a.StorageId, boxIds),
+                Builders<StorageAllocationDocument>.Filter.Eq(a => a.StorageType, "Box")));
+        var pieceDocs = await _bulkPieces.Find(pieceFilter).ToListAsync();
+
+        // A set/piece can appear in multiple boxes; build per-box lists
+        var setsByBox = new Dictionary<Guid, List<LegoSetDocument>>();
+        foreach (var setDoc in setDocs)
+        {
+            foreach (var alloc in setDoc.StorageAllocations.Where(a => a.StorageType == "Box" && boxIds.Contains(a.StorageId)))
+            {
+                if (!setsByBox.TryGetValue(alloc.StorageId, out var list))
+                    setsByBox[alloc.StorageId] = list = [];
+                list.Add(setDoc);
+            }
+        }
+
+        var piecesByBox = new Dictionary<Guid, List<BulkPieceDocument>>();
+        foreach (var pieceDoc in pieceDocs)
+        {
+            foreach (var alloc in pieceDoc.StorageAllocations.Where(a => a.StorageType == "Box" && boxIds.Contains(a.StorageId)))
+            {
+                if (!piecesByBox.TryGetValue(alloc.StorageId, out var list))
+                    piecesByBox[alloc.StorageId] = list = [];
+                list.Add(pieceDoc);
+            }
+        }
 
         return boxDocs.Select(b => ToModel(b,
             setsByBox.GetValueOrDefault(b.Id) ?? [],
@@ -41,8 +70,14 @@ public class BoxRepository : IBoxRepository
         var doc = await _boxes.Find(x => x.Id == id).FirstOrDefaultAsync();
         if (doc is null) return null;
 
-        var sets = await _legoSets.Find(x => x.BoxId == id).ToListAsync();
-        var pieces = await _bulkPieces.Find(x => x.BoxId == id).ToListAsync();
+        var setFilter = Builders<LegoSetDocument>.Filter.ElemMatch(x => x.StorageAllocations,
+            a => a.StorageId == id && a.StorageType == "Box");
+        var sets = await _legoSets.Find(setFilter).ToListAsync();
+
+        var pieceFilter = Builders<BulkPieceDocument>.Filter.ElemMatch(x => x.StorageAllocations,
+            a => a.StorageId == id && a.StorageType == "Box");
+        var pieces = await _bulkPieces.Find(pieceFilter).ToListAsync();
+
         return ToModel(doc, sets, pieces);
     }
 
@@ -72,8 +107,14 @@ public class BoxRepository : IBoxRepository
         doc.UpdatedAt = DateTime.UtcNow;
         await _boxes.ReplaceOneAsync(x => x.Id == box.Id, doc);
 
-        var sets = await _legoSets.Find(x => x.BoxId == box.Id).ToListAsync();
-        var pieces = await _bulkPieces.Find(x => x.BoxId == box.Id).ToListAsync();
+        var setFilter = Builders<LegoSetDocument>.Filter.ElemMatch(x => x.StorageAllocations,
+            a => a.StorageId == box.Id && a.StorageType == "Box");
+        var sets = await _legoSets.Find(setFilter).ToListAsync();
+
+        var pieceFilter = Builders<BulkPieceDocument>.Filter.ElemMatch(x => x.StorageAllocations,
+            a => a.StorageId == box.Id && a.StorageType == "Box");
+        var pieces = await _bulkPieces.Find(pieceFilter).ToListAsync();
+
         return ToModel(doc, sets, pieces);
     }
 
@@ -97,7 +138,12 @@ public class BoxRepository : IBoxRepository
             Description = s.Description,
             PhotoUrl = s.PhotoUrl,
             Quantity = s.Quantity,
-            BoxId = s.BoxId,
+            StorageAllocations = s.StorageAllocations.Select(a => new StorageAllocation
+            {
+                StorageId = a.StorageId,
+                Type = Enum.Parse<StorageType>(a.StorageType),
+                Quantity = a.Quantity,
+            }).ToList(),
             CreatedAt = new DateTimeOffset(DateTime.SpecifyKind(s.CreatedAt, DateTimeKind.Utc)),
             UpdatedAt = new DateTimeOffset(DateTime.SpecifyKind(s.UpdatedAt, DateTimeKind.Utc)),
         }).ToList(),
@@ -108,8 +154,12 @@ public class BoxRepository : IBoxRepository
             LegoColor = p.LegoColor,
             Description = p.Description,
             Quantity = p.Quantity,
-            BoxId = p.BoxId,
-            DrawerId = p.DrawerId,
+            StorageAllocations = p.StorageAllocations.Select(a => new StorageAllocation
+            {
+                StorageId = a.StorageId,
+                Type = Enum.Parse<StorageType>(a.StorageType),
+                Quantity = a.Quantity,
+            }).ToList(),
             CreatedAt = new DateTimeOffset(DateTime.SpecifyKind(p.CreatedAt, DateTimeKind.Utc)),
             UpdatedAt = new DateTimeOffset(DateTime.SpecifyKind(p.UpdatedAt, DateTimeKind.Utc)),
         }).ToList(),

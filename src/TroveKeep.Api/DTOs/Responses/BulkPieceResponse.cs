@@ -6,7 +6,6 @@ public record BulkPieceResponse(
     string LegoColor,
     string Description,
     int Quantity,
-    Guid? BoxId,
-    Guid? DrawerId,
+    IEnumerable<StorageAllocationResponse> StorageAllocations,
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt);

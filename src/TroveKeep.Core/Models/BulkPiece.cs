@@ -7,10 +7,7 @@ public class BulkPiece
     public string LegoColor { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;
     public int Quantity { get; set; } = 1;
-    public Guid? BoxId { get; set; }
-    public Box? Box { get; set; }
-    public Guid? DrawerId { get; set; }
-    public Drawer? Drawer { get; set; }
+    public List<StorageAllocation> StorageAllocations { get; set; } = [];
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
 }

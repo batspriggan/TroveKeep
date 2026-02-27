@@ -6,6 +6,6 @@ public record LegoSetResponse(
     string Description,
     string? PhotoUrl,
     int Quantity,
-    Guid? BoxId,
+    IEnumerable<StorageAllocationResponse> StorageAllocations,
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt);

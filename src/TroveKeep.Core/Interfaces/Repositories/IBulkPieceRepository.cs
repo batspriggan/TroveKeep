@@ -9,7 +9,7 @@ public interface IBulkPieceRepository
     Task<BulkPiece> CreateAsync(BulkPiece bulkPiece);
     Task<BulkPiece?> UpdateAsync(BulkPiece bulkPiece);
     Task<bool> DeleteAsync(Guid id);
-    Task<BulkPiece?> AssignToBoxAsync(Guid id, Guid boxId);
-    Task<BulkPiece?> AssignToDrawerAsync(Guid id, Guid drawerId);
-    Task<BulkPiece?> RemoveStorageAsync(Guid id);
+    Task<BulkPiece?> AddStorageAsync(Guid id, Guid storageId, StorageType type, int quantity);
+    Task<BulkPiece?> RemoveStorageAsync(Guid id, Guid storageId);
+    Task<BulkPiece?> ClearStorageAsync(Guid id);
 }

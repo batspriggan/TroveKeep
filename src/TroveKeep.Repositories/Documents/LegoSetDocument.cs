@@ -3,6 +3,7 @@ using MongoDB.Bson;
 
 namespace TroveKeep.Repositories.Documents;
 
+[BsonIgnoreExtraElements]
 public class LegoSetDocument
 {
     [BsonId]
@@ -13,9 +14,7 @@ public class LegoSetDocument
     public string Description { get; set; } = string.Empty;
     public string? PhotoUrl { get; set; }
     public int Quantity { get; set; } = 1;
-
-    [BsonGuidRepresentation(GuidRepresentation.Standard)]
-    public Guid? BoxId { get; set; }
+    public List<StorageAllocationDocument> StorageAllocations { get; set; } = [];
 
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }

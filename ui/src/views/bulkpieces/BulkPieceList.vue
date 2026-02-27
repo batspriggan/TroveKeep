@@ -45,7 +45,7 @@
           <td>{{ p.legoColor }}</td>
           <td>{{ p.description }}</td>
           <td>{{ p.quantity }}</td>
-          <td>{{ p.boxId ? 'Box' : p.drawerId ? 'Drawer' : '—' }}</td>
+          <td>{{ (p.storageAllocations && p.storageAllocations.length) ? `${p.storageAllocations.length} location(s)` : '—' }}</td>
           <td>
             <button class="danger" @click="confirmDelete(p)">Delete</button>
           </td>

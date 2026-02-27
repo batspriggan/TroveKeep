@@ -21,32 +21,25 @@ public class LegoSetService : ILegoSetService
     public Task<LegoSet?> UpdateAsync(LegoSet legoSet) => _setRepo.UpdateAsync(legoSet);
     public Task<bool> DeleteAsync(Guid id) => _setRepo.DeleteAsync(id);
 
-    public async Task<StorageLocation?> GetStorageAsync(Guid id)
-    {
-        var set = await _setRepo.GetByIdAsync(id);
-        if (set?.BoxId is null) return null;
-
-        var box = await _boxRepo.GetByIdAsync(set.BoxId.Value);
-        if (box is null) return null;
-
-        return new StorageLocation
-        {
-            Type = StorageType.Box,
-            StorageId = box.Id,
-            StorageName = box.Name,
-        };
-    }
-
-    public async Task<LegoSet?> AssignToBoxAsync(Guid id, Guid boxId)
+    public async Task<LegoSet?> AllocateToBoxAsync(Guid id, Guid boxId, int quantity)
     {
         var box = await _boxRepo.GetByIdAsync(boxId);
         if (box is null) return null;
-        return await _setRepo.AssignToBoxAsync(id, boxId);
+
+        var set = await _setRepo.GetByIdAsync(id);
+        if (set is null) return null;
+
+        var currentlyAllocated = set.StorageAllocations.Sum(a => a.Quantity);
+        if (currentlyAllocated + quantity > set.Quantity)
+            throw new InvalidOperationException(
+                $"Cannot allocate {quantity}: total would be {currentlyAllocated + quantity}, exceeding set quantity {set.Quantity}.");
+
+        return await _setRepo.AddStorageAsync(id, boxId, StorageType.Box, quantity);
     }
 
-    public async Task<bool> RemoveStorageAsync(Guid id)
-    {
-        var result = await _setRepo.RemoveStorageAsync(id);
-        return result is not null;
-    }
+    public Task<LegoSet?> DeallocateStorageAsync(Guid id, Guid storageId) =>
+        _setRepo.RemoveStorageAsync(id, storageId);
+
+    public Task<LegoSet?> ClearStorageAsync(Guid id) =>
+        _setRepo.ClearStorageAsync(id);
 }
