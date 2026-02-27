@@ -48,6 +48,30 @@ public class ArchivesController : ControllerBase
         return Ok(colors.Select(MapToResponse));
     }
 
+    [HttpGet("sets")]
+    [ProducesResponseType(typeof(ArchiveStatusResponse), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetSetsStatus()
+    {
+        var (count, importedAt) = await _service.GetSetsStatusAsync();
+        return Ok(new ArchiveStatusResponse(count, importedAt));
+    }
+
+    [HttpPost("sets/reload")]
+    [ProducesResponseType(typeof(ArchiveStatusResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> ReloadSets()
+    {
+        try
+        {
+            var (count, importedAt) = await _service.ImportSetsAsync();
+            return Ok(new ArchiveStatusResponse(count, importedAt));
+        }
+        catch (FileNotFoundException ex)
+        {
+            return NotFound(new { error = ex.Message });
+        }
+    }
+
     private static ColorResponse MapToResponse(RebrickableColor c) =>
         new(c.Id, c.Name, c.Rgb, c.IsTrans, c.StartYear, c.EndYear);
 }

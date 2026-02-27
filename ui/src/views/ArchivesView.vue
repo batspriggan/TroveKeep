@@ -51,12 +51,35 @@
       </template>
       <p v-else-if="!statusLoading" class="muted">No colors imported yet. Click Reload to import.</p>
     </section>
+
+    <section>
+      <h2>Sets <span class="filename">sets.csv.zip</span></h2>
+
+      <p v-if="setsError" class="error">{{ setsError }}</p>
+
+      <div class="status-row">
+        <span v-if="setsStatusLoading" class="muted">Loading…</span>
+        <template v-else>
+          <span>
+            <strong>{{ setsStatus.count }}</strong> set{{ setsStatus.count !== 1 ? 's' : '' }} imported
+          </span>
+          <span class="sep">·</span>
+          <span class="muted">
+            Last import:
+            {{ setsStatus.lastImportedAt ? formatDate(setsStatus.lastImportedAt) : 'Never imported' }}
+          </span>
+        </template>
+        <button class="primary" :disabled="setsReloading" @click="reloadSetsData">
+          {{ setsReloading ? 'Importing…' : 'Reload' }}
+        </button>
+      </div>
+    </section>
   </div>
 </template>
 
 <script setup>
 import { ref, onMounted } from 'vue'
-import { getColorsStatus, reloadColors, getColorsList } from '../api/archives.js'
+import { getColorsStatus, reloadColors, getColorsList, getSetsStatus, reloadSets } from '../api/archives.js'
 
 const status = ref({ count: 0, lastImportedAt: null })
 const colors = ref([])
@@ -106,9 +129,37 @@ function formatYears(y1, y2) {
   return `–${y2}`
 }
 
+const setsStatus = ref({ count: 0, lastImportedAt: null })
+const setsStatusLoading = ref(true)
+const setsReloading = ref(false)
+const setsError = ref('')
+
+async function loadSetsStatus() {
+  try {
+    setsStatus.value = await getSetsStatus()
+  } catch (e) {
+    setsError.value = e.message
+  } finally {
+    setsStatusLoading.value = false
+  }
+}
+
+async function reloadSetsData() {
+  setsReloading.value = true
+  setsError.value = ''
+  try {
+    setsStatus.value = await reloadSets()
+  } catch (e) {
+    setsError.value = e.message
+  } finally {
+    setsReloading.value = false
+  }
+}
+
 onMounted(async () => {
   await loadStatus()
   if (status.value.count > 0) await loadColors()
+  await loadSetsStatus()
 })
 </script>
 

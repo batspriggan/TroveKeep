@@ -28,6 +28,7 @@ builder.Services.AddScoped<IBoxRepository, BoxRepository>();
 builder.Services.AddScoped<IDrawerContainerRepository, DrawerContainerRepository>();
 builder.Services.AddScoped<IDrawerRepository, DrawerRepository>();
 builder.Services.AddScoped<IColorRepository, ColorRepository>();
+builder.Services.AddScoped<ISetArchiveRepository, SetArchiveRepository>();
 
 // Services
 builder.Services.AddScoped<ILegoSetService, LegoSetService>();
