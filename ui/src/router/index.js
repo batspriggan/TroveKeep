@@ -9,6 +9,7 @@ import BoxDetail from '../views/boxes/BoxDetail.vue'
 import DrawerContainerList from '../views/drawercontainers/DrawerContainerList.vue'
 import DrawerContainerDetail from '../views/drawercontainers/DrawerContainerDetail.vue'
 import DrawerDetail from '../views/drawers/DrawerDetail.vue'
+import SearchView from '../views/SearchView.vue'
 
 const routes = [
   { path: '/', redirect: '/sets' },
@@ -21,6 +22,7 @@ const routes = [
   { path: '/drawercontainers', component: DrawerContainerList },
   { path: '/drawercontainers/:id', component: DrawerContainerDetail },
   { path: '/drawers/:id', component: DrawerDetail },
+  { path: '/search', component: SearchView },
 ]
 
 export default createRouter({

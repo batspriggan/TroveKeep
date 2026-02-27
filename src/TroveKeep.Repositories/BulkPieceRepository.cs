@@ -1,3 +1,4 @@
+using MongoDB.Bson;
 using MongoDB.Driver;
 using TroveKeep.Core.Interfaces.Repositories;
 using TroveKeep.Core.Models;
@@ -101,6 +102,16 @@ public class BulkPieceRepository : IBulkPieceRepository
         var options = new FindOneAndUpdateOptions<BulkPieceDocument> { ReturnDocument = ReturnDocument.After };
         var doc = await _collection.FindOneAndUpdateAsync(x => x.Id == id, update, options);
         return doc is null ? null : ToModel(doc);
+    }
+
+    public async Task<IEnumerable<BulkPiece>> SearchAsync(string query)
+    {
+        var regex = new BsonRegularExpression(query, "i");
+        var filter = Builders<BulkPieceDocument>.Filter.Or(
+            Builders<BulkPieceDocument>.Filter.Regex(d => d.LegoId, regex),
+            Builders<BulkPieceDocument>.Filter.Regex(d => d.Description, regex));
+        var docs = await _collection.Find(filter).ToListAsync();
+        return docs.Select(ToModel);
     }
 
     private static BulkPiece ToModel(BulkPieceDocument doc) => new()

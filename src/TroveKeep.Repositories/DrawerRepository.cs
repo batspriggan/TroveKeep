@@ -65,6 +65,14 @@ public class DrawerRepository : IDrawerRepository
         return result.DeletedCount > 0;
     }
 
+    public async Task<IEnumerable<Drawer>> GetByIdsAsync(IEnumerable<Guid> ids)
+    {
+        var idList = ids.ToList();
+        if (idList.Count == 0) return [];
+        var docs = await _drawers.Find(x => idList.Contains(x.Id)).ToListAsync();
+        return docs.Select(d => ToModel(d, []));
+    }
+
     private static Drawer ToModel(DrawerDocument doc, List<BulkPieceDocument> pieceDocs) => new()
     {
         Id = doc.Id,

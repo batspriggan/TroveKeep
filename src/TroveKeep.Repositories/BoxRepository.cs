@@ -124,6 +124,14 @@ public class BoxRepository : IBoxRepository
         return result.DeletedCount > 0;
     }
 
+    public async Task<IEnumerable<Box>> GetByIdsAsync(IEnumerable<Guid> ids)
+    {
+        var idList = ids.ToList();
+        if (idList.Count == 0) return [];
+        var docs = await _boxes.Find(x => idList.Contains(x.Id)).ToListAsync();
+        return docs.Select(d => ToModel(d, [], []));
+    }
+
     private static Box ToModel(BoxDocument doc, List<LegoSetDocument> sets, List<BulkPieceDocument> pieces) => new()
     {
         Id = doc.Id,

@@ -9,4 +9,5 @@ public interface IDrawerRepository
     Task<Drawer> CreateAsync(Drawer drawer);
     Task<Drawer?> UpdateAsync(Drawer drawer);
     Task<bool> DeleteAsync(Guid id);
+    Task<IEnumerable<Drawer>> GetByIdsAsync(IEnumerable<Guid> ids);
 }

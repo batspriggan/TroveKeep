@@ -26,7 +26,10 @@
 
     <p v-if="loading">Loading…</p>
 
-    <table v-else>
+    <template v-else>
+    <input v-model="filterText" type="search" placeholder="Filter by set number or description…" style="margin: 0.5rem 0; width: 100%; max-width: 400px;" />
+
+    <table>
       <thead>
         <tr>
           <th>Set Number</th>
@@ -37,7 +40,7 @@
         </tr>
       </thead>
       <tbody>
-        <tr v-for="s in sets" :key="s.id">
+        <tr v-for="s in filteredSets" :key="s.id">
           <td>
             <RouterLink :to="`/sets/${s.id}`">{{ s.setNumber }}</RouterLink>
           </td>
@@ -51,8 +54,12 @@
         <tr v-if="sets.length === 0">
           <td colspan="5">No sets yet.</td>
         </tr>
+        <tr v-else-if="filteredSets.length === 0">
+          <td colspan="5">No results match your filter.</td>
+        </tr>
       </tbody>
     </table>
+    </template>
 
     <ConfirmDialog
       :open="!!deleteTarget"
@@ -64,11 +71,20 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { getAllSets, createSet, deleteSet } from '../../api/sets.js'
 import ConfirmDialog from '../../components/ConfirmDialog.vue'
 
 const sets = ref([])
+const filterText = ref('')
+const filteredSets = computed(() => {
+  const q = filterText.value.trim().toLowerCase()
+  if (!q) return sets.value
+  return sets.value.filter(s =>
+    s.setNumber.toLowerCase().includes(q) ||
+    s.description.toLowerCase().includes(q)
+  )
+})
 const loading = ref(true)
 const error = ref('')
 const deleteTarget = ref(null)

@@ -5,6 +5,7 @@
     <RouterLink to="/bulkpieces">Bulk Pieces</RouterLink>
     <RouterLink to="/boxes">Boxes</RouterLink>
     <RouterLink to="/drawercontainers">Drawer Containers</RouterLink>
+    <RouterLink to="/search">Search</RouterLink>
   </nav>
 </template>
 

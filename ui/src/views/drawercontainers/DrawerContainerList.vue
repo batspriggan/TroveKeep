@@ -18,7 +18,10 @@
 
     <p v-if="loading">Loading…</p>
 
-    <table v-else>
+    <template v-else>
+    <input v-model="filterText" type="search" placeholder="Filter by name or description…" style="margin: 0.5rem 0; width: 100%; max-width: 400px;" />
+
+    <table>
       <thead>
         <tr>
           <th>Name</th>
@@ -28,7 +31,7 @@
         </tr>
       </thead>
       <tbody>
-        <tr v-for="c in containers" :key="c.id">
+        <tr v-for="c in filteredContainers" :key="c.id">
           <td>
             <RouterLink :to="`/drawercontainers/${c.id}`">{{ c.name }}</RouterLink>
           </td>
@@ -41,8 +44,12 @@
         <tr v-if="containers.length === 0">
           <td colspan="4">No drawer containers yet.</td>
         </tr>
+        <tr v-else-if="filteredContainers.length === 0">
+          <td colspan="4">No results match your filter.</td>
+        </tr>
       </tbody>
     </table>
+    </template>
 
     <ConfirmDialog
       :open="!!deleteTarget"
@@ -54,11 +61,20 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { getAllDrawerContainers, createDrawerContainer, deleteDrawerContainer } from '../../api/drawercontainers.js'
 import ConfirmDialog from '../../components/ConfirmDialog.vue'
 
 const containers = ref([])
+const filterText = ref('')
+const filteredContainers = computed(() => {
+  const q = filterText.value.trim().toLowerCase()
+  if (!q) return containers.value
+  return containers.value.filter(c =>
+    c.name.toLowerCase().includes(q) ||
+    (c.description && c.description.toLowerCase().includes(q))
+  )
+})
 const loading = ref(true)
 const error = ref('')
 const deleteTarget = ref(null)

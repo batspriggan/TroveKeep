@@ -26,7 +26,10 @@
 
     <p v-if="loading">Loading…</p>
 
-    <table v-else>
+    <template v-else>
+    <input v-model="filterText" type="search" placeholder="Filter by Lego ID or description…" style="margin: 0.5rem 0; width: 100%; max-width: 400px;" />
+
+    <table>
       <thead>
         <tr>
           <th>Lego ID</th>
@@ -38,7 +41,7 @@
         </tr>
       </thead>
       <tbody>
-        <tr v-for="p in pieces" :key="p.id">
+        <tr v-for="p in filteredPieces" :key="p.id">
           <td>
             <RouterLink :to="`/bulkpieces/${p.id}`">{{ p.legoId }}</RouterLink>
           </td>
@@ -53,8 +56,12 @@
         <tr v-if="pieces.length === 0">
           <td colspan="6">No bulk pieces yet.</td>
         </tr>
+        <tr v-else-if="filteredPieces.length === 0">
+          <td colspan="6">No results match your filter.</td>
+        </tr>
       </tbody>
     </table>
+    </template>
 
     <ConfirmDialog
       :open="!!deleteTarget"
@@ -66,11 +73,20 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { getAllBulkPieces, createBulkPiece, deleteBulkPiece } from '../../api/bulkpieces.js'
 import ConfirmDialog from '../../components/ConfirmDialog.vue'
 
 const pieces = ref([])
+const filterText = ref('')
+const filteredPieces = computed(() => {
+  const q = filterText.value.trim().toLowerCase()
+  if (!q) return pieces.value
+  return pieces.value.filter(p =>
+    p.legoId.toLowerCase().includes(q) ||
+    p.description.toLowerCase().includes(q)
+  )
+})
 const loading = ref(true)
 const error = ref('')
 const deleteTarget = ref(null)

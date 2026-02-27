@@ -18,7 +18,10 @@
 
     <p v-if="loading">Loading…</p>
 
-    <table v-else>
+    <template v-else>
+    <input v-model="filterText" type="search" placeholder="Filter by box name…" style="margin: 0.5rem 0; width: 100%; max-width: 400px;" />
+
+    <table>
       <thead>
         <tr>
           <th>Name</th>
@@ -28,7 +31,7 @@
         </tr>
       </thead>
       <tbody>
-        <tr v-for="b in boxes" :key="b.id">
+        <tr v-for="b in filteredBoxes" :key="b.id">
           <td>
             <RouterLink :to="`/boxes/${b.id}`">{{ b.name }}</RouterLink>
           </td>
@@ -41,8 +44,12 @@
         <tr v-if="boxes.length === 0">
           <td colspan="4">No boxes yet.</td>
         </tr>
+        <tr v-else-if="filteredBoxes.length === 0">
+          <td colspan="4">No results match your filter.</td>
+        </tr>
       </tbody>
     </table>
+    </template>
 
     <ConfirmDialog
       :open="!!deleteTarget"
@@ -54,11 +61,17 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { getAllBoxes, createBox, deleteBox } from '../../api/boxes.js'
 import ConfirmDialog from '../../components/ConfirmDialog.vue'
 
 const boxes = ref([])
+const filterText = ref('')
+const filteredBoxes = computed(() => {
+  const q = filterText.value.trim().toLowerCase()
+  if (!q) return boxes.value
+  return boxes.value.filter(b => b.name.toLowerCase().includes(q))
+})
 const loading = ref(true)
 const error = ref('')
 const deleteTarget = ref(null)

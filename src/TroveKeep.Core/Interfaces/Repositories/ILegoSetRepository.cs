@@ -12,4 +12,5 @@ public interface ILegoSetRepository
     Task<LegoSet?> AddStorageAsync(Guid id, Guid storageId, StorageType type, int quantity);
     Task<LegoSet?> RemoveStorageAsync(Guid id, Guid storageId);
     Task<LegoSet?> ClearStorageAsync(Guid id);
+    Task<IEnumerable<LegoSet>> SearchAsync(string query);
 }

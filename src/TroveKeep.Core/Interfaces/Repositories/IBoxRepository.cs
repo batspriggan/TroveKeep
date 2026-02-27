@@ -10,4 +10,5 @@ public interface IBoxRepository
     Task<Box> CreateAsync(Box box);
     Task<Box?> UpdateAsync(Box box);
     Task<bool> DeleteAsync(Guid id);
+    Task<IEnumerable<Box>> GetByIdsAsync(IEnumerable<Guid> ids);
 }

@@ -10,4 +10,5 @@ public interface IDrawerContainerRepository
     Task<DrawerContainer> CreateAsync(DrawerContainer drawerContainer);
     Task<DrawerContainer?> UpdateAsync(DrawerContainer drawerContainer);
     Task<bool> DeleteAsync(Guid id);
+    Task<IEnumerable<DrawerContainer>> GetByIdsAsync(IEnumerable<Guid> ids);
 }

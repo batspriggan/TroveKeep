@@ -34,6 +34,7 @@ builder.Services.AddScoped<IBulkPieceService, BulkPieceService>();
 builder.Services.AddScoped<IBoxService, BoxService>();
 builder.Services.AddScoped<IDrawerContainerService, DrawerContainerService>();
 builder.Services.AddScoped<IDrawerService, DrawerService>();
+builder.Services.AddScoped<ISearchService, SearchService>();
 
 var app = builder.Build();
 

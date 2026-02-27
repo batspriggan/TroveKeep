@@ -1,3 +1,4 @@
+using MongoDB.Bson;
 using MongoDB.Driver;
 using TroveKeep.Core.Interfaces.Repositories;
 using TroveKeep.Core.Models;
@@ -101,6 +102,16 @@ public class LegoSetRepository : ILegoSetRepository
         var options = new FindOneAndUpdateOptions<LegoSetDocument> { ReturnDocument = ReturnDocument.After };
         var doc = await _collection.FindOneAndUpdateAsync(x => x.Id == id, update, options);
         return doc is null ? null : ToModel(doc);
+    }
+
+    public async Task<IEnumerable<LegoSet>> SearchAsync(string query)
+    {
+        var regex = new BsonRegularExpression(query, "i");
+        var filter = Builders<LegoSetDocument>.Filter.Or(
+            Builders<LegoSetDocument>.Filter.Regex(d => d.SetNumber, regex),
+            Builders<LegoSetDocument>.Filter.Regex(d => d.Description, regex));
+        var docs = await _collection.Find(filter).ToListAsync();
+        return docs.Select(ToModel);
     }
 
     private static LegoSet ToModel(LegoSetDocument doc) => new()
