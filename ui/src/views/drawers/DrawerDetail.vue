@@ -34,13 +34,18 @@
               <th>Lego ID</th>
               <th>Color</th>
               <th>Description</th>
+              <th>Qty in Drawer</th>
             </tr>
           </thead>
           <tbody>
             <tr v-for="p in contents" :key="p.id">
               <td><RouterLink :to="`/bulkpieces/${p.id}`">{{ p.legoId }}</RouterLink></td>
-              <td>{{ p.legoColor }}</td>
+              <td>
+                <span v-if="p.legoColorRgb" class="color-swatch" :style="{ background: '#' + p.legoColorRgb }"></span>
+                {{ p.legoColorName ?? `#${p.legoColorId}` }}
+              </td>
               <td>{{ p.description }}</td>
+              <td>{{ p.storageAllocations.find(a => a.storageId === id)?.quantity ?? '—' }}</td>
             </tr>
           </tbody>
         </table>
@@ -119,3 +124,15 @@ async function doDelete() {
 
 onMounted(load)
 </script>
+
+<style scoped>
+.color-swatch {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+  border: 1px solid #ccc;
+  vertical-align: middle;
+  margin-right: 4px;
+}
+</style>

@@ -111,6 +111,11 @@ const deleteDrawerTarget = ref(null)
 const editForm = ref({ name: '', description: '' })
 const drawerForm = ref({ position: 1, label: '' })
 
+function nextPosition(drawerList) {
+  if (!drawerList.length) return 1
+  return Math.max(...drawerList.map(d => d.position)) + 1
+}
+
 async function load() {
   loading.value = true
   error.value = ''
@@ -120,7 +125,8 @@ async function load() {
       getDrawerContainerDrawers(id),
     ])
     container.value = c
-    drawers.value = d
+    drawers.value = d.drawers
+    drawerForm.value = { position: nextPosition(d.drawers), label: '' }
     editForm.value = { name: c.name, description: c.description ?? '' }
   } catch (e) {
     error.value = e.message
@@ -149,8 +155,8 @@ async function submitDrawer() {
       position: drawerForm.value.position,
       label: drawerForm.value.label || null,
     })
-    drawerForm.value = { position: (drawerForm.value.position + 1), label: '' }
-    drawers.value = await getDrawerContainerDrawers(id)
+    drawers.value = (await getDrawerContainerDrawers(id)).drawers
+    drawerForm.value = { position: nextPosition(drawers.value), label: '' }
   } catch (e) {
     drawerError.value = e.message
   }
@@ -165,7 +171,7 @@ async function doDeleteDrawer() {
   try {
     await deleteDrawer(deleteDrawerTarget.value.id)
     deleteDrawerTarget.value = null
-    drawers.value = await getDrawerContainerDrawers(id)
+    drawers.value = (await getDrawerContainerDrawers(id)).drawers
   } catch (e) {
     error.value = e.message
     deleteDrawerTarget.value = null

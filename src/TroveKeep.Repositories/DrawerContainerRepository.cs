@@ -9,11 +9,13 @@ public class DrawerContainerRepository : IDrawerContainerRepository
 {
     private readonly IMongoCollection<DrawerContainerDocument> _containers;
     private readonly IMongoCollection<DrawerDocument> _drawers;
+    private readonly IMongoCollection<BulkPieceDocument> _bulkPieces;
 
     public DrawerContainerRepository(IMongoDatabase database)
     {
         _containers = database.GetCollection<DrawerContainerDocument>("drawercontainers");
         _drawers = database.GetCollection<DrawerDocument>("drawers");
+        _bulkPieces = database.GetCollection<BulkPieceDocument>("bulkpieces");
     }
 
     public async Task<IEnumerable<DrawerContainer>> GetAllAsync()
@@ -25,7 +27,10 @@ public class DrawerContainerRepository : IDrawerContainerRepository
         var drawerDocs = await _drawers.Find(x => containerIds.Contains(x.DrawerContainerId)).ToListAsync();
         var drawersByContainer = drawerDocs.GroupBy(d => d.DrawerContainerId).ToDictionary(g => g.Key, g => g.ToList());
 
-        return containerDocs.Select(c => ToModel(c, drawersByContainer.GetValueOrDefault(c.Id) ?? []));
+        var allDrawerIds = drawerDocs.Select(d => d.Id).ToList();
+        var pieceCountByDrawer = await CountPiecesPerDrawerAsync(allDrawerIds);
+
+        return containerDocs.Select(c => ToModel(c, drawersByContainer.GetValueOrDefault(c.Id) ?? [], pieceCountByDrawer));
     }
 
     public async Task<DrawerContainer?> GetByIdAsync(Guid id)
@@ -34,7 +39,8 @@ public class DrawerContainerRepository : IDrawerContainerRepository
         if (doc is null) return null;
 
         var drawerDocs = await _drawers.Find(x => x.DrawerContainerId == id).ToListAsync();
-        return ToModel(doc, drawerDocs);
+        var pieceCountByDrawer = await CountPiecesPerDrawerAsync(drawerDocs.Select(d => d.Id).ToList());
+        return ToModel(doc, drawerDocs, pieceCountByDrawer);
     }
 
     public async Task<DrawerContainer?> GetByIdWithDrawersAsync(Guid id)
@@ -50,7 +56,7 @@ public class DrawerContainerRepository : IDrawerContainerRepository
         doc.CreatedAt = now;
         doc.UpdatedAt = now;
         await _containers.InsertOneAsync(doc);
-        return ToModel(doc, []);
+        return ToModel(doc, [], []);
     }
 
     public async Task<DrawerContainer?> UpdateAsync(DrawerContainer drawerContainer)
@@ -64,7 +70,8 @@ public class DrawerContainerRepository : IDrawerContainerRepository
         await _containers.ReplaceOneAsync(x => x.Id == drawerContainer.Id, doc);
 
         var drawerDocs = await _drawers.Find(x => x.DrawerContainerId == drawerContainer.Id).ToListAsync();
-        return ToModel(doc, drawerDocs);
+        var pieceCountByDrawer = await CountPiecesPerDrawerAsync(drawerDocs.Select(d => d.Id).ToList());
+        return ToModel(doc, drawerDocs, pieceCountByDrawer);
     }
 
     public async Task<bool> DeleteAsync(Guid id)
@@ -78,10 +85,25 @@ public class DrawerContainerRepository : IDrawerContainerRepository
         var idList = ids.ToList();
         if (idList.Count == 0) return [];
         var docs = await _containers.Find(x => idList.Contains(x.Id)).ToListAsync();
-        return docs.Select(d => ToModel(d, []));
+        return docs.Select(d => ToModel(d, [], []));
     }
 
-    private static DrawerContainer ToModel(DrawerContainerDocument doc, List<DrawerDocument> drawerDocs) => new()
+    private async Task<Dictionary<Guid, int>> CountPiecesPerDrawerAsync(List<Guid> drawerIds)
+    {
+        if (drawerIds.Count == 0) return [];
+        var filter = Builders<BulkPieceDocument>.Filter.ElemMatch(
+            x => x.StorageAllocations,
+            a => a.StorageType == "Drawer" && drawerIds.Contains(a.StorageId));
+        var pieces = await _bulkPieces.Find(filter).ToListAsync();
+        var counts = new Dictionary<Guid, int>();
+        foreach (var piece in pieces)
+            foreach (var alloc in piece.StorageAllocations)
+                if (alloc.StorageType == "Drawer" && drawerIds.Contains(alloc.StorageId))
+                    counts[alloc.StorageId] = counts.GetValueOrDefault(alloc.StorageId) + 1;
+        return counts;
+    }
+
+    private static DrawerContainer ToModel(DrawerContainerDocument doc, List<DrawerDocument> drawerDocs, Dictionary<Guid, int> pieceCountByDrawer) => new()
     {
         Id = doc.Id,
         Name = doc.Name,
@@ -94,6 +116,7 @@ public class DrawerContainerRepository : IDrawerContainerRepository
             Position = d.Position,
             Label = d.Label,
             DrawerContainerId = d.DrawerContainerId,
+            BulkPieces = Enumerable.Range(0, pieceCountByDrawer.GetValueOrDefault(d.Id)).Select(_ => new BulkPiece()).ToList(),
             CreatedAt = new DateTimeOffset(DateTime.SpecifyKind(d.CreatedAt, DateTimeKind.Utc)),
             UpdatedAt = new DateTimeOffset(DateTime.SpecifyKind(d.UpdatedAt, DateTimeKind.Utc)),
         }).ToList(),
