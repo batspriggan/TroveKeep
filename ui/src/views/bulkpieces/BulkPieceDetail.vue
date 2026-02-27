@@ -68,7 +68,7 @@
 
         <p style="margin-top: 0.5rem">Unallocated: {{ unallocated }} of {{ piece.quantity }}</p>
 
-        <div class="form-row" style="margin-top: 0.75rem; align-items: flex-start; flex-direction: column; gap: 0.75rem">
+        <fieldset class="alloc-section" :disabled="fullyAllocated" style="margin-top: 0.75rem">
           <form class="form-row" style="width:100%" @submit.prevent="submitBoxStorage">
             <div class="form-field">
               <label>Box</label>
@@ -84,7 +84,7 @@
             <button class="primary" type="submit" :disabled="!selectedBoxId || boxAllocQty < 1">Allocate to Box</button>
           </form>
 
-          <form class="form-row" style="width:100%" @submit.prevent="submitDrawerStorage">
+          <form class="form-row" style="width:100%; margin-top: 0.75rem" @submit.prevent="submitDrawerStorage">
             <div class="form-field">
               <label>Drawer</label>
               <select v-model="selectedDrawerId">
@@ -100,14 +100,17 @@
             </div>
             <button class="primary" type="submit" :disabled="!selectedDrawerId || drawerAllocQty < 1">Allocate to Drawer</button>
           </form>
+        </fieldset>
 
-          <button
-            v-if="piece.storageAllocations && piece.storageAllocations.length"
-            type="button"
-            class="danger"
-            @click="clearStorage"
-          >Clear All</button>
-        </div>
+        <p v-if="fullyAllocated" class="alloc-full-msg">All quantity is allocated — remove a location to free up space.</p>
+
+        <button
+          v-if="piece.storageAllocations && piece.storageAllocations.length"
+          type="button"
+          class="danger"
+          style="margin-top: 0.75rem"
+          @click="clearStorage"
+        >Clear All</button>
         <p v-if="storageError" class="error">{{ storageError }}</p>
       </div>
 
@@ -166,6 +169,7 @@ const unallocated = computed(() => {
   const allocated = (piece.value.storageAllocations ?? []).reduce((sum, a) => sum + a.quantity, 0)
   return piece.value.quantity - allocated
 })
+const fullyAllocated = computed(() => unallocated.value === 0)
 
 async function load() {
   loading.value = true
@@ -264,6 +268,22 @@ onMounted(load)
 </script>
 
 <style scoped>
+.alloc-section {
+  border: none;
+  padding: 0;
+  margin: 0;
+}
+
+.alloc-section:disabled {
+  opacity: 0.45;
+}
+
+.alloc-full-msg {
+  margin-top: 0.4rem;
+  font-size: 0.85rem;
+  color: #6b7280;
+}
+
 .swatch-title {
   display: inline-block;
   width: 1rem;
