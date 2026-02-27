@@ -6,6 +6,7 @@
     <RouterLink to="/boxes">Boxes</RouterLink>
     <RouterLink to="/drawercontainers">Drawer Containers</RouterLink>
     <RouterLink to="/search">Search</RouterLink>
+    <RouterLink to="/archives">Archives</RouterLink>
   </nav>
 </template>
 

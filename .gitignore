@@ -482,3 +482,4 @@ $RECYCLE.BIN/
 *.swp
 
 ui/dist/*
+src/archives/*
