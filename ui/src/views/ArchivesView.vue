@@ -112,6 +112,33 @@
         </button>
       </div>
     </section>
+
+    <section>
+      <h2>Parts <span class="filename">inventory_parts.csv.zip</span></h2>
+
+      <p v-if="partsInventoryError" class="error">{{ partsInventoryError }}</p>
+
+      <div class="status-row">
+        <span v-if="partsInventoryStatusLoading" class="muted">Loading…</span>
+        <template v-else>
+          <span>
+            <strong>{{ partsInventoryStatus.count }}</strong> part{{ partsInventoryStatus.count !== 1 ? 's' : '' }} imported
+          </span>
+          <span class="sep">·</span>
+          <span class="muted">
+            Last import:
+            {{ partsInventoryStatus.lastImportedAt ? formatDate(partsInventoryStatus.lastImportedAt) : 'Never imported' }}
+          </span>
+        </template>
+      </div>
+
+      <div class="upload-row">
+        <input ref="partsInventoryInput" type="file" accept=".csv.zip" @change="onPartsInventoryFile" />
+        <button class="primary" :disabled="!partsInventoryFile || partsInventoryReloading" @click="reloadPartsInventoryData">
+          {{ partsInventoryReloading ? 'Importing…' : 'Import' }}
+        </button>
+      </div>
+    </section>
   </div>
 </template>
 
@@ -121,6 +148,7 @@ import {
   getColorsStatus, uploadColors, getColorsList,
   getSetsStatus, uploadSets,
   getPartsStatus, uploadParts,
+  getPartsInventoryStatus, uploadPartsInventory
 } from '../api/archives.js'
 
 // --- Colors ---
@@ -239,6 +267,41 @@ async function reloadPartsData() {
   }
 }
 
+// --- PartsInventory ---
+const partsInventoryStatus = ref({ count: 0, lastImportedAt: null })
+const partsInventoryStatusLoading = ref(true)
+const partsInventoryReloading = ref(false)
+const partsInventoryError = ref('')
+const partsInventoryFile = ref(null)
+
+function onPartsInventoryFile(e) {
+  partsInventoryFile.value = e.target.files[0] ?? null
+  partsInventoryError.value = ''
+}
+
+async function loadPartsInventoryStatus() {
+  try {
+    partsInventoryStatus.value = await getPartsInventoryStatus()
+  } catch (e) {
+    partsInventoryError.value = e.message
+  } finally {
+    partsInventoryStatusLoading.value = false
+  }
+}
+
+async function reloadPartsInventoryData() {
+  if (!partsInventoryFile.value) return
+  partsInventoryReloading.value = true
+  partsInventoryError.value = ''
+  try {
+    partsInventoryStatus.value = await uploadPartsInventory(partsInventoryFile.value)
+  } catch (e) {
+    partsInventoryError.value = e.message
+  } finally {
+    partsInventoryReloading.value = false
+  }
+}
+
 // --- Shared ---
 function formatDate(iso) {
   return new Date(iso).toLocaleString()
@@ -256,6 +319,7 @@ onMounted(async () => {
   if (status.value.count > 0) await loadColors()
   await loadSetsStatus()
   await loadPartsStatus()
+  await loadPartsInventoryStatus()
 })
 </script>
 

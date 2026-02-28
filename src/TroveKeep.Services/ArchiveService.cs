@@ -11,11 +11,18 @@ public class ArchiveService : IArchiveService
     private readonly ISetArchiveRepository _setRepository;
     private readonly IPartArchiveRepository _partRepository;
 
-    public ArchiveService(IColorRepository colorRepository, ISetArchiveRepository setRepository, IPartArchiveRepository partRepository)
+    private readonly IPartInventoryArchiveRepository _partInventoryRepository;
+
+    public ArchiveService(
+        IColorRepository colorRepository,
+         ISetArchiveRepository setRepository,
+          IPartArchiveRepository partRepository,
+           IPartInventoryArchiveRepository partInventoryRepository)
     {
         _colorRepository = colorRepository;
         _setRepository = setRepository;
         _partRepository = partRepository;
+        _partInventoryRepository = partInventoryRepository;
     }
 
     public async Task<(int count, DateTimeOffset importedAt)> ImportColorsAsync(Stream stream)
@@ -70,8 +77,8 @@ public class ArchiveService : IArchiveService
         return (count, importedAt);
     }
 
-    public Task<IEnumerable<RebrickableColor>> GetColorsAsync() =>
-        _colorRepository.GetAllAsync();
+    public Task<IEnumerable<RebrickableColor>> GetColorsAsync()
+        => _colorRepository.GetAllAsync();
 
     public async Task<(int count, DateTimeOffset importedAt)> ImportSetsAsync(Stream stream)
     {
@@ -125,8 +132,8 @@ public class ArchiveService : IArchiveService
         return (count, importedAt);
     }
 
-    public Task<IEnumerable<RebrickableSet>> SearchSetsAsync(string query, int limit) =>
-        _setRepository.SearchAsync(query, limit);
+    public Task<IEnumerable<RebrickableSet>> SearchSetsAsync(string query, int limit)
+        => _setRepository.SearchAsync(query, limit);
 
     public async Task<(int count, DateTimeOffset importedAt)> ImportPartsAsync(Stream stream)
     {
@@ -174,8 +181,63 @@ public class ArchiveService : IArchiveService
         return (count, importedAt);
     }
 
-    public Task<IEnumerable<RebrickablePart>> SearchPartsAsync(string query, int limit) =>
-        _partRepository.SearchAsync(query, limit);
+    public Task<IEnumerable<RebrickablePart>> SearchPartsAsync(string query, int limit)
+        => _partRepository.SearchAsync(query, limit);
+
+    public async Task<(int count, DateTimeOffset importedAt)> ImportPartsInventoryAsync(Stream stream)
+    {
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Read);
+        var csvEntry = archive.Entries.FirstOrDefault(e =>
+            e.Name.EndsWith(".csv", StringComparison.OrdinalIgnoreCase));
+
+        if (csvEntry is null)
+            throw new InvalidOperationException("No CSV file found inside the uploaded zip.");
+
+        using var csvStream = csvEntry.Open();
+        using var reader = new StreamReader(csvStream);
+        var headerLine = await reader.ReadLineAsync();
+        if (headerLine is null)
+            throw new InvalidOperationException("CSV file is empty.");
+
+        var headers = SplitCsvLine(headerLine);
+        var colIndex = BuildColumnIndex(headers);
+
+        string? line;
+        var uniqueParts = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        while ((line = await reader.ReadLineAsync()) is not null)
+        {
+            if (string.IsNullOrWhiteSpace(line)) continue;
+            var fields = SplitCsvLine(line);
+            if (fields.Length < 2) continue;
+
+            var colorId = int.Parse(fields[colIndex["color_id"]].Trim());
+            var isSpare = fields[colIndex["is_spare"]].Trim().Equals("True", StringComparison.OrdinalIgnoreCase);
+            if (colorId != 0 || isSpare)
+                continue;
+            var partNum = fields[colIndex["part_num"]].Trim();
+            if (uniqueParts.ContainsKey(partNum))
+                continue;
+            uniqueParts[partNum] = fields[colIndex["img_url"]].Trim();
+        }
+
+        var count = await _partInventoryRepository.ReplaceAllAsync(uniqueParts.Select(kv => new RebrickablePartInventory
+        {
+            PartNum = kv.Key,
+            ImgUrl = kv.Value,
+        }));
+        var importedAt = await _partInventoryRepository.GetLastImportedAtAsync();
+        return (count, importedAt ?? DateTimeOffset.UtcNow);
+    }
+
+    public async Task<(int count, DateTimeOffset? importedAt)> GetPartsInventoryStatusAsync()
+    {
+        var count = await _partInventoryRepository.GetCountAsync();
+        var importedAt = await _partInventoryRepository.GetLastImportedAtAsync();
+        return (count, importedAt);
+    }
+
+    public Task<IEnumerable<RebrickablePartInventory>> SearchPartsInventoryAsync(string query, int limit)
+        => _partInventoryRepository.SearchAsync(query, limit);
 
     private static Dictionary<string, int> BuildColumnIndex(string[] headers)
     {

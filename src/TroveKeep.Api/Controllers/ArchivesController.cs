@@ -126,6 +126,44 @@ public class ArchivesController : ControllerBase
         }
     }
 
+    [HttpGet("partsinventory")]
+    [ProducesResponseType(typeof(ArchiveStatusResponse), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetPartsInventoryStatus()
+    {
+        var (count, importedAt) = await _service.GetPartsInventoryStatusAsync();
+        return Ok(new ArchiveStatusResponse(count, importedAt));
+    }
+
+    [HttpGet("partsinventory/search")]
+    [ProducesResponseType(typeof(IEnumerable<PartArchiveSearchResponse>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> SearchPartsInventory([FromQuery] string? q, [FromQuery] int limit = 10)
+    {
+        if (string.IsNullOrWhiteSpace(q))
+            return Ok(Array.Empty<PartArchiveSearchResponse>());
+
+        var cap = Math.Min(limit, 20);
+        var results = await _service.SearchPartsAsync(q, cap);
+        return Ok(results.Select(p => new PartArchiveSearchResponse(p.PartNum, p.Name)));
+    }
+
+    [HttpPost("partsinventory/reload")]
+    [RequestSizeLimit(50_000_000)]
+    [RequestFormLimits(MultipartBodyLengthLimit = 50_000_000)]
+    [ProducesResponseType(typeof(ArchiveStatusResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> ReloadPartsInventory(IFormFile file)
+    {
+        try
+        {
+            var (count, importedAt) = await _service.ImportPartsInventoryAsync(file.OpenReadStream());
+            return Ok(new ArchiveStatusResponse(count, importedAt));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+    }
+
     private static ColorResponse MapToResponse(RebrickableColor c) =>
         new(c.UniqueId, c.Id, c.Name, c.Rgb, c.IsTrans, c.StartYear, c.EndYear);
 }
