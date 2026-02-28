@@ -100,7 +100,7 @@ public class BoxesController : ControllerBase
                 colors.TryGetValue(p.LegoColorId, out var color);
                 return new BulkPieceResponse(p.Id, p.LegoId,
                     p.LegoColorId, color.Name, color.Rgb,
-                    p.Description, p.Quantity,
+                    p.Description, p.Quantity, p.ImageCached,
                     p.StorageAllocations.Select(a => new StorageAllocationResponse(a.StorageId, a.Type.ToString(), a.Quantity)),
                     p.CreatedAt, p.UpdatedAt);
             }),

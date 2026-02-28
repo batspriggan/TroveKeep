@@ -45,6 +45,7 @@ public class BulkPieceRepository : IBulkPieceRepository
 
         var doc = ToDocument(bulkPiece);
         doc.StorageAllocations = existing.StorageAllocations;
+        doc.ImageCached = existing.ImageCached;
         doc.CreatedAt = existing.CreatedAt;
         doc.UpdatedAt = DateTime.UtcNow;
         await _collection.ReplaceOneAsync(x => x.Id == bulkPiece.Id, doc);
@@ -116,7 +117,7 @@ public class BulkPieceRepository : IBulkPieceRepository
     public async Task UpdateImageCachedAsync(Guid id)
     {
         var filter = Builders<BulkPieceDocument>.Filter.Eq(x => x.Id, id);
-        var update = Builders<BulkPieceDocument>.Update.Set(x => x.ImageCached, false);
+        var update = Builders<BulkPieceDocument>.Update.Set(x => x.ImageCached, true);
         await _collection.UpdateOneAsync(filter, update);
     }
 

@@ -8,6 +8,7 @@ public record BulkPieceResponse(
     string? LegoColorRgb,
     string Description,
     int Quantity,
+    bool ImageCached,
     IEnumerable<StorageAllocationResponse> StorageAllocations,
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt);

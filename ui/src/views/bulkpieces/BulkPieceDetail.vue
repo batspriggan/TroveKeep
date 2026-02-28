@@ -12,6 +12,10 @@
         {{ piece.legoColorName ?? `Color #${piece.legoColorId}` }}
       </h1>
 
+      <div v-if="piece.imageCached" class="card piece-image-card">
+        <img :src="`/api/bulkpieces/${id}/image`" class="piece-image" alt="" />
+      </div>
+
       <div class="card">
         <h2>Edit Piece</h2>
         <form class="form-row" @submit.prevent="submitEdit">
@@ -274,6 +278,17 @@ onMounted(load)
 </script>
 
 <style scoped>
+.piece-image-card {
+  display: flex;
+  justify-content: center;
+  padding: 0.75rem;
+}
+
+.piece-image {
+  max-height: 200px;
+  object-fit: contain;
+}
+
 .alloc-section {
   border: none;
   padding: 0;

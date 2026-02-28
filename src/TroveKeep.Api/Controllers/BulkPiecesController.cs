@@ -13,11 +13,15 @@ public class BulkPiecesController : ControllerBase
 {
     private readonly IBulkPieceService _service;
     private readonly IColorRepository _colorRepo;
+    private readonly IImageService _imageService;
+    private readonly IPartInventoryArchiveRepository _partInventoryRepo;
 
-    public BulkPiecesController(IBulkPieceService service, IColorRepository colorRepo)
+    public BulkPiecesController(IBulkPieceService service, IColorRepository colorRepo, IImageService imageService, IPartInventoryArchiveRepository partInventoryRepo)
     {
         _service = service;
         _colorRepo = colorRepo;
+        _imageService = imageService;
+        _partInventoryRepo = partInventoryRepo;
     }
 
     [HttpGet]
@@ -53,6 +57,15 @@ public class BulkPiecesController : ControllerBase
             Quantity = request.Quantity,
         };
         var created = await _service.CreateAsync(model);
+        var partInventory = await _partInventoryRepo.GetByPartNumAsync(created.LegoId);
+        if (partInventory is not null && !string.IsNullOrWhiteSpace(partInventory.ImgUrl))
+        {
+            var existing = await _imageService.GetImageAsync(created.LegoId, ImageReferenceType.Part);
+            if (existing is not null)
+                await _service.UpdateImageCachedAsync(created.Id);
+            else
+                _ = _imageService.DownloadAndStoreAsync(created.Id, created.LegoId, partInventory.ImgUrl, ImageReferenceType.Part);
+        }
         var colors = await BuildColorLookupAsync();
         return CreatedAtAction(nameof(GetById), new { id = created.Id }, MapToResponse(created, colors));
     }
@@ -147,6 +160,18 @@ public class BulkPiecesController : ControllerBase
         return Ok(MapToResponse(updated, colors));
     }
 
+    [HttpGet("{id:guid}/image")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetImage(Guid id)
+    {
+        var piece = await _service.GetByIdAsync(id);
+        if (piece is null) return NotFound();
+        var image = await _imageService.GetImageAsync(piece.LegoId, ImageReferenceType.Part);
+        if (image is null) return NotFound();
+        return File(image.Data, image.ContentType);
+    }
+
     private async Task<Dictionary<int, (string Name, string Rgb)>> BuildColorLookupAsync()
     {
         var colors = await _colorRepo.GetAllAsync();
@@ -161,7 +186,7 @@ public class BulkPiecesController : ControllerBase
         return new BulkPieceResponse(
             p.Id, p.LegoId,
             p.LegoColorId, color.Name, color.Rgb,
-            p.Description, p.Quantity,
+            p.Description, p.Quantity, p.ImageCached,
             p.StorageAllocations.Select(a => new StorageAllocationResponse(a.StorageId, a.Type.ToString(), a.Quantity)),
             p.CreatedAt, p.UpdatedAt);
     }

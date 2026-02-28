@@ -57,6 +57,12 @@ public class PartInventoryArchiveRepository : IPartInventoryArchiveRepository
         return docs.Select(ToModel);
     }
 
+    public async Task<RebrickablePartInventory?> GetByPartNumAsync(string partNum)
+    {
+        var doc = await _collection.Find(x => x.PartNum == partNum).FirstOrDefaultAsync();
+        return doc is null ? null : ToModel(doc);
+    }
+
     private static RebrickablePartInventory ToModel(PartInventoryArchiveDocument doc) => new()
     {
         PartNum = doc.PartNum,

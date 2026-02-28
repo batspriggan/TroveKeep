@@ -32,6 +32,7 @@
     <table>
       <thead>
         <tr>
+          <th class="thumb-col"></th>
           <th>Lego ID</th>
           <th>Color</th>
           <th>Description</th>
@@ -42,6 +43,9 @@
       </thead>
       <tbody>
         <tr v-for="p in filteredPieces" :key="p.id">
+          <td class="thumb-col">
+            <img v-if="p.imageCached" :src="`/api/bulkpieces/${p.id}/image`" class="list-thumb" alt="" />
+          </td>
           <td>
             <RouterLink :to="`/bulkpieces/${p.id}`">{{ p.legoId }}</RouterLink>
           </td>
@@ -157,6 +161,17 @@ onMounted(load)
 </script>
 
 <style scoped>
+.thumb-col {
+  width: 40px;
+  text-align: center;
+}
+
+.list-thumb {
+  width: 36px;
+  height: 36px;
+  object-fit: contain;
+}
+
 .swatch {
   display: inline-block;
   width: 0.9rem;
