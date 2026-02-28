@@ -1,9 +1,9 @@
 <template>
   <div class="color-select-wrap">
     <div v-if="selectedColor" class="swatch-preview" :style="{ background: '#' + selectedColor.rgb }" :title="selectedColor.name"></div>
-    <select :value="modelValue" @change="$emit('update:modelValue', +$event.target.value)" required>
-      <option value="0" disabled>— select color —</option>
-      <option v-for="c in colors" :key="c.id" :value="c.id">{{ c.name }}</option>
+    <select :value="modelValue" @change="$emit('update:modelValue', $event.target.value)">
+      <option value="">— select color —</option>
+      <option v-for="c in colors" :key="c.uniqueId" :value="c.uniqueId">{{ c.name }}</option>
     </select>
   </div>
 </template>
@@ -12,13 +12,13 @@
 import { computed } from 'vue'
 
 const props = defineProps({
-  modelValue: { type: Number, default: 0 },
+  modelValue: { type: String, default: '' },
   colors: { type: Array, default: () => [] },
 })
 defineEmits(['update:modelValue'])
 
 const selectedColor = computed(() =>
-  props.colors.find(c => c.id === props.modelValue) ?? null
+  props.colors.find(c => c.uniqueId === props.modelValue) ?? null
 )
 </script>
 

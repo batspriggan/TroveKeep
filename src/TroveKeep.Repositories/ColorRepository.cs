@@ -47,6 +47,7 @@ public class ColorRepository : IColorRepository
 
     private static RebrickableColor ToModel(ColorDocument doc) => new()
     {
+        UniqueId = doc.UniqueId,
         Id = doc.Id,
         Name = doc.Name,
         Rgb = doc.Rgb,
@@ -57,6 +58,7 @@ public class ColorRepository : IColorRepository
 
     private static ColorDocument ToDocument(RebrickableColor model) => new()
     {
+        UniqueId = model.UniqueId == Guid.Empty ? Guid.NewGuid() : model.UniqueId,
         Id = model.Id,
         Name = model.Name,
         Rgb = model.Rgb,

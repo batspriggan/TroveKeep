@@ -21,7 +21,7 @@
           </div>
           <div class="form-field">
             <label>Color *</label>
-            <ColorSelect v-model="editForm.legoColorId" :colors="colors" />
+            <ColorSelect v-model="editForm.legoColorUid" :colors="colors" />
           </div>
           <div class="form-field">
             <label>Description *</label>
@@ -31,7 +31,7 @@
             <label>Qty *</label>
             <input v-model.number="editForm.quantity" type="number" min="1" required />
           </div>
-          <button class="primary" type="submit" :disabled="!editForm.legoColorId">Save</button>
+          <button class="primary" type="submit">Save</button>
         </form>
         <p v-if="editError" class="error">{{ editError }}</p>
       </div>
@@ -158,7 +158,7 @@ const selectedBoxId = ref('')
 const selectedDrawerId = ref('')
 const boxAllocQty = ref(1)
 const drawerAllocQty = ref(1)
-const editForm = ref({ legoId: '', legoColorId: 0, description: '', quantity: 1 })
+const editForm = ref({ legoId: '', legoColorUid: '', description: '', quantity: 1 })
 
 const boxNameMap = computed(() => Object.fromEntries(boxes.value.map(b => [b.id, b.name])))
 const drawerLabelMap = computed(() =>
@@ -184,7 +184,8 @@ async function load() {
     piece.value = p
     boxes.value = allBoxes
     colors.value = allColors
-    editForm.value = { legoId: p.legoId, legoColorId: p.legoColorId, description: p.description, quantity: p.quantity }
+    const legoColorUid = allColors.find(c => c.id === p.legoColorId)?.uniqueId ?? ''
+    editForm.value = { legoId: p.legoId, legoColorUid, description: p.description, quantity: p.quantity }
 
     const containerDetails = await Promise.all(allContainers.map((c) => getDrawerContainerDrawers(c.id)))
     drawers.value = containerDetails.flatMap((c) => c.drawers ?? [])
@@ -197,10 +198,15 @@ async function load() {
 
 async function submitEdit() {
   editError.value = ''
+  const legoColorId = colors.value.find(c => c.uniqueId === editForm.value.legoColorUid)?.id
+  if (!legoColorId && legoColorId !== 0) {
+    editError.value = 'Required fields missing: Color.'
+    return
+  }
   try {
     const updated = await updateBulkPiece(id, {
       legoId: editForm.value.legoId,
-      legoColorId: editForm.value.legoColorId,
+      legoColorId,
       description: editForm.value.description,
       quantity: editForm.value.quantity,
     })

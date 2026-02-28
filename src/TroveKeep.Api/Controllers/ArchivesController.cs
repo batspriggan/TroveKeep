@@ -127,5 +127,5 @@ public class ArchivesController : ControllerBase
     }
 
     private static ColorResponse MapToResponse(RebrickableColor c) =>
-        new(c.Id, c.Name, c.Rgb, c.IsTrans, c.StartYear, c.EndYear);
+        new(c.UniqueId, c.Id, c.Name, c.Rgb, c.IsTrans, c.StartYear, c.EndYear);
 }

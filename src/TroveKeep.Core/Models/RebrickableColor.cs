@@ -2,6 +2,7 @@ namespace TroveKeep.Core.Models;
 
 public class RebrickableColor
 {
+    public Guid UniqueId { get; set; }
     public int Id { get; set; }
     public string Name { get; set; } = "";
     public string Rgb { get; set; } = "";

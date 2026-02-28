@@ -5,11 +5,11 @@
     <form class="form-row" @submit.prevent="submit">
       <div class="form-field">
         <label>Lego ID *</label>
-        <input v-model="form.legoId" required placeholder="e.g. 3001" />
+        <PartArchiveTypeahead v-model="form.legoId" @select="onPartSelect" />
       </div>
       <div class="form-field">
         <label>Color *</label>
-        <ColorSelect v-model="form.legoColorId" :colors="colors" />
+        <ColorSelect v-model="form.legoColorUid" :colors="colors" />
       </div>
       <div class="form-field">
         <label>Description *</label>
@@ -19,7 +19,7 @@
         <label>Qty *</label>
         <input v-model.number="form.quantity" type="number" min="1" required />
       </div>
-      <button class="primary" type="submit" :disabled="!form.legoColorId">Add Piece</button>
+      <button class="primary" type="submit">Add Piece</button>
     </form>
 
     <p v-if="error" class="error">{{ error }}</p>
@@ -81,6 +81,7 @@ import { getAllBulkPieces, createBulkPiece, deleteBulkPiece } from '../../api/bu
 import { getColorsList } from '../../api/archives.js'
 import ConfirmDialog from '../../components/ConfirmDialog.vue'
 import ColorSelect from '../../components/ColorSelect.vue'
+import PartArchiveTypeahead from '../../components/PartArchiveTypeahead.vue'
 
 const pieces = ref([])
 const colors = ref([])
@@ -96,7 +97,7 @@ const filteredPieces = computed(() => {
 const loading = ref(true)
 const error = ref('')
 const deleteTarget = ref(null)
-const form = ref({ legoId: '', legoColorId: 0, description: '', quantity: 1 })
+const form = ref({ legoId: '', legoColorUid: '', description: '', quantity: 1 })
 
 async function load() {
   loading.value = true
@@ -112,11 +113,24 @@ async function load() {
   }
 }
 
+function onPartSelect(part) {
+  form.value.description = part.name
+}
+
 async function submit() {
   error.value = ''
+  const missing = []
+  if (!form.value.legoId.trim()) missing.push('Lego ID')
+  if (!form.value.legoColorUid) missing.push('Color (if the list is empty, import colors in the Archives)')
+  if (!form.value.description.trim()) missing.push('Description')
+  if (missing.length) {
+    error.value = `Required fields missing: ${missing.join(', ')}.`
+    return
+  }
+  const legoColorId = colors.value.find(c => c.uniqueId === form.value.legoColorUid)?.id
   try {
-    await createBulkPiece({ legoId: form.value.legoId, legoColorId: form.value.legoColorId, description: form.value.description, quantity: form.value.quantity })
-    form.value = { legoId: '', legoColorId: 0, description: '', quantity: 1 }
+    await createBulkPiece({ legoId: form.value.legoId, legoColorId, description: form.value.description, quantity: form.value.quantity })
+    form.value = { legoId: '', legoColorUid: '', description: '', quantity: 1 }
     await load()
   } catch (e) {
     error.value = e.message
