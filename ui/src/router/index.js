@@ -12,6 +12,7 @@ import DrawerDetail from '../views/drawers/DrawerDetail.vue'
 import SearchView from '../views/SearchView.vue'
 import ArchivesView from '../views/ArchivesView.vue'
 import SettingsView from '../views/SettingsView.vue'
+import TablePlannerView from '../views/TablePlannerView.vue'
 
 const routes = [
   { path: '/', redirect: '/sets' },
@@ -27,6 +28,7 @@ const routes = [
   { path: '/search', component: SearchView },
   { path: '/archives', component: ArchivesView },
   { path: '/settings', component: SettingsView },
+  { path: '/table-planner', component: TablePlannerView },
 ]
 
 export default createRouter({
