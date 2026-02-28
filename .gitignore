@@ -481,8 +481,9 @@ $RECYCLE.BIN/
 # Vim temporary swap files
 *.swp
 
-ui/dist/*
-src/archives/*
+dist
+archives
 
 # Local development settings — contain credentials, never commit
 appsettings.Development.json
+.vite
