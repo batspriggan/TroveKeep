@@ -11,9 +11,9 @@ namespace TroveKeep.Api.Controllers;
 public class SetsController : ControllerBase
 {
     private readonly ILegoSetService _service;
-    private readonly ISetImageService _imageService;
+    private readonly IImageService _imageService;
 
-    public SetsController(ILegoSetService service, ISetImageService imageService)
+    public SetsController(ILegoSetService service, IImageService imageService)
     {
         _service = service;
         _imageService = imageService;
@@ -51,7 +51,7 @@ public class SetsController : ControllerBase
         };
         var created = await _service.CreateAsync(model);
         if (!string.IsNullOrWhiteSpace(request.PhotoUrl))
-            _ = _imageService.DownloadAndStoreAsync(created.Id, created.SetNumber, request.PhotoUrl);
+            _ = _imageService.DownloadAndStoreAsync(created.Id, created.SetNumber, request.PhotoUrl, ImageReferenceType.Set);
         return CreatedAtAction(nameof(GetById), new { id = created.Id }, MapToResponse(created));
     }
 
@@ -62,7 +62,7 @@ public class SetsController : ControllerBase
     {
         var set = await _service.GetByIdAsync(id);
         if (set is null) return NotFound();
-        var image = await _imageService.GetImageAsync(set.SetNumber);
+        var image = await _imageService.GetImageAsync(set.SetNumber, ImageReferenceType.Set);
         if (image is null) return NotFound();
         return File(image.Data, image.ContentType);
     }

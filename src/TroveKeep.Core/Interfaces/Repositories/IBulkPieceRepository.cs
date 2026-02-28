@@ -13,4 +13,5 @@ public interface IBulkPieceRepository
     Task<BulkPiece?> RemoveStorageAsync(Guid id, Guid storageId);
     Task<BulkPiece?> ClearStorageAsync(Guid id);
     Task<IEnumerable<BulkPiece>> SearchAsync(string query);
+    Task UpdateImageCachedAsync(Guid id);
 }

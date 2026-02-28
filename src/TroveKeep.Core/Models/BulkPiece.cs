@@ -10,4 +10,5 @@ public class BulkPiece
     public List<StorageAllocation> StorageAllocations { get; set; } = [];
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
+    public bool ImageCached { get; set; } = false;
 }

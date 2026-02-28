@@ -37,9 +37,11 @@ public class LegoSetService : ILegoSetService
         return await _setRepo.AddStorageAsync(id, boxId, StorageType.Box, quantity);
     }
 
-    public Task<LegoSet?> DeallocateStorageAsync(Guid id, Guid storageId) =>
-        _setRepo.RemoveStorageAsync(id, storageId);
+    public Task<LegoSet?> DeallocateStorageAsync(Guid id, Guid storageId)
+        => _setRepo.RemoveStorageAsync(id, storageId);
 
-    public Task<LegoSet?> ClearStorageAsync(Guid id) =>
-        _setRepo.ClearStorageAsync(id);
+    public Task<LegoSet?> ClearStorageAsync(Guid id)
+        => _setRepo.ClearStorageAsync(id);
+    public Task UpdateImageCachedAsync(Guid id)
+        => _setRepo.UpdateImageCachedAsync(id);
 }

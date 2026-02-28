@@ -96,6 +96,7 @@ public class DrawerRepository : IDrawerRepository
             }).ToList(),
             CreatedAt = new DateTimeOffset(DateTime.SpecifyKind(p.CreatedAt, DateTimeKind.Utc)),
             UpdatedAt = new DateTimeOffset(DateTime.SpecifyKind(p.UpdatedAt, DateTimeKind.Utc)),
+            ImageCached = p.ImageCached,
         }).ToList(),
     };
 

@@ -170,6 +170,7 @@ public class BoxRepository : IBoxRepository
             }).ToList(),
             CreatedAt = new DateTimeOffset(DateTime.SpecifyKind(p.CreatedAt, DateTimeKind.Utc)),
             UpdatedAt = new DateTimeOffset(DateTime.SpecifyKind(p.UpdatedAt, DateTimeKind.Utc)),
+            ImageCached = p.ImageCached,
         }).ToList(),
     };
 

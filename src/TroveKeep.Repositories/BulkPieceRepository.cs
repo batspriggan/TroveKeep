@@ -113,6 +113,12 @@ public class BulkPieceRepository : IBulkPieceRepository
         var docs = await _collection.Find(filter).ToListAsync();
         return docs.Select(ToModel);
     }
+    public async Task UpdateImageCachedAsync(Guid id)
+    {
+        var filter = Builders<BulkPieceDocument>.Filter.Eq(x => x.Id, id);
+        var update = Builders<BulkPieceDocument>.Update.Set(x => x.ImageCached, false);
+        await _collection.UpdateOneAsync(filter, update);
+    }
 
     private static BulkPiece ToModel(BulkPieceDocument doc) => new()
     {
@@ -129,6 +135,7 @@ public class BulkPieceRepository : IBulkPieceRepository
         }).ToList(),
         CreatedAt = new DateTimeOffset(DateTime.SpecifyKind(doc.CreatedAt, DateTimeKind.Utc)),
         UpdatedAt = new DateTimeOffset(DateTime.SpecifyKind(doc.UpdatedAt, DateTimeKind.Utc)),
+        ImageCached = doc.ImageCached,
     };
 
     private static BulkPieceDocument ToDocument(BulkPiece model) => new()
@@ -146,5 +153,6 @@ public class BulkPieceRepository : IBulkPieceRepository
         }).ToList(),
         CreatedAt = model.CreatedAt.UtcDateTime,
         UpdatedAt = model.UpdatedAt.UtcDateTime,
+        ImageCached = model.ImageCached,
     };
 }

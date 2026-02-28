@@ -13,4 +13,5 @@ public interface IBulkPieceService
     Task<BulkPiece?> AllocateToDrawerAsync(Guid id, Guid drawerId, int quantity);
     Task<BulkPiece?> DeallocateStorageAsync(Guid id, Guid storageId);
     Task<BulkPiece?> ClearStorageAsync(Guid id);
+    Task UpdateImageCachedAsync(Guid id);
 }

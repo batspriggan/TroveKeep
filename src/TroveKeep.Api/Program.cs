@@ -31,7 +31,7 @@ builder.Services.AddScoped<IColorRepository, ColorRepository>();
 builder.Services.AddScoped<ISetArchiveRepository, SetArchiveRepository>();
 builder.Services.AddScoped<IPartArchiveRepository, PartArchiveRepository>();
 builder.Services.AddScoped<IPartInventoryArchiveRepository, PartInventoryArchiveRepository>();
-builder.Services.AddScoped<ISetImageRepository, SetImageRepository>();
+builder.Services.AddScoped<IImageRepository, ImageRepository>();
 
 // Services
 builder.Services.AddScoped<ILegoSetService, LegoSetService>();
@@ -41,7 +41,7 @@ builder.Services.AddScoped<IDrawerContainerService, DrawerContainerService>();
 builder.Services.AddScoped<IDrawerService, DrawerService>();
 builder.Services.AddScoped<ISearchService, SearchService>();
 builder.Services.AddScoped<IArchiveService, ArchiveService>();
-builder.Services.AddScoped<ISetImageService, SetImageService>();
+builder.Services.AddScoped<IImageService, ImageService>();
 builder.Services.AddScoped<IBackupService, BackupService>();
 builder.Services.AddHttpClient("SetImages");
 

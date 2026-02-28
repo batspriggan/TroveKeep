@@ -10,12 +10,12 @@ public class BulkPieceDocument
     [BsonGuidRepresentation(GuidRepresentation.Standard)]
     public Guid Id { get; set; }
 
-    public string LegoId { get; set; } = string.Empty;
+    required public string LegoId { get; set; }
     public int LegoColorId { get; set; }
-    public string Description { get; set; } = string.Empty;
-    public int Quantity { get; set; } = 1;
-    public List<StorageAllocationDocument> StorageAllocations { get; set; } = [];
-
+    required public string Description { get; set; }
+    required public int Quantity { get; set; }
+    required public List<StorageAllocationDocument> StorageAllocations { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
+    public bool ImageCached { get; set; }
 }

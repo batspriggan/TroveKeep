@@ -63,4 +63,7 @@ public class BulkPieceService : IBulkPieceService
 
     public Task<BulkPiece?> ClearStorageAsync(Guid id) =>
         _pieceRepo.ClearStorageAsync(id);
+
+    public Task UpdateImageCachedAsync(Guid id)
+     => _pieceRepo.UpdateImageCachedAsync(id);
 }
