@@ -13,6 +13,7 @@ import SearchView from '../views/SearchView.vue'
 import ArchivesView from '../views/ArchivesView.vue'
 import SettingsView from '../views/SettingsView.vue'
 import TablePlannerView from '../views/TablePlannerView.vue'
+import RoomPlannerView from '../views/tableplanner/RoomPlannerView.vue'
 
 const routes = [
   { path: '/', redirect: '/sets' },
@@ -29,6 +30,7 @@ const routes = [
   { path: '/archives', component: ArchivesView },
   { path: '/settings', component: SettingsView },
   { path: '/table-planner', component: TablePlannerView },
+  { path: '/table-planner/rooms/:id', component: RoomPlannerView },
 ]
 
 export default createRouter({

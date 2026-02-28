@@ -1,252 +1,316 @@
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
+import {
+  getAllRooms, createRoom, updateRoom, deleteRoom,
+  getAllTemplates, createTemplate, updateTemplate, deleteTemplate,
+} from '../api/tableplanner.js'
 
-// Scale: 100 px = 1 m
-// Table: 2 m × 0.8 m  →  200 px × 80 px
-// Snap grid: 20 px = 20 cm
-const SCALE    = 100
-const TABLE_W  = 2 * SCALE       // 200 px
-const TABLE_H  = 0.8 * SCALE     // 80 px
-const SNAP     = 20              // px
-const CANVAS_W = 3000            // 30 m wide
-const CANVAS_H = 2000            // 20 m tall
+const router = useRouter()
 
-const tables = ref([])
-let nextId = 1
+// ── Rooms ────────────────────────────────────────────────────────────────────
+const rooms = ref([])
+const roomForm = ref({ name: '', widthCm: 1000, depthCm: 800 })
+const roomError = ref('')
 
-const draggingId = ref(null)
+async function loadRooms() {
+  rooms.value = await getAllRooms()
+}
 
-function addTable() {
-  const offset = (tables.value.length % 8) * SNAP * 2
-  tables.value.push({
-    id: nextId,
-    label: `Table ${nextId}`,
-    x: SNAP + offset,
-    y: SNAP + offset,
+async function submitRoom() {
+  roomError.value = ''
+  if (!roomForm.value.name.trim()) { roomError.value = 'Name is required.'; return }
+  await createRoom({ name: roomForm.value.name.trim(), widthCm: Number(roomForm.value.widthCm), depthCm: Number(roomForm.value.depthCm) })
+  roomForm.value = { name: '', widthCm: 1000, depthCm: 800 }
+  await loadRooms()
+}
+
+async function removeRoom(id) {
+  if (!confirm('Delete this room and its layout?')) return
+  await deleteRoom(id)
+  await loadRooms()
+}
+
+function openRoom(id) {
+  router.push(`/table-planner/rooms/${id}`)
+}
+
+// ── Templates ─────────────────────────────────────────────────────────────────
+const templates = ref([])
+const tplForm = ref({ description: '', widthCm: 200, depthCm: 80, color: '#8b6340' })
+const tplError = ref('')
+const editingId = ref(null)
+const editRow = ref({ description: '', widthCm: 200, depthCm: 80, color: '#8b6340' })
+
+async function loadTemplates() {
+  templates.value = await getAllTemplates()
+}
+
+async function submitTemplate() {
+  tplError.value = ''
+  if (!tplForm.value.description.trim()) { tplError.value = 'Description is required.'; return }
+  await createTemplate({
+    description: tplForm.value.description.trim(),
+    widthCm: Number(tplForm.value.widthCm),
+    depthCm: Number(tplForm.value.depthCm),
+    color: tplForm.value.color,
   })
-  nextId++
+  tplForm.value = { description: '', widthCm: 200, depthCm: 80, color: '#8b6340' }
+  await loadTemplates()
 }
 
-function removeTable(id) {
-  tables.value = tables.value.filter(t => t.id !== id)
+function startEdit(t) {
+  editingId.value = t.id
+  editRow.value = { description: t.description, widthCm: t.widthCm, depthCm: t.depthCm, color: t.color }
 }
 
-// Plain object — not reactive, doesn't need to be
-let _drag = null
-
-function startDrag(e, table) {
-  if (e.button !== 0) return
-  e.preventDefault()
-  draggingId.value = table.id
-  _drag = {
-    id: table.id,
-    startMouseX: e.clientX,
-    startMouseY: e.clientY,
-    startX: table.x,
-    startY: table.y,
-  }
-  window.addEventListener('mousemove', onMove)
-  window.addEventListener('mouseup', onUp)
+function cancelEdit() {
+  editingId.value = null
 }
 
-function onMove(e) {
-  if (!_drag) return
-  const t = tables.value.find(t => t.id === _drag.id)
-  if (!t) return
-  const rawX = _drag.startX + (e.clientX - _drag.startMouseX)
-  const rawY = _drag.startY + (e.clientY - _drag.startMouseY)
-  t.x = Math.max(0, Math.min(CANVAS_W - TABLE_W, Math.round(rawX / SNAP) * SNAP))
-  t.y = Math.max(0, Math.min(CANVAS_H - TABLE_H, Math.round(rawY / SNAP) * SNAP))
+async function saveEdit(id) {
+  await updateTemplate(id, {
+    description: editRow.value.description,
+    widthCm: Number(editRow.value.widthCm),
+    depthCm: Number(editRow.value.depthCm),
+    color: editRow.value.color,
+  })
+  editingId.value = null
+  await loadTemplates()
 }
 
-function onUp() {
-  _drag = null
-  draggingId.value = null
-  window.removeEventListener('mousemove', onMove)
-  window.removeEventListener('mouseup', onUp)
+async function removeTemplate(id) {
+  if (!confirm('Delete this template?')) return
+  await deleteTemplate(id)
+  await loadTemplates()
 }
+
+onMounted(() => Promise.all([loadRooms(), loadTemplates()]))
 </script>
 
 <template>
-  <div class="planner-page">
-    <div class="planner-header">
-      <h1>Table Planner</h1>
-      <div class="toolbar">
-        <button class="primary" @click="addTable">+ Add Table</button>
-        <span class="hint">Drag tables to position them &mdash; snaps to 20 cm grid.</span>
-      </div>
-    </div>
+  <div class="hub-page">
+    <h1>Table Planner</h1>
 
-    <p v-if="tables.length === 0" class="empty-hint">
-      No tables yet. Click <strong>+ Add Table</strong> to place your first beer table (2 m &times; 0.8 m).
-    </p>
+    <!-- ── Rooms ── -->
+    <section class="section">
+      <h2>Rooms</h2>
 
-    <div class="canvas-wrap">
-      <div
-        class="canvas"
-        :style="{ width: CANVAS_W + 'px', height: CANVAS_H + 'px' }"
-      >
-        <div
-          v-for="t in tables"
-          :key="t.id"
-          class="table-item"
-          :class="{ active: draggingId === t.id }"
-          :style="{ left: t.x + 'px', top: t.y + 'px', width: TABLE_W + 'px', height: TABLE_H + 'px' }"
-          @mousedown="startDrag($event, t)"
-        >
-          <button class="remove-btn" @mousedown.stop @click="removeTable(t.id)" title="Remove">✕</button>
-          <span class="table-label">{{ t.label }}</span>
-          <span class="table-dims">2 m &times; 0.8 m</span>
-        </div>
+      <form class="inline-form" @submit.prevent="submitRoom">
+        <input v-model="roomForm.name" placeholder="Room name" />
+        <label>W (cm) <input v-model.number="roomForm.widthCm" type="number" min="100" max="10000" style="width:80px" /></label>
+        <label>D (cm) <input v-model.number="roomForm.depthCm" type="number" min="100" max="10000" style="width:80px" /></label>
+        <button class="primary" type="submit">+ Add Room</button>
+        <span v-if="roomError" class="form-error">{{ roomError }}</span>
+      </form>
 
-        <div class="scale-bar">
-          <div class="scale-line"></div>
-          <span>1 m</span>
-        </div>
-      </div>
-    </div>
+      <p v-if="rooms.length === 0" class="empty-hint">No rooms yet.</p>
+
+      <table v-else class="data-table">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Width (cm)</th>
+            <th>Depth (cm)</th>
+            <th>Tables in layout</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="r in rooms" :key="r.id">
+            <td>{{ r.name }}</td>
+            <td>{{ r.widthCm }}</td>
+            <td>{{ r.depthCm }}</td>
+            <td>{{ r.layout.length }}</td>
+            <td class="actions">
+              <button class="primary small" @click="openRoom(r.id)">Open</button>
+              <button class="danger small" @click="removeRoom(r.id)">Delete</button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- ── Templates ── -->
+    <section class="section">
+      <h2>Table Templates</h2>
+
+      <form class="inline-form" @submit.prevent="submitTemplate">
+        <input v-model="tplForm.description" placeholder="Description" />
+        <label>W (cm) <input v-model.number="tplForm.widthCm" type="number" min="10" max="2000" style="width:70px" /></label>
+        <label>D (cm) <input v-model.number="tplForm.depthCm" type="number" min="10" max="2000" style="width:70px" /></label>
+        <label>Color <input v-model="tplForm.color" type="color" style="width:40px;height:32px;padding:2px;cursor:pointer" /></label>
+        <button class="primary" type="submit">+ Add Template</button>
+        <span v-if="tplError" class="form-error">{{ tplError }}</span>
+      </form>
+
+      <p v-if="templates.length === 0" class="empty-hint">No templates yet.</p>
+
+      <table v-else class="data-table">
+        <thead>
+          <tr>
+            <th>Color</th>
+            <th>Description</th>
+            <th>Width (cm)</th>
+            <th>Depth (cm)</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="t in templates" :key="t.id">
+            <template v-if="editingId === t.id">
+              <td><input v-model="editRow.color" type="color" style="width:40px;height:28px;padding:2px;cursor:pointer" /></td>
+              <td><input v-model="editRow.description" style="width:100%" /></td>
+              <td><input v-model.number="editRow.widthCm" type="number" min="10" max="2000" style="width:70px" /></td>
+              <td><input v-model.number="editRow.depthCm" type="number" min="10" max="2000" style="width:70px" /></td>
+              <td class="actions">
+                <button class="primary small" @click="saveEdit(t.id)">Save</button>
+                <button class="small" @click="cancelEdit">Cancel</button>
+              </td>
+            </template>
+            <template v-else>
+              <td><span class="color-swatch" :style="{ background: t.color }"></span></td>
+              <td>{{ t.description }}</td>
+              <td>{{ t.widthCm }}</td>
+              <td>{{ t.depthCm }}</td>
+              <td class="actions">
+                <button class="small" @click="startEdit(t)">Edit</button>
+                <button class="danger small" @click="removeTemplate(t.id)">Delete</button>
+              </td>
+            </template>
+          </tr>
+        </tbody>
+      </table>
+    </section>
   </div>
 </template>
 
 <style scoped>
-.planner-page {
-  display: flex;
-  flex-direction: column;
-  height: calc(100vh - 52px);
-  padding: 1rem 1.5rem 0;
-  box-sizing: border-box;
+.hub-page {
+  padding: 1.25rem 1.5rem;
+  max-width: 900px;
 }
 
-.planner-header {
-  display: flex;
-  align-items: baseline;
-  gap: 1.5rem;
-  margin-bottom: 0.75rem;
-  flex-wrap: wrap;
+h1 { margin: 0 0 1.25rem; }
+
+.section {
+  margin-bottom: 2.5rem;
 }
 
-.planner-header h1 {
-  margin: 0;
+.section h2 {
+  margin: 0 0 0.75rem;
+  font-size: 1.1rem;
+  border-bottom: 1px solid #ddd;
+  padding-bottom: 0.35rem;
 }
 
-.toolbar {
+.inline-form {
   display: flex;
   align-items: center;
-  gap: 1rem;
-}
-
-.hint {
-  font-size: 0.85rem;
-  color: #666;
-}
-
-.empty-hint {
-  font-size: 0.9rem;
-  color: #666;
-  margin-bottom: 0.75rem;
-}
-
-.canvas-wrap {
-  flex: 1;
-  overflow: auto;
-  border: 1px solid #ccc;
-  border-radius: 6px;
-  background: #e8ecf0;
+  flex-wrap: wrap;
+  gap: 0.5rem;
   margin-bottom: 1rem;
 }
 
-.canvas {
-  position: relative;
-  background-color: #fff;
-  /* Major grid lines every 100 px = 1 m (darker) */
-  /* Minor grid lines every 20 px = 20 cm (lighter) */
-  background-image:
-    linear-gradient(to right,  #9aa8bb 1px, transparent 1px),
-    linear-gradient(to bottom, #9aa8bb 1px, transparent 1px),
-    linear-gradient(to right,  #dde4ef 1px, transparent 1px),
-    linear-gradient(to bottom, #dde4ef 1px, transparent 1px);
-  background-size: 100px 100px, 100px 100px, 20px 20px, 20px 20px;
-}
-
-/* ── Table ───────────────────────────────────────────────────── */
-.table-item {
-  position: absolute;
-  background: linear-gradient(160deg, #a0714f 0%, #7a5030 100%);
-  border: 2px solid #4e3010;
+.inline-form input[type="text"],
+.inline-form input:not([type="number"]):not([type="color"]) {
+  padding: 0.35rem 0.5rem;
+  border: 1px solid #ccc;
   border-radius: 4px;
-  cursor: grab;
-  user-select: none;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 3px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
-  transition: box-shadow 0.1s;
+  font-size: 0.9rem;
 }
 
-.table-item.active {
-  cursor: grabbing;
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.4);
-  z-index: 10;
+.inline-form input[type="number"] {
+  padding: 0.35rem 0.4rem;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 0.9rem;
 }
 
-.table-label {
-  font-size: 0.75rem;
-  font-weight: 700;
-  color: #fff;
-  pointer-events: none;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
-}
-
-.table-dims {
-  font-size: 0.63rem;
-  color: rgba(255, 255, 255, 0.7);
-  pointer-events: none;
-}
-
-.remove-btn {
-  position: absolute;
-  top: 3px;
-  right: 4px;
-  background: rgba(0, 0, 0, 0.2);
-  border: none;
-  border-radius: 3px;
-  color: #fff;
-  font-size: 0.55rem;
-  width: 15px;
-  height: 15px;
-  padding: 0;
-  line-height: 1;
-  cursor: pointer;
+.inline-form label {
   display: flex;
   align-items: center;
-  justify-content: center;
-}
-
-.remove-btn:hover {
-  background: rgba(200, 30, 30, 0.75);
-}
-
-/* ── Scale bar ───────────────────────────────────────────────── */
-.scale-bar {
-  position: absolute;
-  bottom: 14px;
-  right: 18px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
-  font-size: 0.7rem;
+  gap: 0.3rem;
+  font-size: 0.85rem;
   color: #555;
-  pointer-events: none;
 }
 
-.scale-line {
-  width: 100px; /* = 1 m at current scale */
-  height: 3px;
-  background: #555;
-  border-left: 2px solid #555;
-  border-right: 2px solid #555;
+.form-error {
+  color: #c00;
+  font-size: 0.85rem;
 }
+
+.empty-hint {
+  color: #888;
+  font-size: 0.9rem;
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.data-table th,
+.data-table td {
+  text-align: left;
+  padding: 0.45rem 0.6rem;
+  border-bottom: 1px solid #eee;
+}
+
+.data-table th {
+  font-weight: 600;
+  background: #f5f5f5;
+}
+
+.actions {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.color-swatch {
+  display: inline-block;
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  border: 1px solid rgba(0,0,0,0.2);
+  vertical-align: middle;
+}
+
+button.small {
+  font-size: 0.8rem;
+  padding: 0.25rem 0.55rem;
+}
+
+button.primary {
+  background: #3a6ea5;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  padding: 0.35rem 0.75rem;
+  cursor: pointer;
+}
+
+button.primary:hover { background: #2e5a8a; }
+
+button.danger {
+  background: #c0392b;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  padding: 0.35rem 0.75rem;
+  cursor: pointer;
+}
+
+button.danger:hover { background: #a93226; }
+
+button:not(.primary):not(.danger) {
+  background: #f0f0f0;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  padding: 0.35rem 0.75rem;
+  cursor: pointer;
+}
+
+button:not(.primary):not(.danger):hover { background: #e0e0e0; }
 </style>

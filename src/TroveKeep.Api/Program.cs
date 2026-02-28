@@ -33,6 +33,8 @@ builder.Services.AddScoped<IPartArchiveRepository, PartArchiveRepository>();
 builder.Services.AddScoped<IPartInventoryArchiveRepository, PartInventoryArchiveRepository>();
 builder.Services.AddScoped<IPartCategoryRepository, PartCategoryRepository>();
 builder.Services.AddScoped<IImageRepository, ImageRepository>();
+builder.Services.AddScoped<ITableTemplateRepository, TableTemplateRepository>();
+builder.Services.AddScoped<IRoomRepository, RoomRepository>();
 
 // Services
 builder.Services.AddScoped<ILegoSetService, LegoSetService>();
@@ -44,6 +46,8 @@ builder.Services.AddScoped<ISearchService, SearchService>();
 builder.Services.AddScoped<IArchiveService, ArchiveService>();
 builder.Services.AddScoped<IImageService, ImageService>();
 builder.Services.AddScoped<IBackupService, BackupService>();
+builder.Services.AddScoped<ITableTemplateService, TableTemplateService>();
+builder.Services.AddScoped<IRoomService, RoomService>();
 builder.Services.AddHttpClient("SetImages");
 
 var app = builder.Build();
