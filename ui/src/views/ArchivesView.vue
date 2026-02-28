@@ -19,13 +19,20 @@
             {{ status.lastImportedAt ? formatDate(status.lastImportedAt) : 'Never imported' }}
           </span>
         </template>
-        <button class="primary" :disabled="reloading" @click="reload">
-          {{ reloading ? 'Importing…' : 'Reload' }}
+      </div>
+
+      <div class="upload-row">
+        <input ref="colorsInput" type="file" accept=".zip" @change="onColorsFile" />
+        <button class="primary" :disabled="!colorsFile || reloading" @click="reload">
+          {{ reloading ? 'Importing…' : 'Import' }}
         </button>
       </div>
 
       <template v-if="colors.length">
-        <table class="colors-table">
+        <button class="toggle-link" @click="colorsExpanded = !colorsExpanded">
+          {{ colorsExpanded ? '▴ Hide list' : '▾ Show list' }}
+        </button>
+        <table v-if="colorsExpanded" class="colors-table">
           <thead>
             <tr>
               <th>ID</th>
@@ -49,7 +56,7 @@
           </tbody>
         </table>
       </template>
-      <p v-else-if="!statusLoading" class="muted">No colors imported yet. Click Reload to import.</p>
+      <p v-else-if="!statusLoading" class="muted">No colors imported yet.</p>
     </section>
 
     <section>
@@ -69,8 +76,39 @@
             {{ setsStatus.lastImportedAt ? formatDate(setsStatus.lastImportedAt) : 'Never imported' }}
           </span>
         </template>
-        <button class="primary" :disabled="setsReloading" @click="reloadSetsData">
-          {{ setsReloading ? 'Importing…' : 'Reload' }}
+      </div>
+
+      <div class="upload-row">
+        <input ref="setsInput" type="file" accept=".zip" @change="onSetsFile" />
+        <button class="primary" :disabled="!setsFile || setsReloading" @click="reloadSetsData">
+          {{ setsReloading ? 'Importing…' : 'Import' }}
+        </button>
+      </div>
+    </section>
+
+    <section>
+      <h2>Parts <span class="filename">parts.csv.zip</span></h2>
+
+      <p v-if="partsError" class="error">{{ partsError }}</p>
+
+      <div class="status-row">
+        <span v-if="partsStatusLoading" class="muted">Loading…</span>
+        <template v-else>
+          <span>
+            <strong>{{ partsStatus.count }}</strong> part{{ partsStatus.count !== 1 ? 's' : '' }} imported
+          </span>
+          <span class="sep">·</span>
+          <span class="muted">
+            Last import:
+            {{ partsStatus.lastImportedAt ? formatDate(partsStatus.lastImportedAt) : 'Never imported' }}
+          </span>
+        </template>
+      </div>
+
+      <div class="upload-row">
+        <input ref="partsInput" type="file" accept=".csv.zip" @change="onPartsFile" />
+        <button class="primary" :disabled="!partsFile || partsReloading" @click="reloadPartsData">
+          {{ partsReloading ? 'Importing…' : 'Import' }}
         </button>
       </div>
     </section>
@@ -79,13 +117,25 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
-import { getColorsStatus, reloadColors, getColorsList, getSetsStatus, reloadSets } from '../api/archives.js'
+import {
+  getColorsStatus, uploadColors, getColorsList,
+  getSetsStatus, uploadSets,
+  getPartsStatus, uploadParts,
+} from '../api/archives.js'
 
+// --- Colors ---
 const status = ref({ count: 0, lastImportedAt: null })
 const colors = ref([])
 const statusLoading = ref(true)
 const reloading = ref(false)
 const error = ref('')
+const colorsFile = ref(null)
+const colorsExpanded = ref(false)
+
+function onColorsFile(e) {
+  colorsFile.value = e.target.files[0] ?? null
+  error.value = ''
+}
 
 async function loadStatus() {
   try {
@@ -101,15 +151,16 @@ async function loadColors() {
   try {
     colors.value = await getColorsList()
   } catch {
-    // colors list may be empty if not yet imported — silently ignore
+    // silently ignore if not yet imported
   }
 }
 
 async function reload() {
+  if (!colorsFile.value) return
   reloading.value = true
   error.value = ''
   try {
-    status.value = await reloadColors()
+    status.value = await uploadColors(colorsFile.value)
     await loadColors()
   } catch (e) {
     error.value = e.message
@@ -118,21 +169,17 @@ async function reload() {
   }
 }
 
-function formatDate(iso) {
-  return new Date(iso).toLocaleString()
-}
-
-function formatYears(y1, y2) {
-  if (!y1 && !y2) return '—'
-  if (y1 && y2) return `${y1}–${y2}`
-  if (y1) return `${y1}–`
-  return `–${y2}`
-}
-
+// --- Sets ---
 const setsStatus = ref({ count: 0, lastImportedAt: null })
 const setsStatusLoading = ref(true)
 const setsReloading = ref(false)
 const setsError = ref('')
+const setsFile = ref(null)
+
+function onSetsFile(e) {
+  setsFile.value = e.target.files[0] ?? null
+  setsError.value = ''
+}
 
 async function loadSetsStatus() {
   try {
@@ -145,10 +192,11 @@ async function loadSetsStatus() {
 }
 
 async function reloadSetsData() {
+  if (!setsFile.value) return
   setsReloading.value = true
   setsError.value = ''
   try {
-    setsStatus.value = await reloadSets()
+    setsStatus.value = await uploadSets(setsFile.value)
   } catch (e) {
     setsError.value = e.message
   } finally {
@@ -156,10 +204,58 @@ async function reloadSetsData() {
   }
 }
 
+// --- Parts ---
+const partsStatus = ref({ count: 0, lastImportedAt: null })
+const partsStatusLoading = ref(true)
+const partsReloading = ref(false)
+const partsError = ref('')
+const partsFile = ref(null)
+
+function onPartsFile(e) {
+  partsFile.value = e.target.files[0] ?? null
+  partsError.value = ''
+}
+
+async function loadPartsStatus() {
+  try {
+    partsStatus.value = await getPartsStatus()
+  } catch (e) {
+    partsError.value = e.message
+  } finally {
+    partsStatusLoading.value = false
+  }
+}
+
+async function reloadPartsData() {
+  if (!partsFile.value) return
+  partsReloading.value = true
+  partsError.value = ''
+  try {
+    partsStatus.value = await uploadParts(partsFile.value)
+  } catch (e) {
+    partsError.value = e.message
+  } finally {
+    partsReloading.value = false
+  }
+}
+
+// --- Shared ---
+function formatDate(iso) {
+  return new Date(iso).toLocaleString()
+}
+
+function formatYears(y1, y2) {
+  if (!y1 && !y2) return '—'
+  if (y1 && y2) return `${y1}–${y2}`
+  if (y1) return `${y1}–`
+  return `–${y2}`
+}
+
 onMounted(async () => {
   await loadStatus()
   if (status.value.count > 0) await loadColors()
   await loadSetsStatus()
+  await loadPartsStatus()
 })
 </script>
 
@@ -176,6 +272,14 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   gap: 0.75rem;
+  margin-bottom: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.upload-row {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
   margin-bottom: 1.25rem;
   flex-wrap: wrap;
 }
@@ -187,6 +291,21 @@ onMounted(async () => {
 .muted {
   color: #64748b;
   font-size: 0.875rem;
+}
+
+.toggle-link {
+  background: none;
+  border: none;
+  padding: 0;
+  color: #3b82f6;
+  font-size: 0.875rem;
+  cursor: pointer;
+  margin-bottom: 0.75rem;
+  display: block;
+}
+
+.toggle-link:hover {
+  text-decoration: underline;
 }
 
 .colors-table {

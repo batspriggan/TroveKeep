@@ -29,6 +29,7 @@ builder.Services.AddScoped<IDrawerContainerRepository, DrawerContainerRepository
 builder.Services.AddScoped<IDrawerRepository, DrawerRepository>();
 builder.Services.AddScoped<IColorRepository, ColorRepository>();
 builder.Services.AddScoped<ISetArchiveRepository, SetArchiveRepository>();
+builder.Services.AddScoped<IPartArchiveRepository, PartArchiveRepository>();
 builder.Services.AddScoped<ISetImageRepository, SetImageRepository>();
 
 // Services

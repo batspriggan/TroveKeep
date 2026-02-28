@@ -1,11 +1,32 @@
-import { get, post } from './client.js'
+import { get } from './client.js'
 
 const BASE = '/api/archives'
 
+async function uploadFile(url, file) {
+  const form = new FormData()
+  form.append('file', file)
+  const res = await fetch(url, { method: 'POST', body: form })
+  if (!res.ok) {
+    let msg = `Server error: ${res.status}`
+    try {
+      const json = await res.json()
+      if (json.error) msg = json.error
+    } catch {
+      // non-JSON error body
+    }
+    throw new Error(msg)
+  }
+  return res.json()
+}
+
 export const getColorsStatus = () => get(`${BASE}/colors`)
-export const reloadColors = () => post(`${BASE}/colors/reload`)
+export const uploadColors = (file) => uploadFile(`${BASE}/colors/reload`, file)
 export const getColorsList = () => get(`${BASE}/colors/list`)
 
 export const getSetsStatus = () => get(`${BASE}/sets`)
-export const reloadSets = () => post(`${BASE}/sets/reload`)
+export const uploadSets = (file) => uploadFile(`${BASE}/sets/reload`, file)
 export const searchArchiveSets = (q, limit = 10) => get(`${BASE}/sets/search?q=${encodeURIComponent(q)}&limit=${limit}`)
+
+export const getPartsStatus = () => get(`${BASE}/parts`)
+export const uploadParts = (file) => uploadFile(`${BASE}/parts/reload`, file)
+export const searchArchiveParts = (q, limit = 10) => get(`${BASE}/parts/search?q=${encodeURIComponent(q)}&limit=${limit}`)

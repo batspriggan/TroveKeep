@@ -25,18 +25,20 @@ public class ArchivesController : ControllerBase
     }
 
     [HttpPost("colors/reload")]
+    [RequestSizeLimit(50_000_000)]
+    [RequestFormLimits(MultipartBodyLengthLimit = 50_000_000)]
     [ProducesResponseType(typeof(ArchiveStatusResponse), StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> ReloadColors()
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> ReloadColors(IFormFile file)
     {
         try
         {
-            var (count, importedAt) = await _service.ImportColorsAsync();
+            var (count, importedAt) = await _service.ImportColorsAsync(file.OpenReadStream());
             return Ok(new ArchiveStatusResponse(count, importedAt));
         }
-        catch (FileNotFoundException ex)
+        catch (InvalidOperationException ex)
         {
-            return NotFound(new { error = ex.Message });
+            return BadRequest(new { error = ex.Message });
         }
     }
 
@@ -69,18 +71,58 @@ public class ArchivesController : ControllerBase
     }
 
     [HttpPost("sets/reload")]
+    [RequestSizeLimit(50_000_000)]
+    [RequestFormLimits(MultipartBodyLengthLimit = 50_000_000)]
     [ProducesResponseType(typeof(ArchiveStatusResponse), StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> ReloadSets()
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> ReloadSets(IFormFile file)
     {
         try
         {
-            var (count, importedAt) = await _service.ImportSetsAsync();
+            var (count, importedAt) = await _service.ImportSetsAsync(file.OpenReadStream());
             return Ok(new ArchiveStatusResponse(count, importedAt));
         }
-        catch (FileNotFoundException ex)
+        catch (InvalidOperationException ex)
         {
-            return NotFound(new { error = ex.Message });
+            return BadRequest(new { error = ex.Message });
+        }
+    }
+
+    [HttpGet("parts")]
+    [ProducesResponseType(typeof(ArchiveStatusResponse), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetPartsStatus()
+    {
+        var (count, importedAt) = await _service.GetPartsStatusAsync();
+        return Ok(new ArchiveStatusResponse(count, importedAt));
+    }
+
+    [HttpGet("parts/search")]
+    [ProducesResponseType(typeof(IEnumerable<PartArchiveSearchResponse>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> SearchParts([FromQuery] string? q, [FromQuery] int limit = 10)
+    {
+        if (string.IsNullOrWhiteSpace(q))
+            return Ok(Array.Empty<PartArchiveSearchResponse>());
+
+        var cap = Math.Min(limit, 20);
+        var results = await _service.SearchPartsAsync(q, cap);
+        return Ok(results.Select(p => new PartArchiveSearchResponse(p.PartNum, p.Name)));
+    }
+
+    [HttpPost("parts/reload")]
+    [RequestSizeLimit(50_000_000)]
+    [RequestFormLimits(MultipartBodyLengthLimit = 50_000_000)]
+    [ProducesResponseType(typeof(ArchiveStatusResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> ReloadParts(IFormFile file)
+    {
+        try
+        {
+            var (count, importedAt) = await _service.ImportPartsAsync(file.OpenReadStream());
+            return Ok(new ArchiveStatusResponse(count, importedAt));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { error = ex.Message });
         }
     }
 
