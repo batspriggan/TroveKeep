@@ -46,6 +46,7 @@ builder.Services.AddScoped<ISearchService, SearchService>();
 builder.Services.AddScoped<IArchiveService, ArchiveService>();
 builder.Services.AddScoped<IImageService, ImageService>();
 builder.Services.AddScoped<IBackupService, BackupService>();
+builder.Services.AddScoped<IRoomExportService, RoomExportService>();
 builder.Services.AddScoped<ITableTemplateService, TableTemplateService>();
 builder.Services.AddScoped<IRoomService, RoomService>();
 builder.Services.AddHttpClient("SetImages");

@@ -8,8 +8,9 @@ const router = useRouter()
 const roomId = route.params.id
 
 // Scale: 100 px = 1 m → 1 px = 1 cm
-const SCALE = 1   // 1 px per cm
-const SNAP = 20   // 20 cm snap
+const SCALE = 1         // 1 px per cm
+const SNAP = 1          // 1 cm snap
+const BORDER_SNAP = 20  // cm — magnetism threshold for edge-to-edge snap
 
 const room = ref(null)
 const templates = ref([])
@@ -17,6 +18,7 @@ const placedTables = ref([])
 const savedLayoutJson = ref('')
 const saveSuccess = ref(false)
 const loading = ref(true)
+const showGrid = ref(true)
 
 // Map from templateId → template data for display
 const templateMap = computed(() => {
@@ -46,6 +48,7 @@ onMounted(async () => {
     templateId: p.templateId,
     xCm: p.xCm,
     yCm: p.yCm,
+    overlapping: false,
   }))
   savedLayoutJson.value = JSON.stringify(placedTables.value.map(serialise))
   loading.value = false
@@ -56,8 +59,9 @@ function addFromTemplate(tpl) {
   placedTables.value.push({
     instanceId: crypto.randomUUID(),
     templateId: tpl.id,
-    xCm: SNAP,
-    yCm: SNAP,
+    xCm: 20,
+    yCm: 20,
+    overlapping: false,
   })
 }
 
@@ -80,6 +84,8 @@ function startDrag(e, placed) {
     startMouseY: e.clientY,
     startX: placed.xCm,
     startY: placed.yCm,
+    lastValidX: placed.xCm,
+    lastValidY: placed.yCm,
   }
   window.addEventListener('mousemove', onMove)
   window.addEventListener('mouseup', onUp)
@@ -87,17 +93,86 @@ function startDrag(e, placed) {
 
 function onMove(e) {
   if (!_drag) return
-  const tpl = templateMap.value[placedTables.value.find(p => p.instanceId === _drag.instanceId)?.templateId]
   const p = placedTables.value.find(t => t.instanceId === _drag.instanceId)
-  if (!p || !tpl || !room.value) return
+  if (!p || !room.value) return
+  const tpl = templateMap.value[p.templateId]
+  if (!tpl) return
 
+  const cw = tpl.widthCm
+  const cd = tpl.depthCm
+
+  // Step 1+2: raw position → 1 cm snap → room-bounds clamp
   const rawX = _drag.startX + (e.clientX - _drag.startMouseX) / SCALE
   const rawY = _drag.startY + (e.clientY - _drag.startMouseY) / SCALE
-  p.xCm = Math.max(0, Math.min(room.value.widthCm - tpl.widthCm, Math.round(rawX / SNAP) * SNAP))
-  p.yCm = Math.max(0, Math.min(room.value.depthCm - tpl.depthCm, Math.round(rawY / SNAP) * SNAP))
+  let cx = Math.max(0, Math.min(room.value.widthCm - cw, Math.round(rawX / SNAP) * SNAP))
+  let cy = Math.max(0, Math.min(room.value.depthCm - cd, Math.round(rawY / SNAP) * SNAP))
+
+  // Step 3: border-to-border snap (per axis, independently)
+  const others = placedTables.value.filter(t => t.instanceId !== _drag.instanceId)
+  let bestDX = BORDER_SNAP + 1
+  let bestDY = BORDER_SNAP + 1
+  let snapX = cx
+  let snapY = cy
+
+  for (const other of others) {
+    const otpl = templateMap.value[other.templateId]
+    if (!otpl) continue
+    const nx = other.xCm, ny = other.yCm, nw = otpl.widthCm, nd = otpl.depthCm
+
+    for (const xc of [nx - cw, nx + nw, nx, nx + nw - cw]) {
+      const d = Math.abs(cx - xc)
+      if (d < bestDX) { bestDX = d; snapX = xc }
+    }
+    for (const yc of [ny - cd, ny + nd, ny, ny + nd - cd]) {
+      const d = Math.abs(cy - yc)
+      if (d < bestDY) { bestDY = d; snapY = yc }
+    }
+  }
+
+  // Wall snap candidates
+  for (const xc of [0, room.value.widthCm - cw]) {
+    const d = Math.abs(cx - xc)
+    if (d < bestDX) { bestDX = d; snapX = xc }
+  }
+  for (const yc of [0, room.value.depthCm - cd]) {
+    const d = Math.abs(cy - yc)
+    if (d < bestDY) { bestDY = d; snapY = yc }
+  }
+
+  if (bestDX <= BORDER_SNAP) cx = snapX
+  if (bestDY <= BORDER_SNAP) cy = snapY
+
+  // Re-clamp after snap
+  cx = Math.max(0, Math.min(room.value.widthCm - cw, cx))
+  cy = Math.max(0, Math.min(room.value.depthCm - cd, cy))
+
+  // Step 4: AABB overlap check
+  const hasOverlap = others.some(other => {
+    const otpl = templateMap.value[other.templateId]
+    if (!otpl) return false
+    return cx < other.xCm + otpl.widthCm &&
+           cx + cw > other.xCm &&
+           cy < other.yCm + otpl.depthCm &&
+           cy + cd > other.yCm
+  })
+
+  if (hasOverlap) {
+    p.overlapping = true
+    // Don't update position — stay at last valid
+  } else {
+    p.overlapping = false
+    p.xCm = cx
+    p.yCm = cy
+    _drag.lastValidX = cx
+    _drag.lastValidY = cy
+  }
 }
 
 function onUp() {
+  if (_drag) {
+    const p = placedTables.value.find(t => t.instanceId === _drag.instanceId)
+    if (p) p.overlapping = false
+  }
   _drag = null
   draggingId.value = null
   window.removeEventListener('mousemove', onMove)
@@ -124,6 +199,7 @@ async function saveLayout() {
       <button class="back-btn" @click="router.push('/table-planner')">&larr; Table Planner</button>
       <h1 v-if="room">{{ room.name }}</h1>
       <div class="header-right">
+        <button class="toggle-btn" :class="{ active: showGrid }" @click="showGrid = !showGrid" title="Toggle grid">Grid</button>
         <span v-if="saveSuccess" class="save-ok">Layout saved!</span>
         <button
           class="primary save-btn"
@@ -155,13 +231,14 @@ async function saveLayout() {
       <div class="canvas-wrap">
         <div
           class="canvas"
+          :class="{ 'canvas--grid': showGrid }"
           :style="{ width: canvasWidth + 'px', height: canvasHeight + 'px' }"
         >
           <div
             v-for="p in placedTables"
             :key="p.instanceId"
             class="table-item"
-            :class="{ active: draggingId === p.instanceId }"
+            :class="{ active: draggingId === p.instanceId, 'table-item--overlap': p.overlapping }"
             :style="{
               left: p.xCm * SCALE + 'px',
               top: p.yCm * SCALE + 'px',
@@ -250,6 +327,26 @@ async function saveLayout() {
 
 .save-btn.dirty:hover { background: #2e5a8a; }
 
+.toggle-btn {
+  background: #f0f0f0;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  padding: 0.3rem 0.65rem;
+  font-size: 0.8rem;
+  cursor: pointer;
+  color: #666;
+}
+
+.toggle-btn.active {
+  background: #dde8f5;
+  border-color: #3a6ea5;
+  color: #3a6ea5;
+  font-weight: 600;
+}
+
+.toggle-btn:hover { background: #e0e0e0; }
+.toggle-btn.active:hover { background: #ccdaf0; }
+
 .loading {
   color: #888;
   padding: 1rem 0;
@@ -302,6 +399,9 @@ async function saveLayout() {
 .canvas {
   position: relative;
   background-color: #fff;
+}
+
+.canvas--grid {
   background-image:
     linear-gradient(to right,  #9aa8bb 1px, transparent 1px),
     linear-gradient(to bottom, #9aa8bb 1px, transparent 1px),
@@ -330,6 +430,11 @@ async function saveLayout() {
   cursor: grabbing;
   box-shadow: 0 8px 20px rgba(0,0,0,0.4);
   z-index: 10;
+}
+
+.table-item--overlap {
+  border-color: rgba(200, 30, 30, 0.8);
+  box-shadow: 0 0 0 2px rgba(200, 30, 30, 0.4);
 }
 
 .table-label {

@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import {
   getAllRooms, createRoom, updateRoom, deleteRoom,
   getAllTemplates, createTemplate, updateTemplate, deleteTemplate,
+  exportRoom, importRoom,
 } from '../api/tableplanner.js'
 
 const router = useRouter()
@@ -12,6 +13,9 @@ const router = useRouter()
 const rooms = ref([])
 const roomForm = ref({ name: '', widthCm: 1000, depthCm: 800 })
 const roomError = ref('')
+const importError = ref('')
+const importSuccess = ref('')
+const importFileRef = ref(null)
 
 async function loadRooms() {
   rooms.value = await getAllRooms()
@@ -33,6 +37,26 @@ async function removeRoom(id) {
 
 function openRoom(id) {
   router.push(`/table-planner/rooms/${id}`)
+}
+
+function triggerImport() {
+  importFileRef.value.click()
+}
+
+async function handleImportFile(e) {
+  const file = e.target.files[0]
+  if (!file) return
+  e.target.value = ''
+  importError.value = ''
+  importSuccess.value = ''
+  try {
+    await importRoom(file)
+    await loadRooms()
+    importSuccess.value = 'Room imported successfully.'
+    setTimeout(() => { importSuccess.value = '' }, 3000)
+  } catch (err) {
+    importError.value = err.message
+  }
 }
 
 // ── Templates ─────────────────────────────────────────────────────────────────
@@ -101,8 +125,12 @@ onMounted(() => Promise.all([loadRooms(), loadTemplates()]))
         <label>W (cm) <input v-model.number="roomForm.widthCm" type="number" min="100" max="10000" style="width:80px" /></label>
         <label>D (cm) <input v-model.number="roomForm.depthCm" type="number" min="100" max="10000" style="width:80px" /></label>
         <button class="primary" type="submit">+ Add Room</button>
+        <button type="button" @click="triggerImport">Import Room</button>
+        <input type="file" ref="importFileRef" accept=".zip" style="display:none" @change="handleImportFile" />
         <span v-if="roomError" class="form-error">{{ roomError }}</span>
       </form>
+      <p v-if="importError" class="form-error">{{ importError }}</p>
+      <p v-if="importSuccess" class="form-success">{{ importSuccess }}</p>
 
       <p v-if="rooms.length === 0" class="empty-hint">No rooms yet.</p>
 
@@ -124,6 +152,7 @@ onMounted(() => Promise.all([loadRooms(), loadTemplates()]))
             <td>{{ r.layout.length }}</td>
             <td class="actions">
               <button class="primary small" @click="openRoom(r.id)">Open</button>
+              <button class="small" @click="exportRoom(r.id)">Export</button>
               <button class="danger small" @click="removeRoom(r.id)">Delete</button>
             </td>
           </tr>
@@ -237,6 +266,11 @@ h1 { margin: 0 0 1.25rem; }
 
 .form-error {
   color: #c00;
+  font-size: 0.85rem;
+}
+
+.form-success {
+  color: #2a7a2a;
   font-size: 0.85rem;
 }
 

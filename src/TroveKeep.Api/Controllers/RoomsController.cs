@@ -11,10 +11,12 @@ namespace TroveKeep.Api.Controllers;
 public class RoomsController : ControllerBase
 {
     private readonly IRoomService _service;
+    private readonly IRoomExportService _exportService;
 
-    public RoomsController(IRoomService service)
+    public RoomsController(IRoomService service, IRoomExportService exportService)
     {
         _service = service;
+        _exportService = exportService;
     }
 
     [HttpGet]
@@ -92,6 +94,34 @@ public class RoomsController : ControllerBase
         var deleted = await _service.DeleteAsync(id);
         if (!deleted) return NotFound();
         return NoContent();
+    }
+
+    [HttpGet("{id:guid}/export")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> Export(Guid id)
+    {
+        try
+        {
+            var (data, fn) = await _exportService.ExportRoomAsync(id);
+            return File(data, "application/zip", fn);
+        }
+        catch (KeyNotFoundException) { return NotFound(); }
+    }
+
+    [HttpPost("import")]
+    [RequestSizeLimit(10_000_000)]
+    [RequestFormLimits(MultipartBodyLengthLimit = 10_000_000)]
+    [ProducesResponseType(typeof(RoomResponse), StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> Import(IFormFile file)
+    {
+        try
+        {
+            var room = await _exportService.ImportRoomAsync(file.OpenReadStream());
+            return CreatedAtAction(nameof(GetById), new { id = room.Id }, MapToResponse(room));
+        }
+        catch (InvalidOperationException ex) { return BadRequest(new { error = ex.Message }); }
     }
 
     private static RoomResponse MapToResponse(Room r) =>
