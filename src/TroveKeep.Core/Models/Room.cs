@@ -7,6 +7,7 @@ public class Room
     public int WidthCm { get; set; }
     public int DepthCm { get; set; }
     public List<PlacedTable> Layout { get; set; } = [];
+    public List<AggregateSelection> AggregateSelections { get; set; } = [];
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
 }

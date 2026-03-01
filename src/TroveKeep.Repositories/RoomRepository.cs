@@ -45,13 +45,14 @@ public class RoomRepository : IRoomRepository
         var doc = ToDocument(room);
         doc.CreatedAt = existing.CreatedAt;
         doc.UpdatedAt = DateTime.UtcNow;
-        // Preserve existing layout
+        // Preserve existing layout and aggregate selections
         doc.Layout = existing.Layout;
+        doc.AggregateSelections = existing.AggregateSelections;
         await _rooms.ReplaceOneAsync(x => x.Id == room.Id, doc);
         return ToModel(doc);
     }
 
-    public async Task<Room?> SaveLayoutAsync(Guid id, IEnumerable<PlacedTable> layout)
+    public async Task<Room?> SaveLayoutAsync(Guid id, IEnumerable<PlacedTable> layout, IEnumerable<AggregateSelection> aggregateSelections)
     {
         var layoutDocs = layout.Select(p => new PlacedTableDocument
         {
@@ -61,8 +62,15 @@ public class RoomRepository : IRoomRepository
             YCm = p.YCm,
         }).ToList();
 
+        var selectionDocs = aggregateSelections.Select(s => new AggregateSelectionDocument
+        {
+            RepresentativeId = s.RepresentativeId,
+            BpKey = s.BpKey,
+        }).ToList();
+
         var update = Builders<RoomDocument>.Update
             .Set(r => r.Layout, layoutDocs)
+            .Set(r => r.AggregateSelections, selectionDocs)
             .Set(r => r.UpdatedAt, DateTime.UtcNow);
 
         var result = await _rooms.FindOneAndUpdateAsync(
@@ -92,6 +100,11 @@ public class RoomRepository : IRoomRepository
             XCm = p.XCm,
             YCm = p.YCm,
         }).ToList(),
+        AggregateSelections = doc.AggregateSelections.Select(s => new AggregateSelection
+        {
+            RepresentativeId = s.RepresentativeId,
+            BpKey = s.BpKey,
+        }).ToList(),
         CreatedAt = new DateTimeOffset(DateTime.SpecifyKind(doc.CreatedAt, DateTimeKind.Utc)),
         UpdatedAt = new DateTimeOffset(DateTime.SpecifyKind(doc.UpdatedAt, DateTimeKind.Utc)),
     };
@@ -108,6 +121,11 @@ public class RoomRepository : IRoomRepository
             TemplateId = p.TemplateId,
             XCm = p.XCm,
             YCm = p.YCm,
+        }).ToList(),
+        AggregateSelections = model.AggregateSelections.Select(s => new AggregateSelectionDocument
+        {
+            RepresentativeId = s.RepresentativeId,
+            BpKey = s.BpKey,
         }).ToList(),
         CreatedAt = model.CreatedAt.UtcDateTime,
         UpdatedAt = model.UpdatedAt.UtcDateTime,

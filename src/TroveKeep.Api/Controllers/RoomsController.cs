@@ -81,7 +81,12 @@ public class RoomsController : ControllerBase
             XCm = p.XCm,
             YCm = p.YCm,
         });
-        var updated = await _service.SaveLayoutAsync(id, layout);
+        var selections = request.AggregateSelections.Select(s => new AggregateSelection
+        {
+            RepresentativeId = s.RepresentativeId,
+            BpKey = s.BpKey,
+        });
+        var updated = await _service.SaveLayoutAsync(id, layout, selections);
         if (updated is null) return NotFound();
         return Ok(MapToResponse(updated));
     }
@@ -127,5 +132,6 @@ public class RoomsController : ControllerBase
     private static RoomResponse MapToResponse(Room r) =>
         new(r.Id, r.Name, r.WidthCm, r.DepthCm,
             r.Layout.Select(p => new PlacedTableResponse(p.InstanceId, p.TemplateId, p.XCm, p.YCm)),
+            r.AggregateSelections.Select(s => new AggregateSelectionResponse(s.RepresentativeId, s.BpKey)),
             r.CreatedAt, r.UpdatedAt);
 }

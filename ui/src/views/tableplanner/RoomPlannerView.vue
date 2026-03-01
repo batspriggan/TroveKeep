@@ -16,6 +16,7 @@ const room = ref(null)
 const templates = ref([])
 const placedTables = ref([])
 const savedLayoutJson = ref('')
+const savedAggSelectionsJson = ref('[]')
 const saveSuccess = ref(false)
 const loading = ref(true)
 const showGrid = ref(true)
@@ -35,11 +36,33 @@ const canvasWidth = computed(() => room.value ? room.value.widthCm * SCALE : 0)
 const canvasHeight = computed(() => room.value ? room.value.depthCm * SCALE : 0)
 
 const isDirty = computed(() =>
-  JSON.stringify(placedTables.value.map(serialise)) !== savedLayoutJson.value
+  JSON.stringify(placedTables.value.map(serialise)) !== savedLayoutJson.value ||
+  JSON.stringify(buildAggSelectionsForSave()) !== savedAggSelectionsJson.value
 )
 
 function serialise(p) {
   return { instanceId: p.instanceId, templateId: p.templateId, xCm: p.xCm, yCm: p.yCm }
+}
+
+// Stable aggregate identity: lexicographically smallest instanceId in the group
+function buildAggSelectionsForSave() {
+  return aggregates.value
+    .map((group, idx) => {
+      const bpKey = aggSelections.value[idx]
+      if (!bpKey) return null
+      const repId = [...group].sort()[0]
+      return { representativeId: repId, bpKey }
+    })
+    .filter(Boolean)
+}
+
+function restoreAggSelections(savedSelections) {
+  const newSel = {}
+  for (const saved of savedSelections) {
+    const idx = aggregates.value.findIndex(g => g.includes(saved.representativeId))
+    if (idx >= 0) newSel[idx] = saved.bpKey
+  }
+  aggSelections.value = newSel
 }
 
 // ── Aggregate detection ────────────────────────────────────────────────────────
@@ -182,6 +205,8 @@ onMounted(async () => {
     overlapping: false,
   }))
   savedLayoutJson.value = JSON.stringify(placedTables.value.map(serialise))
+  restoreAggSelections(r.aggregateSelections ?? [])
+  savedAggSelectionsJson.value = JSON.stringify(buildAggSelectionsForSave())
   loading.value = false
 })
 
@@ -422,8 +447,10 @@ onUnmounted(() => {
 
 // ── Save ──────────────────────────────────────────────────────────────────────
 async function saveLayout() {
-  await saveRoomLayout(roomId, placedTables.value.map(serialise))
+  const aggSels = buildAggSelectionsForSave()
+  await saveRoomLayout(roomId, placedTables.value.map(serialise), aggSels)
   savedLayoutJson.value = JSON.stringify(placedTables.value.map(serialise))
+  savedAggSelectionsJson.value = JSON.stringify(aggSels)
   saveSuccess.value = true
   setTimeout(() => { saveSuccess.value = false }, 2500)
 }

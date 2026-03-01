@@ -20,7 +20,7 @@ export const getAllRooms = () => get(ROOMS)
 export const getRoom = (id) => get(`${ROOMS}/${id}`)
 export const createRoom = (body) => post(ROOMS, body)
 export const updateRoom = (id, body) => put(`${ROOMS}/${id}`, body)
-export const saveRoomLayout = (id, layout) => put(`${ROOMS}/${id}/layout`, { layout })
+export const saveRoomLayout = (id, layout, aggregateSelections) => put(`${ROOMS}/${id}/layout`, { layout, aggregateSelections })
 export const deleteRoom = (id) => del(`${ROOMS}/${id}`)
 
 export async function exportRoom(id) {
