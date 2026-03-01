@@ -22,8 +22,8 @@ public class SettingsController : ControllerBase
     }
 
     [HttpPost("restore")]
-    [RequestSizeLimit(100_000_000)]
-    [RequestFormLimits(MultipartBodyLengthLimit = 100_000_000)]
+    [RequestSizeLimit(500_000_000)]
+    [RequestFormLimits(MultipartBodyLengthLimit = 500_000_000)]
     public async Task<IActionResult> Restore(IFormFile file)
     {
         try
