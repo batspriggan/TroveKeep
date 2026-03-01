@@ -20,6 +20,11 @@ const saveSuccess = ref(false)
 const loading = ref(true)
 const showGrid = ref(true)
 
+const selectedAggregateId = ref(null)   // integer index into aggregates.value, or null
+const calcWidthStuds  = ref(32)
+const calcDepthStuds  = ref(32)
+const calcCollapsed   = ref(false)
+
 // Map from templateId → template data for display
 const templateMap = computed(() => {
   const m = {}
@@ -36,6 +41,119 @@ const isDirty = computed(() =>
 
 function serialise(p) {
   return { instanceId: p.instanceId, templateId: p.templateId, xCm: p.xCm, yCm: p.yCm }
+}
+
+// ── Aggregate detection ────────────────────────────────────────────────────────
+function rangeOverlaps(a1, a2, b1, b2) {
+  return Math.min(a2, b2) - Math.max(a1, b1) > 0
+}
+
+function areAdjacent(a, tplA, b, tplB) {
+  const T = 0.5  // cm tolerance
+  const xAdj =
+    (Math.abs((a.xCm + tplA.widthCm) - b.xCm) < T ||
+     Math.abs((b.xCm + tplB.widthCm) - a.xCm) < T) &&
+    rangeOverlaps(a.yCm, a.yCm + tplA.depthCm, b.yCm, b.yCm + tplB.depthCm)
+  const yAdj =
+    (Math.abs((a.yCm + tplA.depthCm) - b.yCm) < T ||
+     Math.abs((b.yCm + tplB.depthCm) - a.yCm) < T) &&
+    rangeOverlaps(a.xCm, a.xCm + tplA.widthCm, b.xCm, b.xCm + tplB.widthCm)
+  return xAdj || yAdj
+}
+
+// Each aggregate = array of instanceIds (BFS)
+const aggregates = computed(() => {
+  const tables = placedTables.value
+  const tMap   = templateMap.value
+  const n = tables.length
+  if (n === 0) return []
+  const visited = new Array(n).fill(false)
+  const result  = []
+  for (let i = 0; i < n; i++) {
+    if (visited[i]) continue
+    const group = [], queue = [i]
+    visited[i] = true
+    while (queue.length) {
+      const cur = queue.shift()
+      group.push(tables[cur].instanceId)
+      const a = tables[cur], tplA = tMap[a.templateId]
+      if (!tplA) continue
+      for (let j = 0; j < n; j++) {
+        if (visited[j]) continue
+        const b = tables[j], tplB = tMap[b.templateId]
+        if (!tplB) continue
+        if (areAdjacent(a, tplA, b, tplB)) { visited[j] = true; queue.push(j) }
+      }
+    }
+    result.push(group)
+  }
+  return result
+})
+
+// instanceId → aggregate index
+const aggregateMap = computed(() => {
+  const map = {}
+  aggregates.value.forEach((g, i) => { for (const id of g) map[id] = i })
+  return map
+})
+
+// ── Plate count computed ───────────────────────────────────────────────────────
+const plateCount = computed(() => {
+  if (selectedAggregateId.value == null) return null
+  const group = aggregates.value[selectedAggregateId.value]
+  if (!group?.length) return null
+  const tMap = templateMap.value
+
+  // Table rects in mm (1 cm = 10 mm)
+  const rects = group.map(id => {
+    const t = placedTables.value.find(p => p.instanceId === id)
+    const tpl = tMap[t.templateId]
+    return { x1: t.xCm*10, y1: t.yCm*10, x2: (t.xCm+tpl.widthCm)*10, y2: (t.yCm+tpl.depthCm)*10 }
+  })
+  const minX = Math.min(...rects.map(r => r.x1))
+  const minY = Math.min(...rects.map(r => r.y1))
+  const maxX = Math.max(...rects.map(r => r.x2))
+  const maxY = Math.max(...rects.map(r => r.y2))
+
+  const pw = calcWidthStuds.value * 8 - 2
+  const pd = calcDepthStuds.value * 8 - 2
+  if (pw <= 0 || pd <= 0) return 0
+
+  const nX = Math.ceil((maxX - minX) / pw)
+  const nY = Math.ceil((maxY - minY) / pd)
+  let count = 0
+  for (let ix = 0; ix < nX; ix++) {
+    for (let iy = 0; iy < nY; iy++) {
+      const px1 = minX + ix*pw, py1 = minY + iy*pd
+      const px2 = px1+pw,       py2 = py1+pd
+      let covered = 0
+      for (const r of rects) {
+        const ox1 = Math.max(px1,r.x1), oy1 = Math.max(py1,r.y1)
+        const ox2 = Math.min(px2,r.x2), oy2 = Math.min(py2,r.y2)
+        if (ox2 > ox1 && oy2 > oy1) covered += (ox2-ox1)*(oy2-oy1)
+      }
+      if (covered >= pw*pd - 0.01) count++
+    }
+  }
+  return count
+})
+
+function aggregateLabel(idx) {
+  const group = aggregates.value[idx]
+  if (!group) return ''
+  const tMap = templateMap.value
+  let minX=Infinity, minY=Infinity, maxX=-Infinity, maxY=-Infinity
+  for (const id of group) {
+    const t = placedTables.value.find(p => p.instanceId === id)
+    const tpl = tMap[t?.templateId]
+    if (!t || !tpl) continue
+    if (t.xCm < minX) minX = t.xCm
+    if (t.yCm < minY) minY = t.yCm
+    if (t.xCm+tpl.widthCm > maxX) maxX = t.xCm+tpl.widthCm
+    if (t.yCm+tpl.depthCm > maxY) maxY = t.yCm+tpl.depthCm
+  }
+  const w = maxX-minX, d = maxY-minY
+  return `Group ${idx+1} — ${group.length} table(s) · ${w}×${d} cm`
 }
 
 // ── Load ──────────────────────────────────────────────────────────────────────
@@ -104,14 +222,22 @@ function startDrag(e, placed) {
   if (e.button !== 0) return
   e.preventDefault()
   draggingId.value = placed.instanceId
+  const aggIdx = aggregateMap.value[placed.instanceId]
+  const aggGroup = (aggIdx != null) ? aggregates.value[aggIdx] : [placed.instanceId]
+  const isGroup = aggGroup.length > 1
   _drag = {
     instanceId: placed.instanceId,
-    startMouseX: e.clientX,
-    startMouseY: e.clientY,
-    startX: placed.xCm,
-    startY: placed.yCm,
-    lastValidX: placed.xCm,
-    lastValidY: placed.yCm,
+    startMouseX: e.clientX, startMouseY: e.clientY,
+    startX: placed.xCm, startY: placed.yCm,
+    lastValidX: placed.xCm, lastValidY: placed.yCm,
+    isGroup,
+    groupStartPositions: isGroup
+      ? aggGroup.map(id => {
+          const t = placedTables.value.find(p => p.instanceId === id)
+          return { instanceId: id, startX: t.xCm, startY: t.yCm }
+        })
+      : null,
+    groupInstanceIds: isGroup ? aggGroup : null,
   }
   window.addEventListener('mousemove', onMove)
   window.addEventListener('mouseup', onUp)
@@ -119,6 +245,10 @@ function startDrag(e, placed) {
 
 function onMove(e) {
   if (!_drag) return
+  _drag.isGroup ? onMoveGroup(e) : onMoveSingle(e)
+}
+
+function onMoveSingle(e) {
   const p = placedTables.value.find(t => t.instanceId === _drag.instanceId)
   if (!p || !room.value) return
   const tpl = templateMap.value[p.templateId]
@@ -194,15 +324,82 @@ function onMove(e) {
   }
 }
 
-function onUp() {
+function onMoveGroup(e) {
+  if (!room.value) return
+  const gsp = _drag.groupStartPositions
+  const groupIds = new Set(_drag.groupInstanceIds)
+  const nonGroup = placedTables.value.filter(t => !groupIds.has(t.instanceId))
+
+  const rawDx = (e.clientX - _drag.startMouseX) / SCALE
+  const rawDy = (e.clientY - _drag.startMouseY) / SCALE
+  const snapDx = Math.round(rawDx / SNAP) * SNAP
+  const snapDy = Math.round(rawDy / SNAP) * SNAP
+
+  const proposed = gsp.map(sp => ({
+    instanceId: sp.instanceId,
+    newX: sp.startX + snapDx,
+    newY: sp.startY + snapDy,
+  }))
+
+  // Bounding box → clamp correction (uniform shift)
+  let clampDx = 0, clampDy = 0
+  for (const pr of proposed) {
+    const t = placedTables.value.find(p => p.instanceId === pr.instanceId)
+    const tpl = templateMap.value[t.templateId]
+    if (!tpl) continue
+    if (pr.newX < 0) clampDx = Math.max(clampDx, -pr.newX)
+    if (pr.newX + tpl.widthCm > room.value.widthCm)
+      clampDx = Math.min(clampDx, room.value.widthCm - pr.newX - tpl.widthCm)
+    if (pr.newY < 0) clampDy = Math.max(clampDy, -pr.newY)
+    if (pr.newY + tpl.depthCm > room.value.depthCm)
+      clampDy = Math.min(clampDy, room.value.depthCm - pr.newY - tpl.depthCm)
+  }
+  for (const pr of proposed) { pr.newX += clampDx; pr.newY += clampDy }
+
+  // Overlap check vs non-group tables
+  const hasOverlap = proposed.some(pr => {
+    const t = placedTables.value.find(p => p.instanceId === pr.instanceId)
+    const tpl = templateMap.value[t.templateId]
+    if (!tpl) return false
+    return nonGroup.some(other => {
+      const otpl = templateMap.value[other.templateId]
+      if (!otpl) return false
+      return pr.newX < other.xCm + otpl.widthCm && pr.newX + tpl.widthCm > other.xCm &&
+             pr.newY < other.yCm + otpl.depthCm && pr.newY + tpl.depthCm > other.yCm
+    })
+  })
+
+  if (!hasOverlap) {
+    for (const pr of proposed) {
+      const t = placedTables.value.find(p => p.instanceId === pr.instanceId)
+      if (t) { t.xCm = pr.newX; t.yCm = pr.newY }
+    }
+    const main = proposed.find(p => p.instanceId === _drag.instanceId)
+    if (main) { _drag.lastValidX = main.newX; _drag.lastValidY = main.newY }
+  }
+}
+
+function onUp(e) {
   if (_drag) {
-    const p = placedTables.value.find(t => t.instanceId === _drag.instanceId)
-    if (p) p.overlapping = false
+    const ids = _drag.isGroup ? _drag.groupInstanceIds : [_drag.instanceId]
+    for (const id of ids) {
+      const t = placedTables.value.find(p => p.instanceId === id)
+      if (t) t.overlapping = false
+    }
+    const moved = Math.abs(e.clientX - _drag.startMouseX) + Math.abs(e.clientY - _drag.startMouseY)
+    if (moved < 5) {
+      const idx = aggregateMap.value[_drag.instanceId]
+      selectedAggregateId.value = idx ?? null
+    }
   }
   _drag = null
   draggingId.value = null
   window.removeEventListener('mousemove', onMove)
   window.removeEventListener('mouseup', onUp)
+}
+
+function onCanvasClick(e) {
+  if (e.target === e.currentTarget) selectedAggregateId.value = null
 }
 
 onUnmounted(() => {
@@ -253,18 +450,64 @@ async function saveLayout() {
         <span v-if="templates.length === 0" class="empty-palette">No templates — create some in Table Planner.</span>
       </div>
 
+      <!-- Plate Calculator -->
+      <div class="calc-bar">
+        <div class="calc-header" @click="calcCollapsed = !calcCollapsed">
+          <span class="calc-title">Plate Calculator</span>
+          <span class="calc-toggle">{{ calcCollapsed ? '▸' : '▾' }}</span>
+        </div>
+        <div v-if="!calcCollapsed" class="calc-body">
+          <div class="calc-row">
+            <label class="calc-label">Aggregate:</label>
+            <select class="calc-select"
+              :value="selectedAggregateId"
+              @change="selectedAggregateId = $event.target.value === '' ? null : Number($event.target.value)">
+              <option value="">— none —</option>
+              <option v-for="(group, idx) in aggregates" :key="idx" :value="idx">{{ aggregateLabel(idx) }}</option>
+            </select>
+          </div>
+          <div class="calc-row">
+            <label class="calc-label">Plate size:</label>
+            <input v-model.number="calcWidthStuds" type="number" min="1" max="256" class="calc-stud-input" />
+            <span>&times;</span>
+            <input v-model.number="calcDepthStuds" type="number" min="1" max="256" class="calc-stud-input" />
+            <span class="calc-unit">studs</span>
+            <span class="calc-presets-label">Presets:</span>
+            <button class="calc-preset-btn" @click="calcWidthStuds=16;calcDepthStuds=16">16×16</button>
+            <button class="calc-preset-btn" @click="calcWidthStuds=32;calcDepthStuds=32">32×32</button>
+            <button class="calc-preset-btn" @click="calcWidthStuds=48;calcDepthStuds=48">48×48</button>
+          </div>
+          <div class="calc-row">
+            <template v-if="selectedAggregateId === null">
+              <span class="calc-hint">Click a table on the canvas or pick an aggregate above.</span>
+            </template>
+            <template v-else>
+              <span class="calc-result">&#9658; <strong>{{ plateCount }}</strong> baseplate(s) fit</span>
+              <span class="calc-plate-info">
+                ({{ (calcWidthStuds*8-2).toFixed(1) }} mm &times; {{ (calcDepthStuds*8-2).toFixed(1) }} mm each)
+              </span>
+            </template>
+          </div>
+        </div>
+      </div>
+
       <!-- Canvas -->
       <div class="canvas-wrap">
         <div
           class="canvas"
           :class="{ 'canvas--grid': showGrid }"
           :style="{ width: canvasWidth + 'px', height: canvasHeight + 'px' }"
+          @click="onCanvasClick"
         >
           <div
             v-for="p in placedTables"
             :key="p.instanceId"
             class="table-item"
-            :class="{ active: draggingId === p.instanceId, 'table-item--overlap': p.overlapping }"
+            :class="{
+              active: draggingId === p.instanceId,
+              'table-item--overlap': p.overlapping,
+              'table-item--selected': selectedAggregateId !== null && aggregateMap[p.instanceId] === selectedAggregateId,
+            }"
             :style="{
               left: p.xCm * SCALE + 'px',
               top: p.yCm * SCALE + 'px',
@@ -412,6 +655,46 @@ async function saveLayout() {
   color: #999;
 }
 
+/* ── Plate Calculator ─────────────────────────────────────────────────────── */
+.calc-bar {
+  background: #f3f5f8; border: 1px solid #d0d5de; border-radius: 6px;
+  margin-bottom: 0.6rem; font-size: 0.85rem;
+}
+.calc-header {
+  display: flex; align-items: center; gap: 0.5rem;
+  padding: 0.4rem 0.75rem; cursor: pointer; user-select: none;
+}
+.calc-header:hover { background: #eaecf0; border-radius: 6px; }
+.calc-title { font-weight: 600; color: #444; flex: 1; }
+.calc-toggle { color: #666; font-size: 0.75rem; }
+.calc-body {
+  padding: 0.35rem 0.75rem 0.55rem;
+  display: flex; flex-direction: column; gap: 0.4rem;
+  border-top: 1px solid #d0d5de;
+}
+.calc-row { display: flex; align-items: center; flex-wrap: wrap; gap: 0.4rem; }
+.calc-label { color: #555; font-weight: 600; min-width: 80px; }
+.calc-select {
+  flex: 1; min-width: 0; max-width: 420px;
+  padding: 0.25rem 0.4rem; border: 1px solid #ccc; border-radius: 4px;
+  font-size: 0.85rem; background: #fff;
+}
+.calc-stud-input {
+  width: 56px; padding: 0.25rem 0.4rem;
+  border: 1px solid #ccc; border-radius: 4px;
+  font-size: 0.85rem; text-align: center;
+}
+.calc-unit, .calc-presets-label { color: #777; font-size: 0.8rem; }
+.calc-presets-label { margin-left: 0.5rem; }
+.calc-preset-btn {
+  background: #e8edf4; border: 1px solid #c0c8d8; border-radius: 4px;
+  padding: 0.2rem 0.45rem; font-size: 0.78rem; cursor: pointer; color: #3a5a80;
+}
+.calc-preset-btn:hover { background: #d4dff0; }
+.calc-result { font-weight: 600; color: #2a5a2a; font-size: 0.9rem; }
+.calc-plate-info { color: #666; font-size: 0.8rem; }
+.calc-hint { color: #888; font-style: italic; }
+
 /* ── Canvas ───────────────────────────────────────────────────────────────── */
 .canvas-wrap {
   flex: 1;
@@ -461,6 +744,15 @@ async function saveLayout() {
 .table-item--overlap {
   border-color: rgba(200, 30, 30, 0.8);
   box-shadow: 0 0 0 2px rgba(200, 30, 30, 0.4);
+}
+
+.table-item--selected {
+  border-color: #1a90d0;
+  border-width: 3px;
+  box-shadow: 0 0 0 2px rgba(26,144,208,0.35), 0 2px 8px rgba(0,0,0,0.2);
+}
+.table-item--selected.active {
+  box-shadow: 0 0 0 2px rgba(26,144,208,0.5), 0 8px 20px rgba(0,0,0,0.4);
 }
 
 .table-label {
