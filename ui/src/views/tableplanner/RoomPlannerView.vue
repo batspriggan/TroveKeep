@@ -22,7 +22,7 @@ const showGrid = ref(true)
 
 const selectedAggregateId = ref(null)   // integer index into aggregates.value, or null
 const baseplates = ref([])
-const selectedBaseplateId = ref(null)
+const aggSelections = ref({})           // aggIdx → canonical bpKey e.g. "16x32"
 
 // Map from templateId → template data for display
 const templateMap = computed(() => {
@@ -96,12 +96,23 @@ const aggregateMap = computed(() => {
   return map
 })
 
-// ── Plate count computed ───────────────────────────────────────────────────────
-const plateCount = computed(() => {
-  if (selectedAggregateId.value == null || selectedBaseplateId.value == null) return null
-  const bp = baseplates.value.find(b => b.id === selectedBaseplateId.value)
+// ── Distinct baseplates by canonical dimension ─────────────────────────────────
+const distinctBaseplates = computed(() => {
+  const seen = new Map()
+  for (const bp of baseplates.value) {
+    const w = Math.min(bp.widthStuds, bp.depthStuds)
+    const d = Math.max(bp.widthStuds, bp.depthStuds)
+    const key = `${w}x${d}`
+    if (!seen.has(key)) seen.set(key, { key, widthStuds: w, depthStuds: d })
+  }
+  return [...seen.values()]
+})
+
+// ── Plate count per aggregate ──────────────────────────────────────────────────
+function calcPlateCount(aggIdx, bpKey) {
+  const bp = distinctBaseplates.value.find(b => b.key === bpKey)
   if (!bp) return null
-  const group = aggregates.value[selectedAggregateId.value]
+  const group = aggregates.value[aggIdx]
   if (!group?.length) return null
   const tMap = templateMap.value
 
@@ -137,7 +148,7 @@ const plateCount = computed(() => {
     }
   }
   return count
-})
+}
 
 function aggregateLabel(idx) {
   const group = aggregates.value[idx]
@@ -453,42 +464,40 @@ async function saveLayout() {
       </div>
 
       <!-- Plate Calculator -->
-      <div v-if="baseplates.length > 0" class="calc-bar">
-        <div class="calc-body">
-          <div class="calc-row">
-            <label class="calc-label">Aggregate:</label>
-            <select class="calc-select"
-              :value="selectedAggregateId"
-              @change="selectedAggregateId = $event.target.value === '' ? null : Number($event.target.value)">
-              <option value="">— none —</option>
-              <option v-for="(group, idx) in aggregates" :key="idx" :value="idx">{{ aggregateLabel(idx) }}</option>
-            </select>
-          </div>
-          <div class="calc-row">
-            <label class="calc-label">Baseplate:</label>
-            <select class="calc-select"
-              :value="selectedBaseplateId"
-              @change="selectedBaseplateId = $event.target.value || null">
-              <option value="">— select —</option>
-              <option v-for="bp in baseplates" :key="bp.id" :value="bp.id">
-                {{ bp.name }} ({{ bp.widthStuds }}×{{ bp.depthStuds }})
-              </option>
-            </select>
-          </div>
-          <div class="calc-row">
-            <template v-if="selectedAggregateId === null || selectedBaseplateId === null">
-              <span class="calc-hint">Select an aggregate and a baseplate above.</span>
-            </template>
-            <template v-else>
-              <span class="calc-result">&#9658; <strong>{{ plateCount }}</strong> baseplate(s) fit</span>
-              <span class="calc-plate-info">
-                ({{ (baseplates.find(b => b.id === selectedBaseplateId)?.widthStuds * 8 - 2).toFixed(1) }} mm
-                &times;
-                {{ (baseplates.find(b => b.id === selectedBaseplateId)?.depthStuds * 8 - 2).toFixed(1) }} mm each)
-              </span>
-            </template>
-          </div>
-        </div>
+      <div v-if="distinctBaseplates.length > 0 && aggregates.length > 0" class="calc-bar">
+        <table class="calc-table">
+          <thead>
+            <tr>
+              <th>Aggregate</th>
+              <th>Baseplate</th>
+              <th>Fits</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="(group, idx) in aggregates" :key="idx">
+              <td class="calc-agg-name">{{ aggregateLabel(idx) }}</td>
+              <td>
+                <select class="calc-select" v-model="aggSelections[idx]">
+                  <option value="">— select —</option>
+                  <option v-for="bp in distinctBaseplates" :key="bp.key" :value="bp.key">
+                    {{ bp.widthStuds }}×{{ bp.depthStuds }} studs
+                  </option>
+                </select>
+              </td>
+              <td class="calc-fits">
+                <template v-if="aggSelections[idx]">
+                  <strong class="calc-result">{{ calcPlateCount(idx, aggSelections[idx]) }}</strong>
+                  <span class="calc-plate-info">
+                    ({{ distinctBaseplates.find(b => b.key === aggSelections[idx])?.widthStuds * 8 - 2 }} mm
+                    &times;
+                    {{ distinctBaseplates.find(b => b.key === aggSelections[idx])?.depthStuds * 8 - 2 }} mm each)
+                  </span>
+                </template>
+                <span v-else class="calc-hint">—</span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
       </div>
 
       <!-- Canvas -->
@@ -658,22 +667,27 @@ async function saveLayout() {
 /* ── Plate Calculator ─────────────────────────────────────────────────────── */
 .calc-bar {
   background: #f3f5f8; border: 1px solid #d0d5de; border-radius: 6px;
-  margin-bottom: 0.6rem; font-size: 0.85rem;
+  margin-bottom: 0.6rem; font-size: 0.85rem; overflow-x: auto;
 }
-.calc-body {
-  padding: 0.35rem 0.75rem 0.55rem;
-  display: flex; flex-direction: column; gap: 0.4rem;
+.calc-table {
+  width: 100%; border-collapse: collapse;
 }
-.calc-row { display: flex; align-items: center; flex-wrap: wrap; gap: 0.4rem; }
-.calc-label { color: #555; font-weight: 600; min-width: 80px; }
+.calc-table th, .calc-table td {
+  text-align: left; padding: 0.3rem 0.65rem; border-bottom: 1px solid #e0e3ea;
+}
+.calc-table th {
+  font-weight: 600; color: #555; background: #eaecf2; font-size: 0.8rem;
+}
+.calc-table tr:last-child td { border-bottom: none; }
+.calc-agg-name { color: #333; white-space: nowrap; }
 .calc-select {
-  flex: 1; min-width: 0; max-width: 420px;
-  padding: 0.25rem 0.4rem; border: 1px solid #ccc; border-radius: 4px;
-  font-size: 0.85rem; background: #fff;
+  padding: 0.2rem 0.4rem; border: 1px solid #ccc; border-radius: 4px;
+  font-size: 0.82rem; background: #fff;
 }
-.calc-result { font-weight: 600; color: #2a5a2a; font-size: 0.9rem; }
-.calc-plate-info { color: #666; font-size: 0.8rem; }
-.calc-hint { color: #888; font-style: italic; }
+.calc-fits { white-space: nowrap; min-width: 60px; }
+.calc-result { font-weight: 700; color: #2a5a2a; font-size: 0.9rem; }
+.calc-plate-info { color: #666; font-size: 0.8rem; margin-left: 0.3rem; }
+.calc-hint { color: #aaa; }
 
 /* ── Canvas ───────────────────────────────────────────────────────────────── */
 .canvas-wrap {
