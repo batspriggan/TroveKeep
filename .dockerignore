@@ -1,0 +1,22 @@
+# Git
+.git
+.gitignore
+
+# .NET build artifacts
+src/**/bin/
+src/**/obj/
+
+# Node
+ui/node_modules/
+ui/dist/
+
+# IDE / OS
+.idea/
+.vscode/
+*.user
+.DS_Store
+
+# Docker files (no need to send to build context)
+Dockerfile
+docker-compose.yml
+.dockerignore
