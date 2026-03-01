@@ -237,7 +237,7 @@ function startDrag(e, placed) {
   draggingId.value = placed.instanceId
   const aggIdx = aggregateMap.value[placed.instanceId]
   const aggGroup = (aggIdx != null) ? aggregates.value[aggIdx] : [placed.instanceId]
-  const isGroup = aggGroup.length > 1
+  const isGroup = aggGroup.length > 1 && !e.altKey
   _drag = {
     instanceId: placed.instanceId,
     startMouseX: e.clientX, startMouseY: e.clientY,
@@ -461,6 +461,7 @@ async function saveLayout() {
           :title="`${t.widthCm} cm × ${t.depthCm} cm`"
         >{{ t.description }}</button>
         <span v-if="templates.length === 0" class="empty-palette">No templates — create some in Table Planner.</span>
+        <span class="palette-hint">Alt+drag to detach a table from its group</span>
       </div>
 
       <!-- Plate Calculator -->
@@ -662,6 +663,13 @@ async function saveLayout() {
 .empty-palette {
   font-size: 0.8rem;
   color: #999;
+}
+
+.palette-hint {
+  font-size: 0.75rem;
+  color: #aaa;
+  margin-left: auto;
+  white-space: nowrap;
 }
 
 /* ── Plate Calculator ─────────────────────────────────────────────────────── */
