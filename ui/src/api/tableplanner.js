@@ -2,12 +2,18 @@ import { get, post, put, del } from './client.js'
 
 const TEMPLATES = '/api/table-templates'
 const ROOMS = '/api/rooms'
+const BASEPLATES = '/api/baseplates'
 
 // Templates
 export const getAllTemplates = () => get(TEMPLATES)
 export const createTemplate = (body) => post(TEMPLATES, body)
 export const updateTemplate = (id, body) => put(`${TEMPLATES}/${id}`, body)
 export const deleteTemplate = (id) => del(`${TEMPLATES}/${id}`)
+
+// Baseplates
+export const getAllBaseplates = () => get(BASEPLATES)
+export const createBaseplate = (data) => post(BASEPLATES, data)
+export const deleteBaseplate = (id) => del(`${BASEPLATES}/${id}`)
 
 // Rooms
 export const getAllRooms = () => get(ROOMS)

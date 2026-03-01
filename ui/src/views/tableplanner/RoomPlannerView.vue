@@ -1,7 +1,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { getRoom, getAllTemplates, saveRoomLayout } from '../../api/tableplanner.js'
+import { getRoom, getAllTemplates, saveRoomLayout, getAllBaseplates } from '../../api/tableplanner.js'
 
 const route = useRoute()
 const router = useRouter()
@@ -21,9 +21,8 @@ const loading = ref(true)
 const showGrid = ref(true)
 
 const selectedAggregateId = ref(null)   // integer index into aggregates.value, or null
-const calcWidthStuds  = ref(32)
-const calcDepthStuds  = ref(32)
-const calcCollapsed   = ref(false)
+const baseplates = ref([])
+const selectedBaseplateId = ref(null)
 
 // Map from templateId → template data for display
 const templateMap = computed(() => {
@@ -99,7 +98,9 @@ const aggregateMap = computed(() => {
 
 // ── Plate count computed ───────────────────────────────────────────────────────
 const plateCount = computed(() => {
-  if (selectedAggregateId.value == null) return null
+  if (selectedAggregateId.value == null || selectedBaseplateId.value == null) return null
+  const bp = baseplates.value.find(b => b.id === selectedBaseplateId.value)
+  if (!bp) return null
   const group = aggregates.value[selectedAggregateId.value]
   if (!group?.length) return null
   const tMap = templateMap.value
@@ -115,8 +116,8 @@ const plateCount = computed(() => {
   const maxX = Math.max(...rects.map(r => r.x2))
   const maxY = Math.max(...rects.map(r => r.y2))
 
-  const pw = calcWidthStuds.value * 8 - 2
-  const pd = calcDepthStuds.value * 8 - 2
+  const pw = bp.widthStuds * 8 - 2
+  const pd = bp.depthStuds * 8 - 2
   if (pw <= 0 || pd <= 0) return 0
 
   const nX = Math.ceil((maxX - minX) / pw)
@@ -158,9 +159,10 @@ function aggregateLabel(idx) {
 
 // ── Load ──────────────────────────────────────────────────────────────────────
 onMounted(async () => {
-  const [r, tpls] = await Promise.all([getRoom(roomId), getAllTemplates()])
+  const [r, tpls, bps] = await Promise.all([getRoom(roomId), getAllTemplates(), getAllBaseplates()])
   room.value = r
   templates.value = tpls
+  baseplates.value = bps
   placedTables.value = r.layout.map(p => ({
     instanceId: p.instanceId,
     templateId: p.templateId,
@@ -451,12 +453,8 @@ async function saveLayout() {
       </div>
 
       <!-- Plate Calculator -->
-      <div class="calc-bar">
-        <div class="calc-header" @click="calcCollapsed = !calcCollapsed">
-          <span class="calc-title">Plate Calculator</span>
-          <span class="calc-toggle">{{ calcCollapsed ? '▸' : '▾' }}</span>
-        </div>
-        <div v-if="!calcCollapsed" class="calc-body">
+      <div v-if="baseplates.length > 0" class="calc-bar">
+        <div class="calc-body">
           <div class="calc-row">
             <label class="calc-label">Aggregate:</label>
             <select class="calc-select"
@@ -467,24 +465,26 @@ async function saveLayout() {
             </select>
           </div>
           <div class="calc-row">
-            <label class="calc-label">Plate size:</label>
-            <input v-model.number="calcWidthStuds" type="number" min="1" max="256" class="calc-stud-input" />
-            <span>&times;</span>
-            <input v-model.number="calcDepthStuds" type="number" min="1" max="256" class="calc-stud-input" />
-            <span class="calc-unit">studs</span>
-            <span class="calc-presets-label">Presets:</span>
-            <button class="calc-preset-btn" @click="calcWidthStuds=16;calcDepthStuds=16">16×16</button>
-            <button class="calc-preset-btn" @click="calcWidthStuds=32;calcDepthStuds=32">32×32</button>
-            <button class="calc-preset-btn" @click="calcWidthStuds=48;calcDepthStuds=48">48×48</button>
+            <label class="calc-label">Baseplate:</label>
+            <select class="calc-select"
+              :value="selectedBaseplateId"
+              @change="selectedBaseplateId = $event.target.value || null">
+              <option value="">— select —</option>
+              <option v-for="bp in baseplates" :key="bp.id" :value="bp.id">
+                {{ bp.name }} ({{ bp.widthStuds }}×{{ bp.depthStuds }})
+              </option>
+            </select>
           </div>
           <div class="calc-row">
-            <template v-if="selectedAggregateId === null">
-              <span class="calc-hint">Click a table on the canvas or pick an aggregate above.</span>
+            <template v-if="selectedAggregateId === null || selectedBaseplateId === null">
+              <span class="calc-hint">Select an aggregate and a baseplate above.</span>
             </template>
             <template v-else>
               <span class="calc-result">&#9658; <strong>{{ plateCount }}</strong> baseplate(s) fit</span>
               <span class="calc-plate-info">
-                ({{ (calcWidthStuds*8-2).toFixed(1) }} mm &times; {{ (calcDepthStuds*8-2).toFixed(1) }} mm each)
+                ({{ (baseplates.find(b => b.id === selectedBaseplateId)?.widthStuds * 8 - 2).toFixed(1) }} mm
+                &times;
+                {{ (baseplates.find(b => b.id === selectedBaseplateId)?.depthStuds * 8 - 2).toFixed(1) }} mm each)
               </span>
             </template>
           </div>
@@ -520,7 +520,7 @@ async function saveLayout() {
             <button class="remove-btn" @mousedown.stop @click="removeTable(p.instanceId)" title="Remove">✕</button>
             <span class="table-label">{{ templateMap[p.templateId]?.description ?? '?' }}</span>
             <span class="table-dims" v-if="templateMap[p.templateId]">
-              {{ templateMap[p.templateId].widthCm / 100 }} m &times; {{ templateMap[p.templateId].depthCm / 100 }} m
+              {{ templateMap[p.templateId].widthCm }} cm &times; {{ templateMap[p.templateId].depthCm }} cm
             </span>
           </div>
 
@@ -660,17 +660,9 @@ async function saveLayout() {
   background: #f3f5f8; border: 1px solid #d0d5de; border-radius: 6px;
   margin-bottom: 0.6rem; font-size: 0.85rem;
 }
-.calc-header {
-  display: flex; align-items: center; gap: 0.5rem;
-  padding: 0.4rem 0.75rem; cursor: pointer; user-select: none;
-}
-.calc-header:hover { background: #eaecf0; border-radius: 6px; }
-.calc-title { font-weight: 600; color: #444; flex: 1; }
-.calc-toggle { color: #666; font-size: 0.75rem; }
 .calc-body {
   padding: 0.35rem 0.75rem 0.55rem;
   display: flex; flex-direction: column; gap: 0.4rem;
-  border-top: 1px solid #d0d5de;
 }
 .calc-row { display: flex; align-items: center; flex-wrap: wrap; gap: 0.4rem; }
 .calc-label { color: #555; font-weight: 600; min-width: 80px; }
@@ -679,18 +671,6 @@ async function saveLayout() {
   padding: 0.25rem 0.4rem; border: 1px solid #ccc; border-radius: 4px;
   font-size: 0.85rem; background: #fff;
 }
-.calc-stud-input {
-  width: 56px; padding: 0.25rem 0.4rem;
-  border: 1px solid #ccc; border-radius: 4px;
-  font-size: 0.85rem; text-align: center;
-}
-.calc-unit, .calc-presets-label { color: #777; font-size: 0.8rem; }
-.calc-presets-label { margin-left: 0.5rem; }
-.calc-preset-btn {
-  background: #e8edf4; border: 1px solid #c0c8d8; border-radius: 4px;
-  padding: 0.2rem 0.45rem; font-size: 0.78rem; cursor: pointer; color: #3a5a80;
-}
-.calc-preset-btn:hover { background: #d4dff0; }
 .calc-result { font-weight: 600; color: #2a5a2a; font-size: 0.9rem; }
 .calc-plate-info { color: #666; font-size: 0.8rem; }
 .calc-hint { color: #888; font-style: italic; }
