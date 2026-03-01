@@ -13,6 +13,7 @@ public class BaseplateDocument
     public string Name { get; set; } = string.Empty;
     public int WidthStuds { get; set; }
     public int DepthStuds { get; set; }
+    public int LegoColorId { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
 }

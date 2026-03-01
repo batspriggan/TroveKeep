@@ -255,18 +255,70 @@
         </tbody>
       </table>
     </div>
+
+    <!-- Baseplates -->
+    <div class="baseplates-section">
+      <h2 class="section-heading">Baseplates</h2>
+      <p class="muted">Define LEGO baseplates used by the plate calculator in the Table Planner.</p>
+
+      <table v-if="baseplates.length" class="data-table bp-table">
+        <thead>
+          <tr>
+            <th>Color</th>
+            <th>Part #</th>
+            <th>Name</th>
+            <th>Size (studs)</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="b in baseplates" :key="b.id">
+            <td><span class="swatch" :style="{ background: b.legoColorRgb ? '#' + b.legoColorRgb : '#ccc' }" :title="b.legoColorName ?? ''"></span></td>
+            <td class="id-col">{{ b.partNum }}</td>
+            <td>{{ b.name }}</td>
+            <td>{{ b.widthStuds }}×{{ b.depthStuds }}</td>
+            <td class="bp-action-col">
+              <button class="import-btn" @click="removeBaseplate(b.id)">Delete</button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      <p v-else class="muted" style="margin-top:0.5rem">No baseplates yet.</p>
+
+      <form class="bp-add-form" @submit.prevent="addBaseplate">
+        <div class="bp-search-wrap">
+          <input v-model="newBpQuery" placeholder="Search part…" class="bp-search-input" />
+          <ul v-if="newBpResults.length > 0" class="bp-dropdown">
+            <li
+              v-for="r in newBpResults"
+              :key="r.partNum"
+              class="bp-dropdown-item"
+              @click="selectBpResult(r)"
+            >{{ r.partNum }} — {{ r.name }}</li>
+          </ul>
+        </div>
+        <span v-if="newBpSelected" class="bp-selected-badge">{{ newBpSelected.partNum }} — {{ newBpSelected.name }}</span>
+        <label class="bp-label">W <input v-model.number="newBpWidth" type="number" min="1" max="256" class="bp-num-input" required /> studs</label>
+        <label class="bp-label">D <input v-model.number="newBpDepth" type="number" min="1" max="256" class="bp-num-input" required /> studs</label>
+        <label class="bp-label">Color <ColorSelect v-model="newBpColorUid" :colors="colors" /></label>
+        <button class="primary small" type="submit" :disabled="!newBpSelected">Add Baseplate</button>
+      </form>
+    </div>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, watch, onMounted } from 'vue'
+import ColorSelect from '../components/ColorSelect.vue'
 import {
   getColorsStatus, uploadColors, getColorsList,
   getSetsStatus, uploadSets,
   getPartsStatus, uploadParts,
   getPartsInventoryStatus, uploadPartsInventory,
-  getPartCategoriesStatus, uploadPartCategories, getPartCategoriesList
+  getPartCategoriesStatus, uploadPartCategories, getPartCategoriesList,
+  searchArchivePartsBaseplates,
 } from '../api/archives.js'
+import { getAllBaseplates, createBaseplate, deleteBaseplate } from '../api/tableplanner.js'
 
 // --- Folder import ---
 const KNOWN_ARCHIVES = {
@@ -523,6 +575,51 @@ async function reloadPartCategoriesData() {
   }
 }
 
+// --- Baseplates ---
+const baseplates = ref([])
+const newBpQuery = ref('')
+const newBpResults = ref([])
+const newBpSelected = ref(null)
+const newBpWidth = ref(null)
+const newBpDepth = ref(null)
+const newBpColorUid = ref('')
+
+watch(newBpQuery, async (q) => {
+  if (q.length >= 2) newBpResults.value = await searchArchivePartsBaseplates(q, 10)
+  else newBpResults.value = []
+})
+
+function selectBpResult(result) {
+  newBpSelected.value = { partNum: result.partNum, name: result.name }
+  newBpWidth.value = result.guessedStudX > 0 ? result.guessedStudX : null
+  newBpDepth.value = result.guessedStudY > 0 ? result.guessedStudY : null
+  newBpResults.value = []
+  newBpQuery.value = ''
+}
+
+async function addBaseplate() {
+  if (!newBpSelected.value) return
+  const legoColorId = colors.value.find(c => c.uniqueId === newBpColorUid.value)?.id ?? 0
+  const bp = await createBaseplate({
+    partNum: newBpSelected.value.partNum,
+    name: newBpSelected.value.name,
+    widthStuds: newBpWidth.value,
+    depthStuds: newBpDepth.value,
+    legoColorId,
+  })
+  baseplates.value.push(bp)
+  newBpSelected.value = null
+  newBpWidth.value = null
+  newBpDepth.value = null
+  newBpColorUid.value = ''
+}
+
+async function removeBaseplate(id) {
+  if (!confirm('Delete this baseplate?')) return
+  await deleteBaseplate(id)
+  baseplates.value = baseplates.value.filter(b => b.id !== id)
+}
+
 // --- Shared ---
 function formatDate(iso) {
   return new Date(iso).toLocaleString()
@@ -543,6 +640,7 @@ onMounted(async () => {
   await loadPartsInventoryStatus()
   await loadPartCategoriesStatus()
   if (partCategoriesStatus.value.count > 0) await loadPartCategories()
+  baseplates.value = await getAllBaseplates()
 })
 </script>
 
@@ -775,4 +873,103 @@ onMounted(async () => {
   font-family: monospace;
   font-size: 0.85rem;
 }
+
+/* ── Baseplates section ── */
+.baseplates-section {
+  margin-top: 2rem;
+  padding-top: 1.5rem;
+  border-top: 2px solid #e2e8f0;
+}
+
+.section-heading {
+  margin: 0 0 0.25rem;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.bp-table {
+  margin-top: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.bp-action-col {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.bp-add-form {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin-top: 0.75rem;
+}
+
+.bp-search-wrap {
+  position: relative;
+}
+
+.bp-search-input {
+  padding: 0.3rem 0.5rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  font-size: 0.875rem;
+  min-width: 200px;
+}
+
+.bp-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 100;
+  background: #fff;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  min-width: 320px;
+  max-height: 200px;
+  overflow-y: auto;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+}
+
+.bp-dropdown-item {
+  padding: 0.35rem 0.65rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.bp-dropdown-item:hover {
+  background: #f0f5ff;
+}
+
+.bp-selected-badge {
+  background: #dde8f5;
+  border: 1px solid #aac2e8;
+  border-radius: 4px;
+  padding: 0.2rem 0.5rem;
+  font-size: 0.85rem;
+  color: #2a4e80;
+}
+
+.bp-label {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.875rem;
+  color: #475569;
+}
+
+.bp-num-input {
+  width: 54px;
+  padding: 0.25rem 0.35rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  font-size: 0.875rem;
+  text-align: center;
+}
+
+
 </style>

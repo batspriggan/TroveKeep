@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using TroveKeep.Api.DTOs.Requests;
 using TroveKeep.Api.DTOs.Responses;
+using TroveKeep.Core.Interfaces.Repositories;
 using TroveKeep.Core.Interfaces.Services;
 using TroveKeep.Core.Models;
 
@@ -11,10 +12,12 @@ namespace TroveKeep.Api.Controllers;
 public class BaseplatesController : ControllerBase
 {
     private readonly IBaseplateService _service;
+    private readonly IColorRepository _colorRepo;
 
-    public BaseplatesController(IBaseplateService service)
+    public BaseplatesController(IBaseplateService service, IColorRepository colorRepo)
     {
         _service = service;
+        _colorRepo = colorRepo;
     }
 
     [HttpGet]
@@ -22,7 +25,8 @@ public class BaseplatesController : ControllerBase
     public async Task<IActionResult> GetAll()
     {
         var baseplates = await _service.GetAllAsync();
-        return Ok(baseplates.Select(MapToResponse));
+        var colors = await BuildColorLookupAsync();
+        return Ok(baseplates.Select(b => MapToResponse(b, colors)));
     }
 
     [HttpPost]
@@ -35,9 +39,11 @@ public class BaseplatesController : ControllerBase
             Name = request.Name,
             WidthStuds = request.WidthStuds,
             DepthStuds = request.DepthStuds,
+            LegoColorId = request.LegoColorId,
         };
         var created = await _service.CreateAsync(model);
-        return StatusCode(StatusCodes.Status201Created, MapToResponse(created));
+        var colors = await BuildColorLookupAsync();
+        return StatusCode(StatusCodes.Status201Created, MapToResponse(created, colors));
     }
 
     [HttpDelete("{id:guid}")]
@@ -48,6 +54,16 @@ public class BaseplatesController : ControllerBase
         return NoContent();
     }
 
-    private static BaseplateResponse MapToResponse(Baseplate b) =>
-        new(b.Id, b.PartNum, b.Name, b.WidthStuds, b.DepthStuds, b.CreatedAt);
+    private async Task<Dictionary<int, (string Name, string Rgb)>> BuildColorLookupAsync()
+    {
+        var colors = await _colorRepo.GetAllAsync();
+        return colors.ToDictionary(c => c.Id, c => (c.Name, c.Rgb));
+    }
+
+    private static BaseplateResponse MapToResponse(Baseplate b, Dictionary<int, (string Name, string Rgb)> colors)
+    {
+        colors.TryGetValue(b.LegoColorId, out var color);
+        return new(b.Id, b.PartNum, b.Name, b.WidthStuds, b.DepthStuds,
+            b.LegoColorId, color.Name, color.Rgb, b.CreatedAt);
+    }
 }

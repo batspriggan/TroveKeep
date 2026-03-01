@@ -43,6 +43,7 @@ public class BaseplateRepository : IBaseplateRepository
         Name = doc.Name,
         WidthStuds = doc.WidthStuds,
         DepthStuds = doc.DepthStuds,
+        LegoColorId = doc.LegoColorId,
         CreatedAt = new DateTimeOffset(DateTime.SpecifyKind(doc.CreatedAt, DateTimeKind.Utc)),
         UpdatedAt = new DateTimeOffset(DateTime.SpecifyKind(doc.UpdatedAt, DateTimeKind.Utc)),
     };
@@ -54,6 +55,7 @@ public class BaseplateRepository : IBaseplateRepository
         Name = model.Name,
         WidthStuds = model.WidthStuds,
         DepthStuds = model.DepthStuds,
+        LegoColorId = model.LegoColorId,
         CreatedAt = model.CreatedAt.UtcDateTime,
         UpdatedAt = model.UpdatedAt.UtcDateTime,
     };

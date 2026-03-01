@@ -1,13 +1,11 @@
 <script setup>
-import { ref, watch, onMounted } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   getAllRooms, createRoom, updateRoom, deleteRoom,
   getAllTemplates, createTemplate, updateTemplate, deleteTemplate,
   exportRoom, importRoom,
-  getAllBaseplates, createBaseplate, deleteBaseplate,
 } from '../api/tableplanner.js'
-import { searchArchivePartsBaseplates } from '../api/archives.js'
 
 const router = useRouter()
 
@@ -111,52 +109,7 @@ async function removeTemplate(id) {
   await loadTemplates()
 }
 
-// ── Baseplates ────────────────────────────────────────────────────────────────
-const baseplates = ref([])
-const newBpQuery = ref('')
-const newBpResults = ref([])
-const newBpSelected = ref(null)
-const newBpWidth = ref(null)
-const newBpDepth = ref(null)
-
-async function loadBaseplates() {
-  baseplates.value = await getAllBaseplates()
-}
-
-watch(newBpQuery, async (q) => {
-  if (q.length >= 2) newBpResults.value = await searchArchivePartsBaseplates(q, 10)
-  else newBpResults.value = []
-})
-
-function selectBpResult(result) {
-  newBpSelected.value = { partNum: result.partNum, name: result.name }
-  newBpWidth.value = result.guessedStudX > 0 ? result.guessedStudX : null
-  newBpDepth.value = result.guessedStudY > 0 ? result.guessedStudY : null
-  newBpResults.value = []
-  newBpQuery.value = ''
-}
-
-async function addBaseplate() {
-  if (!newBpSelected.value || newBpWidth.value < 1 || newBpDepth.value < 1) return
-  const bp = await createBaseplate({
-    partNum: newBpSelected.value.partNum,
-    name: newBpSelected.value.name,
-    widthStuds: newBpWidth.value,
-    depthStuds: newBpDepth.value,
-  })
-  baseplates.value.push(bp)
-  newBpSelected.value = null
-  newBpWidth.value = null
-  newBpDepth.value = null
-}
-
-async function removeBaseplate(id) {
-  if (!confirm('Delete this baseplate?')) return
-  await deleteBaseplate(id)
-  baseplates.value = baseplates.value.filter(b => b.id !== id)
-}
-
-onMounted(() => Promise.all([loadRooms(), loadTemplates(), loadBaseplates()]))
+onMounted(() => Promise.all([loadRooms(), loadTemplates()]))
 </script>
 
 <template>
@@ -205,56 +158,6 @@ onMounted(() => Promise.all([loadRooms(), loadTemplates(), loadBaseplates()]))
           </tr>
         </tbody>
       </table>
-    </section>
-
-    <!-- ── Baseplates ── -->
-    <section class="section">
-      <h2>Baseplates</h2>
-
-      <p v-if="baseplates.length === 0" class="empty-hint">No baseplates yet. Add one below to enable the plate calculator in rooms.</p>
-
-      <table v-else class="data-table">
-        <thead>
-          <tr>
-            <th>Part #</th>
-            <th>Name</th>
-            <th>Size (studs)</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="b in baseplates" :key="b.id">
-            <td>{{ b.partNum }}</td>
-            <td>{{ b.name }}</td>
-            <td>{{ b.widthStuds }}×{{ b.depthStuds }}</td>
-            <td class="actions">
-              <button class="danger small" @click="removeBaseplate(b.id)">Delete</button>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-
-      <form class="bp-add-form" @submit.prevent="addBaseplate">
-        <div class="bp-search-wrap">
-          <input
-            v-model="newBpQuery"
-            placeholder="Search part..."
-            class="bp-search-input"
-          />
-          <ul v-if="newBpResults.length > 0" class="bp-dropdown">
-            <li
-              v-for="r in newBpResults"
-              :key="r.partNum"
-              class="bp-dropdown-item"
-              @click="selectBpResult(r)"
-            >{{ r.partNum }} — {{ r.name }}</li>
-          </ul>
-        </div>
-        <span v-if="newBpSelected" class="bp-selected-badge">{{ newBpSelected.partNum }} — {{ newBpSelected.name }}</span>
-        <label>W <input v-model.number="newBpWidth" type="number" min="1" max="256" style="width:56px" required /> studs</label>
-        <label>D <input v-model.number="newBpDepth" type="number" min="1" max="256" style="width:56px" required /> studs</label>
-        <button class="primary" type="submit" :disabled="!newBpSelected">Add Baseplate</button>
-      </form>
     </section>
 
     <!-- ── Templates ── -->
@@ -444,75 +347,4 @@ button:not(.primary):not(.danger) {
 }
 
 button:not(.primary):not(.danger):hover { background: #e0e0e0; }
-
-.bp-add-form {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  margin-top: 0.75rem;
-}
-
-.bp-search-wrap {
-  position: relative;
-}
-
-.bp-search-input {
-  padding: 0.35rem 0.5rem;
-  border: 1px solid #ccc;
-  border-radius: 4px;
-  font-size: 0.9rem;
-  min-width: 200px;
-}
-
-.bp-dropdown {
-  position: absolute;
-  top: 100%;
-  left: 0;
-  z-index: 100;
-  background: #fff;
-  border: 1px solid #ccc;
-  border-radius: 4px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  min-width: 300px;
-  max-height: 200px;
-  overflow-y: auto;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-}
-
-.bp-dropdown-item {
-  padding: 0.35rem 0.6rem;
-  font-size: 0.85rem;
-  cursor: pointer;
-}
-
-.bp-dropdown-item:hover {
-  background: #f0f5ff;
-}
-
-.bp-selected-badge {
-  background: #dde8f5;
-  border: 1px solid #aac2e8;
-  border-radius: 4px;
-  padding: 0.25rem 0.55rem;
-  font-size: 0.85rem;
-  color: #2a4e80;
-}
-
-.bp-add-form label {
-  display: flex;
-  align-items: center;
-  gap: 0.3rem;
-  font-size: 0.85rem;
-  color: #555;
-}
-
-.bp-add-form input[type="number"] {
-  padding: 0.35rem 0.4rem;
-  border: 1px solid #ccc;
-  border-radius: 4px;
-  font-size: 0.9rem;
-}
 </style>
