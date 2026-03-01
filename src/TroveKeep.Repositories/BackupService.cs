@@ -20,6 +20,7 @@ public class BackupService : IBackupService
         var drawers = await _db.GetCollection<DrawerDocument>("drawers").Find(_ => true).ToListAsync();
         var tableTemplates = await _db.GetCollection<TableTemplateDocument>("table_templates").Find(_ => true).ToListAsync();
         var rooms = await _db.GetCollection<RoomDocument>("rooms").Find(_ => true).ToListAsync();
+        var baseplates = await _db.GetCollection<BaseplateDocument>("baseplates").Find(_ => true).ToListAsync();
 
         var backup = new
         {
@@ -32,6 +33,7 @@ public class BackupService : IBackupService
             drawers,
             tableTemplates,
             rooms,
+            baseplates,
         };
 
         var options = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
@@ -53,6 +55,7 @@ public class BackupService : IBackupService
         await _db.GetCollection<DrawerDocument>("drawers").DeleteManyAsync(_ => true);
         await _db.GetCollection<TableTemplateDocument>("table_templates").DeleteManyAsync(_ => true);
         await _db.GetCollection<RoomDocument>("rooms").DeleteManyAsync(_ => true);
+        await _db.GetCollection<BaseplateDocument>("baseplates").DeleteManyAsync(_ => true);
 
         if (backup.Boxes?.Count > 0)
             await _db.GetCollection<BoxDocument>("boxes").InsertManyAsync(backup.Boxes);
@@ -68,6 +71,8 @@ public class BackupService : IBackupService
             await _db.GetCollection<TableTemplateDocument>("table_templates").InsertManyAsync(backup.TableTemplates);
         if (backup.Rooms?.Count > 0)
             await _db.GetCollection<RoomDocument>("rooms").InsertManyAsync(backup.Rooms);
+        if (backup.Baseplates?.Count > 0)
+            await _db.GetCollection<BaseplateDocument>("baseplates").InsertManyAsync(backup.Baseplates);
     }
 
     private class BackupPayload
@@ -79,5 +84,6 @@ public class BackupService : IBackupService
         public List<DrawerDocument>? Drawers { get; set; }
         public List<TableTemplateDocument>? TableTemplates { get; set; }
         public List<RoomDocument>? Rooms { get; set; }
+        public List<BaseplateDocument>? Baseplates { get; set; }
     }
 }
