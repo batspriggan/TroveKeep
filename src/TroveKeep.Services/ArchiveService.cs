@@ -184,8 +184,8 @@ public class ArchiveService : IArchiveService
         return (count, importedAt);
     }
 
-    public Task<IEnumerable<RebrickablePart>> SearchPartsAsync(string query, int limit)
-        => _partRepository.SearchAsync(query, limit);
+    public Task<IEnumerable<RebrickablePart>> SearchPartsAsync(string query, int limit, int? categoryId = null)
+        => _partRepository.SearchAsync(query, limit, categoryId);
 
     public async Task<(int count, DateTimeOffset importedAt)> ImportPartsInventoryAsync(Stream stream)
     {

@@ -2,24 +2,28 @@
   <div>
     <h1>Bulk Pieces</h1>
 
-    <form class="form-row" @submit.prevent="submit">
-      <div class="form-field">
-        <label>Lego ID *</label>
-        <PartArchiveTypeahead v-model="form.legoId" @select="onPartSelect" />
+    <form @submit.prevent="submit">
+      <div class="form-row">
+        <div class="form-field">
+          <label>Lego ID *</label>
+          <PartArchiveTypeahead v-model="form.legoId" @select="onPartSelect" />
+        </div>
       </div>
-      <div class="form-field">
-        <label>Color *</label>
-        <ColorSelect v-model="form.legoColorUid" :colors="colors" />
+      <div class="form-row">
+        <div class="form-field">
+          <label>Color *</label>
+          <ColorSelect v-model="form.legoColorUid" :colors="colors" />
+        </div>
+        <div class="form-field">
+          <label>Description *</label>
+          <input v-model="form.description" required placeholder="Description" />
+        </div>
+        <div class="form-field" style="max-width: 80px">
+          <label>Qty *</label>
+          <input v-model.number="form.quantity" type="number" min="1" required />
+        </div>
+        <button class="primary" type="submit">Add Piece</button>
       </div>
-      <div class="form-field">
-        <label>Description *</label>
-        <input v-model="form.description" required placeholder="Description" />
-      </div>
-      <div class="form-field" style="max-width: 80px">
-        <label>Qty *</label>
-        <input v-model.number="form.quantity" type="number" min="1" required />
-      </div>
-      <button class="primary" type="submit">Add Piece</button>
     </form>
 
     <p v-if="error" class="error">{{ error }}</p>

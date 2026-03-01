@@ -98,13 +98,16 @@ public class ArchivesController : ControllerBase
 
     [HttpGet("parts/search")]
     [ProducesResponseType(typeof(IEnumerable<PartArchiveSearchResponse>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> SearchParts([FromQuery] string? q, [FromQuery] int limit = 10)
+    public async Task<IActionResult> SearchParts(
+        [FromQuery] string? q,
+        [FromQuery] int limit = 10,
+        [FromQuery] int? categoryId = null)
     {
         if (string.IsNullOrWhiteSpace(q))
             return Ok(Array.Empty<PartArchiveSearchResponse>());
 
-        var cap = Math.Min(limit, 20);
-        var results = await _service.SearchPartsAsync(q, cap);
+        var cap = Math.Max(0, limit); // 0 = no limit (MongoDB semantics)
+        var results = await _service.SearchPartsAsync(q, cap, categoryId);
         return Ok(results.Select(p => new PartArchiveSearchResponse(p.PartNum, p.Name)));
     }
 

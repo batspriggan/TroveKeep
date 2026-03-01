@@ -46,13 +46,20 @@ public class PartArchiveRepository : IPartArchiveRepository
         return (int)await _collection.CountDocumentsAsync(_ => true);
     }
 
-    public async Task<IEnumerable<RebrickablePart>> SearchAsync(string query, int limit)
+    public async Task<IEnumerable<RebrickablePart>> SearchAsync(string query, int limit, int? categoryId = null)
     {
         var escaped = Regex.Escape(query);
         var regex = new BsonRegularExpression(escaped, "i");
-        var filter = Builders<PartArchiveDocument>.Filter.Or(
+        var textFilter = Builders<PartArchiveDocument>.Filter.Or(
             Builders<PartArchiveDocument>.Filter.Regex(x => x.PartNum, regex),
             Builders<PartArchiveDocument>.Filter.Regex(x => x.Name, regex));
+
+        var filter = categoryId.HasValue
+            ? Builders<PartArchiveDocument>.Filter.And(
+                textFilter,
+                Builders<PartArchiveDocument>.Filter.Eq(x => x.PartCategoryId, categoryId.Value))
+            : textFilter;
+
         var docs = await _collection.Find(filter).Limit(limit).ToListAsync();
         return docs.Select(ToModel);
     }
