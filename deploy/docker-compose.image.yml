@@ -12,9 +12,6 @@ services:
 
   api:
     image: codeberg.org/alessandro_battini/trovekeep:latest
-    build:
-      context: .
-      dockerfile: Dockerfile
     restart: unless-stopped
     ports:
       - "8080:8080"
