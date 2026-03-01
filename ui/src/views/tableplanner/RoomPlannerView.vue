@@ -55,12 +55,38 @@ onMounted(async () => {
 })
 
 // ── Add from palette ──────────────────────────────────────────────────────────
+function findFreePosition(tw, td) {
+  const roomW = room.value.widthCm
+  const roomD = room.value.depthCm
+  if (tw > roomW || td > roomD) return { xCm: 0, yCm: 0 }
+
+  for (let y = 0; y <= roomD - td; y += SNAP) {
+    let x = 0
+    while (x <= roomW - tw) {
+      const blocker = placedTables.value.find(other => {
+        const otpl = templateMap.value[other.templateId]
+        if (!otpl) return false
+        return x < other.xCm + otpl.widthCm &&
+               x + tw > other.xCm &&
+               y < other.yCm + otpl.depthCm &&
+               y + td > other.yCm
+      })
+      if (!blocker) return { xCm: x, yCm: y }
+      // Jump x past the right edge of the blocker
+      const otpl = templateMap.value[blocker.templateId]
+      x = blocker.xCm + otpl.widthCm
+    }
+  }
+  return { xCm: 0, yCm: 0 } // fallback: no free space found
+}
+
 function addFromTemplate(tpl) {
+  const { xCm, yCm } = findFreePosition(tpl.widthCm, tpl.depthCm)
   placedTables.value.push({
     instanceId: crypto.randomUUID(),
     templateId: tpl.id,
-    xCm: 20,
-    yCm: 20,
+    xCm,
+    yCm,
     overlapping: false,
   })
 }
