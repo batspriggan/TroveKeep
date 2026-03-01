@@ -8,8 +8,10 @@ A self-hosted inventory manager for Lego collections. Track sets and bulk pieces
 - **Bulk pieces** — catalogue loose parts by Lego part ID, colour (resolved from the Rebrickable colour archive), and quantity
 - **Storage** — assign sets and pieces to boxes or individual drawers; one item can span multiple storage locations
 - **Search** — full-text search across sets and bulk pieces
-- **Archives** — import the Rebrickable colours and sets CSV archives for colour resolution and set typeahead
-- **Backup / Restore** — export the full inventory to a JSON file and restore it on any instance
+- **Archives** — import the Rebrickable colours, sets, parts, and part-categories CSV archives for colour resolution, set typeahead, and part search
+- **Table Planner** — drag-and-drop room layout editor; define table templates, place them on a canvas with snap-to-grid and edge magnetism, and calculate how many LEGO baseplates cover a selected table group
+- **Baseplate Library** — manage LEGO baseplate parts (linked to the Rebrickable parts archive) with their stud dimensions; used by the plate calculator in the room planner
+- **Backup / Restore** — export the full inventory to a JSON file and restore it on any instance; individual rooms can also be exported and imported as ZIP files
 
 ## Tech stack
 

@@ -34,6 +34,10 @@ export const searchArchiveParts = (q, limit = 10, categoryId = null) => {
   if (categoryId !== null) params.append('categoryId', categoryId)
   return get(`${BASE}/parts/search?${params}`)
 }
+export const searchArchivePartsBaseplates = (q, limit = 100) => {
+  const params = new URLSearchParams({ q, limit })
+  return get(`${BASE}/parts/search/baseplates?${params}`)
+}
 
 export const getPartsInventoryStatus = () => get(`${BASE}/partsinventory`)
 export const uploadPartsInventory = (file) => uploadFile(`${BASE}/partsinventory/reload`, file)

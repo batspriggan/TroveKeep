@@ -18,6 +18,8 @@ public class BackupService : IBackupService
         var boxes = await _db.GetCollection<BoxDocument>("boxes").Find(_ => true).ToListAsync();
         var containers = await _db.GetCollection<DrawerContainerDocument>("drawercontainers").Find(_ => true).ToListAsync();
         var drawers = await _db.GetCollection<DrawerDocument>("drawers").Find(_ => true).ToListAsync();
+        var tableTemplates = await _db.GetCollection<TableTemplateDocument>("table_templates").Find(_ => true).ToListAsync();
+        var rooms = await _db.GetCollection<RoomDocument>("rooms").Find(_ => true).ToListAsync();
 
         var backup = new
         {
@@ -28,6 +30,8 @@ public class BackupService : IBackupService
             boxes,
             drawerContainers = containers,
             drawers,
+            tableTemplates,
+            rooms,
         };
 
         var options = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
@@ -47,6 +51,8 @@ public class BackupService : IBackupService
         await _db.GetCollection<BoxDocument>("boxes").DeleteManyAsync(_ => true);
         await _db.GetCollection<DrawerContainerDocument>("drawercontainers").DeleteManyAsync(_ => true);
         await _db.GetCollection<DrawerDocument>("drawers").DeleteManyAsync(_ => true);
+        await _db.GetCollection<TableTemplateDocument>("table_templates").DeleteManyAsync(_ => true);
+        await _db.GetCollection<RoomDocument>("rooms").DeleteManyAsync(_ => true);
 
         if (backup.Boxes?.Count > 0)
             await _db.GetCollection<BoxDocument>("boxes").InsertManyAsync(backup.Boxes);
@@ -58,6 +64,10 @@ public class BackupService : IBackupService
             await _db.GetCollection<LegoSetDocument>("legosets").InsertManyAsync(backup.LegoSets);
         if (backup.BulkPieces?.Count > 0)
             await _db.GetCollection<BulkPieceDocument>("bulkpieces").InsertManyAsync(backup.BulkPieces);
+        if (backup.TableTemplates?.Count > 0)
+            await _db.GetCollection<TableTemplateDocument>("table_templates").InsertManyAsync(backup.TableTemplates);
+        if (backup.Rooms?.Count > 0)
+            await _db.GetCollection<RoomDocument>("rooms").InsertManyAsync(backup.Rooms);
     }
 
     private class BackupPayload
@@ -67,5 +77,7 @@ public class BackupService : IBackupService
         public List<BoxDocument>? Boxes { get; set; }
         public List<DrawerContainerDocument>? DrawerContainers { get; set; }
         public List<DrawerDocument>? Drawers { get; set; }
+        public List<TableTemplateDocument>? TableTemplates { get; set; }
+        public List<RoomDocument>? Rooms { get; set; }
     }
 }

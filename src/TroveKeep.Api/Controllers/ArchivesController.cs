@@ -10,10 +10,12 @@ namespace TroveKeep.Api.Controllers;
 public class ArchivesController : ControllerBase
 {
     private readonly IArchiveService _service;
+    private readonly IBaseplateService _baseplateService;
 
-    public ArchivesController(IArchiveService service)
+    public ArchivesController(IArchiveService service,IBaseplateService baseplateService)
     {
         _service = service;
+        _baseplateService = baseplateService;
     }
 
     [HttpGet("colors")]
@@ -109,6 +111,23 @@ public class ArchivesController : ControllerBase
         var cap = Math.Max(0, limit); // 0 = no limit (MongoDB semantics)
         var results = await _service.SearchPartsAsync(q, cap, categoryId);
         return Ok(results.Select(p => new PartArchiveSearchResponse(p.PartNum, p.Name)));
+    }
+
+    [HttpGet("parts/search/baseplates")]
+    [ProducesResponseType(typeof(IEnumerable<PartArchiveBaseplateSearchResponse>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> SearchPartsBaseplates(
+        [FromQuery] string? q,
+        [FromQuery] int limit = 10)
+    {
+        if (string.IsNullOrWhiteSpace(q))
+            return Ok(Array.Empty<PartArchiveSearchResponse>());
+        int baseplateCategoryId = 1;
+        var cap = Math.Max(0, limit); // 0 = no limit (MongoDB semantics)
+        var results = await _service.SearchPartsAsync(q, cap, baseplateCategoryId);
+        return Ok(results.Select(p => {
+            var (studX, studY) = _baseplateService.GuessStudDimensions(p.Name);
+            return new PartArchiveBaseplateSearchResponse(p.PartNum, p.Name, studX, studY);
+        }));
     }
 
     [HttpPost("parts/reload")]

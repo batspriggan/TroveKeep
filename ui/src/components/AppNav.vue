@@ -8,6 +8,7 @@
     <RouterLink to="/search">Search</RouterLink>
     <RouterLink to="/archives">Archives</RouterLink>
     <RouterLink to="/settings">Settings</RouterLink>
+    <RouterLink to="/table-planner">Table Planner</RouterLink>
   </nav>
 </template>
 
