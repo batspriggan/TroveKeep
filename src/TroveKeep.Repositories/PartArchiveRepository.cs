@@ -57,15 +57,16 @@ public class PartArchiveRepository : IPartArchiveRepository
         return docs.Select(ToModel);
     }
 
-    private static RebrickablePart ToModel(PartArchiveDocument doc) => new()
-    {
-        PartNum = doc.PartNum,
-        Name = doc.Name,
-    };
+    private static RebrickablePart ToModel(PartArchiveDocument doc) => new(
+        PartNum : doc.PartNum,
+        Name : doc.Name,
+        PartCategoryId : doc.PartCategoryId
+    );
 
     private static PartArchiveDocument ToDocument(RebrickablePart model) => new()
     {
         PartNum = model.PartNum,
         Name = model.Name,
+        PartCategoryId = model.PartCategoryId
     };
 }

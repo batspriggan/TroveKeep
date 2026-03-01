@@ -165,10 +165,11 @@ public class ArchiveService : IArchiveService
             if (fields.Length < 2) continue;
 
             parts.Add(new RebrickablePart
-            {
-                PartNum = fields[colIndex["part_num"]].Trim(),
-                Name = fields[colIndex["name"]].Trim(),
-            });
+            (
+                PartNum : fields[colIndex["part_num"]].Trim(),
+                Name : fields[colIndex["name"]].Trim(),
+                PartCategoryId : int.Parse(fields[colIndex["part_cat_id"]].Trim())
+            ));
         }
 
         var count = await _partRepository.ReplaceAllAsync(parts);

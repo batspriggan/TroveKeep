@@ -8,4 +8,5 @@ public class PartArchiveDocument
     [BsonId]
     public string PartNum { get; set; } = "";
     public string Name { get; set; } = "";
+    public int PartCategoryId { get; set; }
 }
