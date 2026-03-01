@@ -304,6 +304,57 @@
         <button class="primary small" type="submit" :disabled="!newBpSelected">Add Baseplate</button>
       </form>
     </div>
+    <!-- Table Templates -->
+    <div class="tpl-section">
+      <h2 class="section-heading">Table Templates</h2>
+      <p class="muted">Define table shapes used in the Table Planner.</p>
+
+      <table v-if="templates.length" class="data-table tpl-table">
+        <thead>
+          <tr>
+            <th>Color</th>
+            <th>Description</th>
+            <th>Width (cm)</th>
+            <th>Depth (cm)</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="t in templates" :key="t.id">
+            <template v-if="editingId === t.id">
+              <td><input v-model="editRow.color" type="color" style="width:40px;height:28px;padding:2px;cursor:pointer" /></td>
+              <td><input v-model="editRow.description" style="width:100%" /></td>
+              <td><input v-model.number="editRow.widthCm" type="number" min="10" max="2000" style="width:70px" /></td>
+              <td><input v-model.number="editRow.depthCm" type="number" min="10" max="2000" style="width:70px" /></td>
+              <td class="tpl-actions">
+                <button class="primary small" @click="saveEdit(t.id)">Save</button>
+                <button class="import-btn" @click="cancelEdit">Cancel</button>
+              </td>
+            </template>
+            <template v-else>
+              <td><span class="tpl-swatch" :style="{ background: t.color }"></span></td>
+              <td>{{ t.description }}</td>
+              <td>{{ t.widthCm }}</td>
+              <td>{{ t.depthCm }}</td>
+              <td class="tpl-actions">
+                <button class="import-btn" @click="startEdit(t)">Edit</button>
+                <button class="import-btn danger-btn" @click="removeTpl(t.id)">Delete</button>
+              </td>
+            </template>
+          </tr>
+        </tbody>
+      </table>
+      <p v-else class="muted" style="margin-top:0.5rem">No templates yet.</p>
+
+      <form class="tpl-add-form" @submit.prevent="submitTemplate">
+        <input v-model="tplForm.description" placeholder="Description" class="tpl-text-input" />
+        <label class="tpl-label">W (cm) <input v-model.number="tplForm.widthCm" type="number" min="10" max="2000" class="tpl-num-input" /></label>
+        <label class="tpl-label">D (cm) <input v-model.number="tplForm.depthCm" type="number" min="10" max="2000" class="tpl-num-input" /></label>
+        <label class="tpl-label">Color <input v-model="tplForm.color" type="color" style="width:40px;height:32px;padding:2px;cursor:pointer" /></label>
+        <button class="primary small" type="submit">+ Add Template</button>
+        <span v-if="tplError" class="error">{{ tplError }}</span>
+      </form>
+    </div>
   </div>
 </template>
 
@@ -318,7 +369,7 @@ import {
   getPartCategoriesStatus, uploadPartCategories, getPartCategoriesList,
   searchArchivePartsBaseplates,
 } from '../api/archives.js'
-import { getAllBaseplates, createBaseplate, deleteBaseplate } from '../api/tableplanner.js'
+import { getAllBaseplates, createBaseplate, deleteBaseplate, getAllTemplates, createTemplate, updateTemplate, deleteTemplate } from '../api/tableplanner.js'
 
 // --- Folder import ---
 const KNOWN_ARCHIVES = {
@@ -620,6 +671,54 @@ async function removeBaseplate(id) {
   baseplates.value = baseplates.value.filter(b => b.id !== id)
 }
 
+// --- Table Templates ---
+const templates = ref([])
+const tplForm = ref({ description: '', widthCm: 200, depthCm: 80, color: '#8b6340' })
+const tplError = ref('')
+const editingId = ref(null)
+const editRow = ref({ description: '', widthCm: 200, depthCm: 80, color: '#8b6340' })
+
+async function loadTemplates() {
+  templates.value = await getAllTemplates()
+}
+
+async function submitTemplate() {
+  tplError.value = ''
+  if (!tplForm.value.description.trim()) { tplError.value = 'Description is required.'; return }
+  await createTemplate({
+    description: tplForm.value.description.trim(),
+    widthCm: Number(tplForm.value.widthCm),
+    depthCm: Number(tplForm.value.depthCm),
+    color: tplForm.value.color,
+  })
+  tplForm.value = { description: '', widthCm: 200, depthCm: 80, color: '#8b6340' }
+  await loadTemplates()
+}
+
+function startEdit(t) {
+  editingId.value = t.id
+  editRow.value = { description: t.description, widthCm: t.widthCm, depthCm: t.depthCm, color: t.color }
+}
+
+function cancelEdit() { editingId.value = null }
+
+async function saveEdit(id) {
+  await updateTemplate(id, {
+    description: editRow.value.description,
+    widthCm: Number(editRow.value.widthCm),
+    depthCm: Number(editRow.value.depthCm),
+    color: editRow.value.color,
+  })
+  editingId.value = null
+  await loadTemplates()
+}
+
+async function removeTpl(id) {
+  if (!confirm('Delete this template?')) return
+  await deleteTemplate(id)
+  await loadTemplates()
+}
+
 // --- Shared ---
 function formatDate(iso) {
   return new Date(iso).toLocaleString()
@@ -641,6 +740,7 @@ onMounted(async () => {
   await loadPartCategoriesStatus()
   if (partCategoriesStatus.value.count > 0) await loadPartCategories()
   baseplates.value = await getAllBaseplates()
+  await loadTemplates()
 })
 </script>
 
@@ -971,5 +1071,73 @@ onMounted(async () => {
   text-align: center;
 }
 
+/* ── Table Templates section ── */
+.tpl-section {
+  margin-top: 2rem;
+  padding-top: 1.5rem;
+  border-top: 2px solid #e2e8f0;
+}
 
+.tpl-table {
+  margin-top: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.tpl-actions {
+  display: flex;
+  gap: 0.4rem;
+  white-space: nowrap;
+}
+
+.tpl-swatch {
+  display: inline-block;
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  border: 1px solid rgba(0,0,0,0.2);
+  vertical-align: middle;
+}
+
+.tpl-add-form {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin-top: 0.75rem;
+}
+
+.tpl-text-input {
+  padding: 0.3rem 0.5rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  font-size: 0.875rem;
+  min-width: 180px;
+}
+
+.tpl-label {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.875rem;
+  color: #475569;
+}
+
+.tpl-num-input {
+  width: 60px;
+  padding: 0.25rem 0.35rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  font-size: 0.875rem;
+  text-align: center;
+}
+
+.danger-btn {
+  color: #dc2626;
+  border-color: #fca5a5;
+}
+
+.danger-btn:hover {
+  background: #fef2f2;
+  border-color: #dc2626;
+}
 </style>

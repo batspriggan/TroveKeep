@@ -3,7 +3,6 @@ import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   getAllRooms, createRoom, updateRoom, deleteRoom,
-  getAllTemplates, createTemplate, updateTemplate, deleteTemplate,
   exportRoom, importRoom,
 } from '../api/tableplanner.js'
 
@@ -59,57 +58,7 @@ async function handleImportFile(e) {
   }
 }
 
-// ── Templates ─────────────────────────────────────────────────────────────────
-const templates = ref([])
-const tplForm = ref({ description: '', widthCm: 200, depthCm: 80, color: '#8b6340' })
-const tplError = ref('')
-const editingId = ref(null)
-const editRow = ref({ description: '', widthCm: 200, depthCm: 80, color: '#8b6340' })
-
-async function loadTemplates() {
-  templates.value = await getAllTemplates()
-}
-
-async function submitTemplate() {
-  tplError.value = ''
-  if (!tplForm.value.description.trim()) { tplError.value = 'Description is required.'; return }
-  await createTemplate({
-    description: tplForm.value.description.trim(),
-    widthCm: Number(tplForm.value.widthCm),
-    depthCm: Number(tplForm.value.depthCm),
-    color: tplForm.value.color,
-  })
-  tplForm.value = { description: '', widthCm: 200, depthCm: 80, color: '#8b6340' }
-  await loadTemplates()
-}
-
-function startEdit(t) {
-  editingId.value = t.id
-  editRow.value = { description: t.description, widthCm: t.widthCm, depthCm: t.depthCm, color: t.color }
-}
-
-function cancelEdit() {
-  editingId.value = null
-}
-
-async function saveEdit(id) {
-  await updateTemplate(id, {
-    description: editRow.value.description,
-    widthCm: Number(editRow.value.widthCm),
-    depthCm: Number(editRow.value.depthCm),
-    color: editRow.value.color,
-  })
-  editingId.value = null
-  await loadTemplates()
-}
-
-async function removeTemplate(id) {
-  if (!confirm('Delete this template?')) return
-  await deleteTemplate(id)
-  await loadTemplates()
-}
-
-onMounted(() => Promise.all([loadRooms(), loadTemplates()]))
+onMounted(() => loadRooms())
 </script>
 
 <template>
@@ -160,57 +109,6 @@ onMounted(() => Promise.all([loadRooms(), loadTemplates()]))
       </table>
     </section>
 
-    <!-- ── Templates ── -->
-    <section class="section">
-      <h2>Table Templates</h2>
-
-      <form class="inline-form" @submit.prevent="submitTemplate">
-        <input v-model="tplForm.description" placeholder="Description" />
-        <label>W (cm) <input v-model.number="tplForm.widthCm" type="number" min="10" max="2000" style="width:70px" /></label>
-        <label>D (cm) <input v-model.number="tplForm.depthCm" type="number" min="10" max="2000" style="width:70px" /></label>
-        <label>Color <input v-model="tplForm.color" type="color" style="width:40px;height:32px;padding:2px;cursor:pointer" /></label>
-        <button class="primary" type="submit">+ Add Template</button>
-        <span v-if="tplError" class="form-error">{{ tplError }}</span>
-      </form>
-
-      <p v-if="templates.length === 0" class="empty-hint">No templates yet.</p>
-
-      <table v-else class="data-table">
-        <thead>
-          <tr>
-            <th>Color</th>
-            <th>Description</th>
-            <th>Width (cm)</th>
-            <th>Depth (cm)</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="t in templates" :key="t.id">
-            <template v-if="editingId === t.id">
-              <td><input v-model="editRow.color" type="color" style="width:40px;height:28px;padding:2px;cursor:pointer" /></td>
-              <td><input v-model="editRow.description" style="width:100%" /></td>
-              <td><input v-model.number="editRow.widthCm" type="number" min="10" max="2000" style="width:70px" /></td>
-              <td><input v-model.number="editRow.depthCm" type="number" min="10" max="2000" style="width:70px" /></td>
-              <td class="actions">
-                <button class="primary small" @click="saveEdit(t.id)">Save</button>
-                <button class="small" @click="cancelEdit">Cancel</button>
-              </td>
-            </template>
-            <template v-else>
-              <td><span class="color-swatch" :style="{ background: t.color }"></span></td>
-              <td>{{ t.description }}</td>
-              <td>{{ t.widthCm }}</td>
-              <td>{{ t.depthCm }}</td>
-              <td class="actions">
-                <button class="small" @click="startEdit(t)">Edit</button>
-                <button class="danger small" @click="removeTemplate(t.id)">Delete</button>
-              </td>
-            </template>
-          </tr>
-        </tbody>
-      </table>
-    </section>
   </div>
 </template>
 
@@ -300,15 +198,6 @@ h1 { margin: 0 0 1.25rem; }
 .actions {
   display: flex;
   gap: 0.4rem;
-}
-
-.color-swatch {
-  display: inline-block;
-  width: 22px;
-  height: 22px;
-  border-radius: 4px;
-  border: 1px solid rgba(0,0,0,0.2);
-  vertical-align: middle;
 }
 
 button.small {
