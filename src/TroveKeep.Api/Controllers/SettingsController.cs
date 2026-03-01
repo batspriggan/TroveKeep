@@ -18,7 +18,7 @@ public class SettingsController : ControllerBase
     public async Task<IActionResult> Backup()
     {
         var (data, fileName) = await _backupService.ExportAsync();
-        return File(data, "application/json", fileName);
+        return File(data, "application/gzip", fileName);
     }
 
     [HttpPost("restore")]

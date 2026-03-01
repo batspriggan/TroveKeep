@@ -4,7 +4,7 @@
 
     <section class="card">
       <h2>Backup</h2>
-      <p class="muted">Download a JSON snapshot of all sets, bulk pieces, boxes, and drawers. Archives (Rebrickable colors/sets, cached images) are excluded.</p>
+      <p class="muted">Download a compressed snapshot of all data including Rebrickable catalog and cached images.</p>
       <p v-if="backupError" class="error">{{ backupError }}</p>
       <p v-if="backupSuccess" class="success">{{ backupSuccess }}</p>
       <button class="primary" :disabled="backupLoading" @click="handleBackup">
@@ -18,7 +18,7 @@
       <p v-if="restoreError" class="error">{{ restoreError }}</p>
       <p v-if="restoreSuccess" class="success">{{ restoreSuccess }}</p>
       <div class="restore-row">
-        <input ref="fileInput" type="file" accept=".json" @change="onFileChange" />
+        <input ref="fileInput" type="file" accept=".gz" @change="onFileChange" />
         <button class="danger" :disabled="!selectedFile || restoreLoading" @click="handleRestore">
           {{ restoreLoading ? 'Restoring…' : 'Restore' }}
         </button>

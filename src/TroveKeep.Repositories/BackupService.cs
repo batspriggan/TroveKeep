@@ -1,3 +1,4 @@
+using System.IO.Compression;
 using System.Text.Json;
 using MongoDB.Driver;
 using TroveKeep.Core.Interfaces.Services;
@@ -50,16 +51,20 @@ public class BackupService : IBackupService
             images,
         };
 
-        var options = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
-        var data = JsonSerializer.SerializeToUtf8Bytes(backup, options);
-        var fileName = $"trovekeep-backup-{DateTime.UtcNow:yyyy-MM-dd}.json";
-        return (data, fileName);
+        var jsonOptions = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
+        using var ms = new MemoryStream();
+        await using (var gz = new GZipStream(ms, CompressionLevel.Optimal, leaveOpen: true))
+            await JsonSerializer.SerializeAsync(gz, backup, jsonOptions);
+
+        var fileName = $"trovekeep-backup-{DateTime.UtcNow:yyyy-MM-dd}.json.gz";
+        return (ms.ToArray(), fileName);
     }
 
     public async Task ImportAsync(Stream stream)
     {
-        var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
-        var backup = await JsonSerializer.DeserializeAsync<BackupPayload>(stream, options)
+        var jsonOptions = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+        await using var gz = new GZipStream(stream, CompressionMode.Decompress);
+        var backup = await JsonSerializer.DeserializeAsync<BackupPayload>(gz, jsonOptions)
             ?? throw new InvalidOperationException("Invalid backup file: could not parse JSON");
 
         // User data
