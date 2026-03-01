@@ -236,10 +236,20 @@ function findFreePosition(tw, td) {
   return { xCm: 0, yCm: 0 } // fallback: no free space found
 }
 
+function generateUUID() {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID()
+  }
+  // Fallback for non-secure contexts (HTTP)
+  return '10000000-1000-4000-8000-100000000000'.replace(/[018]/g, c =>
+    (c ^ (crypto.getRandomValues(new Uint8Array(1))[0] & (15 >> (c / 4)))).toString(16)
+  )
+}
+
 function addFromTemplate(tpl) {
   const { xCm, yCm } = findFreePosition(tpl.widthCm, tpl.depthCm)
   placedTables.value.push({
-    instanceId: crypto.randomUUID(),
+    instanceId: generateUUID(),
     templateId: tpl.id,
     xCm,
     yCm,
