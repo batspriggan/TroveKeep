@@ -10,19 +10,21 @@ public class ArchiveService : IArchiveService
     private readonly IColorRepository _colorRepository;
     private readonly ISetArchiveRepository _setRepository;
     private readonly IPartArchiveRepository _partRepository;
-
     private readonly IPartInventoryArchiveRepository _partInventoryRepository;
+    private readonly IPartCategoryRepository _partCategoryRepository;
 
     public ArchiveService(
         IColorRepository colorRepository,
-         ISetArchiveRepository setRepository,
-          IPartArchiveRepository partRepository,
-           IPartInventoryArchiveRepository partInventoryRepository)
+        ISetArchiveRepository setRepository,
+        IPartArchiveRepository partRepository,
+        IPartInventoryArchiveRepository partInventoryRepository,
+        IPartCategoryRepository partCategoryRepository)
     {
         _colorRepository = colorRepository;
         _setRepository = setRepository;
         _partRepository = partRepository;
         _partInventoryRepository = partInventoryRepository;
+        _partCategoryRepository = partCategoryRepository;
     }
 
     public async Task<(int count, DateTimeOffset importedAt)> ImportColorsAsync(Stream stream)
@@ -238,6 +240,57 @@ public class ArchiveService : IArchiveService
 
     public Task<IEnumerable<RebrickablePartInventory>> SearchPartsInventoryAsync(string query, int limit)
         => _partInventoryRepository.SearchAsync(query, limit);
+
+    public async Task<(int count, DateTimeOffset importedAt)> ImportPartCategoriesAsync(Stream stream)
+    {
+        var categories = new List<RebrickablePartCategory>();
+
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Read);
+        var csvEntry = archive.Entries.FirstOrDefault(e =>
+            e.Name.EndsWith(".csv", StringComparison.OrdinalIgnoreCase));
+
+        if (csvEntry is null)
+            throw new InvalidOperationException("No CSV file found inside the uploaded zip.");
+
+        using var csvStream = csvEntry.Open();
+        using var reader = new StreamReader(csvStream);
+
+        var headerLine = await reader.ReadLineAsync();
+        if (headerLine is null)
+            throw new InvalidOperationException("CSV file is empty.");
+
+        var headers = SplitCsvLine(headerLine);
+        var colIndex = BuildColumnIndex(headers);
+
+        string? line;
+        while ((line = await reader.ReadLineAsync()) is not null)
+        {
+            if (string.IsNullOrWhiteSpace(line)) continue;
+            var fields = SplitCsvLine(line);
+            if (fields.Length < headers.Length) continue;
+
+            categories.Add(new RebrickablePartCategory
+            {
+                Id = int.Parse(fields[colIndex["id"]].Trim()),
+                Name = fields[colIndex["name"]].Trim(),
+            });
+        }
+
+        var count = await _partCategoryRepository.ReplaceAllAsync(categories);
+        var importedAt = await _partCategoryRepository.GetLastImportedAtAsync();
+        return (count, importedAt ?? DateTimeOffset.UtcNow);
+    }
+
+    public async Task<(int count, DateTimeOffset? importedAt)> GetPartCategoriesStatusAsync()
+    {
+        var categories = await _partCategoryRepository.GetAllAsync();
+        var count = categories.Count();
+        var importedAt = await _partCategoryRepository.GetLastImportedAtAsync();
+        return (count, importedAt);
+    }
+
+    public Task<IEnumerable<RebrickablePartCategory>> GetPartCategoriesAsync()
+        => _partCategoryRepository.GetAllAsync();
 
     private static Dictionary<string, int> BuildColumnIndex(string[] headers)
     {

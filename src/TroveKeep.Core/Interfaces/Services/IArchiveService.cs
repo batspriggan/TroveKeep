@@ -19,4 +19,8 @@ public interface IArchiveService
     Task<(int count, DateTimeOffset importedAt)> ImportPartsInventoryAsync(Stream stream);
     Task<(int count, DateTimeOffset? importedAt)> GetPartsInventoryStatusAsync();
     Task<IEnumerable<RebrickablePartInventory>> SearchPartsInventoryAsync(string query, int limit);
+
+    Task<(int count, DateTimeOffset importedAt)> ImportPartCategoriesAsync(Stream stream);
+    Task<(int count, DateTimeOffset? importedAt)> GetPartCategoriesStatusAsync();
+    Task<IEnumerable<RebrickablePartCategory>> GetPartCategoriesAsync();
 }

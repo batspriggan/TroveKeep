@@ -164,6 +164,40 @@ public class ArchivesController : ControllerBase
         }
     }
 
+    [HttpGet("partcategories")]
+    [ProducesResponseType(typeof(ArchiveStatusResponse), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetPartCategoriesStatus()
+    {
+        var (count, importedAt) = await _service.GetPartCategoriesStatusAsync();
+        return Ok(new ArchiveStatusResponse(count, importedAt));
+    }
+
+    [HttpPost("partcategories/reload")]
+    [RequestSizeLimit(50_000_000)]
+    [RequestFormLimits(MultipartBodyLengthLimit = 50_000_000)]
+    [ProducesResponseType(typeof(ArchiveStatusResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> ReloadPartCategories(IFormFile file)
+    {
+        try
+        {
+            var (count, importedAt) = await _service.ImportPartCategoriesAsync(file.OpenReadStream());
+            return Ok(new ArchiveStatusResponse(count, importedAt));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+    }
+
+    [HttpGet("partcategories/list")]
+    [ProducesResponseType(typeof(IEnumerable<PartCategoryResponse>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetPartCategoriesList()
+    {
+        var categories = await _service.GetPartCategoriesAsync();
+        return Ok(categories.Select(c => new PartCategoryResponse(c.Id, c.Name)));
+    }
+
     private static ColorResponse MapToResponse(RebrickableColor c) =>
         new(c.UniqueId, c.Id, c.Name, c.Rgb, c.IsTrans, c.StartYear, c.EndYear);
 }

@@ -31,6 +31,7 @@ builder.Services.AddScoped<IColorRepository, ColorRepository>();
 builder.Services.AddScoped<ISetArchiveRepository, SetArchiveRepository>();
 builder.Services.AddScoped<IPartArchiveRepository, PartArchiveRepository>();
 builder.Services.AddScoped<IPartInventoryArchiveRepository, PartInventoryArchiveRepository>();
+builder.Services.AddScoped<IPartCategoryRepository, PartCategoryRepository>();
 builder.Services.AddScoped<IImageRepository, ImageRepository>();
 
 // Services

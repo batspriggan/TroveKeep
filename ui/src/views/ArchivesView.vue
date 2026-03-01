@@ -139,6 +139,54 @@
         </button>
       </div>
     </section>
+
+    <section>
+      <h2>Part Categories <span class="filename">part_categories.csv.zip</span></h2>
+
+      <p v-if="partCategoriesError" class="error">{{ partCategoriesError }}</p>
+
+      <div class="status-row">
+        <span v-if="partCategoriesStatusLoading" class="muted">Loading…</span>
+        <template v-else>
+          <span>
+            <strong>{{ partCategoriesStatus.count }}</strong> categor{{ partCategoriesStatus.count !== 1 ? 'ies' : 'y' }} imported
+          </span>
+          <span class="sep">·</span>
+          <span class="muted">
+            Last import:
+            {{ partCategoriesStatus.lastImportedAt ? formatDate(partCategoriesStatus.lastImportedAt) : 'Never imported' }}
+          </span>
+        </template>
+      </div>
+
+      <div class="upload-row">
+        <input ref="partCategoriesInput" type="file" accept=".zip" @change="onPartCategoriesFile" />
+        <button class="primary" :disabled="!partCategoriesFile || partCategoriesReloading" @click="reloadPartCategoriesData">
+          {{ partCategoriesReloading ? 'Importing…' : 'Import' }}
+        </button>
+      </div>
+
+      <template v-if="partCategories.length">
+        <button class="toggle-link" @click="partCategoriesExpanded = !partCategoriesExpanded">
+          {{ partCategoriesExpanded ? '▴ Hide list' : '▾ Show list' }}
+        </button>
+        <table v-if="partCategoriesExpanded" class="colors-table">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Name</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="c in partCategories" :key="c.id">
+              <td class="id-col">{{ c.id }}</td>
+              <td>{{ c.name }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </template>
+      <p v-else-if="!partCategoriesStatusLoading" class="muted">No part categories imported yet.</p>
+    </section>
   </div>
 </template>
 
@@ -148,7 +196,8 @@ import {
   getColorsStatus, uploadColors, getColorsList,
   getSetsStatus, uploadSets,
   getPartsStatus, uploadParts,
-  getPartsInventoryStatus, uploadPartsInventory
+  getPartsInventoryStatus, uploadPartsInventory,
+  getPartCategoriesStatus, uploadPartCategories, getPartCategoriesList
 } from '../api/archives.js'
 
 // --- Colors ---
@@ -302,6 +351,52 @@ async function reloadPartsInventoryData() {
   }
 }
 
+// --- Part Categories ---
+const partCategoriesStatus = ref({ count: 0, lastImportedAt: null })
+const partCategories = ref([])
+const partCategoriesStatusLoading = ref(true)
+const partCategoriesReloading = ref(false)
+const partCategoriesError = ref('')
+const partCategoriesFile = ref(null)
+const partCategoriesExpanded = ref(false)
+
+function onPartCategoriesFile(e) {
+  partCategoriesFile.value = e.target.files[0] ?? null
+  partCategoriesError.value = ''
+}
+
+async function loadPartCategoriesStatus() {
+  try {
+    partCategoriesStatus.value = await getPartCategoriesStatus()
+  } catch (e) {
+    partCategoriesError.value = e.message
+  } finally {
+    partCategoriesStatusLoading.value = false
+  }
+}
+
+async function loadPartCategories() {
+  try {
+    partCategories.value = await getPartCategoriesList()
+  } catch {
+    // silently ignore if not yet imported
+  }
+}
+
+async function reloadPartCategoriesData() {
+  if (!partCategoriesFile.value) return
+  partCategoriesReloading.value = true
+  partCategoriesError.value = ''
+  try {
+    partCategoriesStatus.value = await uploadPartCategories(partCategoriesFile.value)
+    await loadPartCategories()
+  } catch (e) {
+    partCategoriesError.value = e.message
+  } finally {
+    partCategoriesReloading.value = false
+  }
+}
+
 // --- Shared ---
 function formatDate(iso) {
   return new Date(iso).toLocaleString()
@@ -320,6 +415,8 @@ onMounted(async () => {
   await loadSetsStatus()
   await loadPartsStatus()
   await loadPartsInventoryStatus()
+  await loadPartCategoriesStatus()
+  if (partCategoriesStatus.value.count > 0) await loadPartCategories()
 })
 </script>
 

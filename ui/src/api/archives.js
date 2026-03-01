@@ -34,3 +34,7 @@ export const searchArchiveParts = (q, limit = 10) => get(`${BASE}/parts/search?q
 export const getPartsInventoryStatus = () => get(`${BASE}/partsinventory`)
 export const uploadPartsInventory = (file) => uploadFile(`${BASE}/partsinventory/reload`, file)
 export const searchArchivePartsInventory = (q, limit = 10) => get(`${BASE}/partsinventory/search?q=${encodeURIComponent(q)}&limit=${limit}`)
+
+export const getPartCategoriesStatus = () => get(`${BASE}/partcategories`)
+export const uploadPartCategories = (file) => uploadFile(`${BASE}/partcategories/reload`, file)
+export const getPartCategoriesList = () => get(`${BASE}/partcategories/list`)
