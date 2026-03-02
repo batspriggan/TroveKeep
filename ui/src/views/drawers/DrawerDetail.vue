@@ -1,6 +1,6 @@
 <template>
   <div>
-    <RouterLink class="back-link" :to="drawer ? `/drawercontainers/${drawer.drawerContainerId}` : '/drawercontainers'">
+    <RouterLink class="back-link" :to="drawer ? `/drawercontainers/${containerId}` : '/drawercontainers'">
       ← Back to Container
     </RouterLink>
 
@@ -14,8 +14,8 @@
         <h2>Edit Drawer</h2>
         <form class="form-row" @submit.prevent="submitEdit">
           <div class="form-field">
-            <label>Position *</label>
-            <input v-model.number="editForm.position" type="number" min="1" required />
+            <label>Label</label>
+            <input v-model="editForm.label" placeholder="Optional label" />
           </div>
           <button class="primary" type="submit">Save</button>
         </form>
@@ -41,7 +41,7 @@
                 {{ p.legoColorName ?? `#${p.legoColorId}` }}
               </td>
               <td>{{ p.description }}</td>
-              <td>{{ p.storageAllocations.find(a => a.storageId === id)?.quantity ?? '—' }}</td>
+              <td>{{ p.storageAllocations.find(a => a.storageId === containerId && a.storagePosition === position)?.quantity ?? '—' }}</td>
             </tr>
           </tbody>
         </table>
@@ -65,12 +65,13 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { getDrawer, getDrawerContents, updateDrawer, deleteDrawer } from '../../api/drawers.js'
+import { getDrawerContents, updateDrawer, deleteDrawer } from '../../api/drawers.js'
 import ConfirmDialog from '../../components/ConfirmDialog.vue'
 
 const route = useRoute()
 const router = useRouter()
-const id = route.params.id
+const containerId = route.params.containerId
+const position = parseInt(route.params.position)
 
 const drawer = ref(null)
 const contents = ref([])
@@ -78,16 +79,16 @@ const loading = ref(true)
 const error = ref('')
 const editError = ref('')
 const showConfirm = ref(false)
-const editForm = ref({ position: 1 })
+const editForm = ref({ label: '' })
 
 async function load() {
   loading.value = true
   error.value = ''
   try {
-    const detail = await getDrawerContents(id)
+    const detail = await getDrawerContents(containerId, position)
     drawer.value = detail
     contents.value = detail.bulkPieces ?? []
-    editForm.value = { position: detail.position }
+    editForm.value = { label: detail.label ?? '' }
   } catch (e) {
     error.value = e.message
   } finally {
@@ -98,7 +99,7 @@ async function load() {
 async function submitEdit() {
   editError.value = ''
   try {
-    const updated = await updateDrawer(id, { position: editForm.value.position, label: null })
+    const updated = await updateDrawer(containerId, position, { position, label: editForm.value.label || null })
     drawer.value = { ...drawer.value, ...updated }
   } catch (e) {
     editError.value = e.message
@@ -107,8 +108,8 @@ async function submitEdit() {
 
 async function doDelete() {
   try {
-    await deleteDrawer(id)
-    router.push(`/drawercontainers/${drawer.value.drawerContainerId}`)
+    await deleteDrawer(containerId, position)
+    router.push(`/drawercontainers/${containerId}`)
   } catch (e) {
     error.value = e.message
     showConfirm.value = false

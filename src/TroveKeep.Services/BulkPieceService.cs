@@ -81,9 +81,9 @@ public class BulkPieceService : IBulkPieceService
         return piece;
     }
 
-    public async Task<BulkPiece?> AllocateToDrawerAsync(Guid id, Guid drawerId, int quantity)
+    public async Task<BulkPiece?> AllocateToDrawerAsync(Guid id, Guid containerId, int position, int quantity)
     {
-        var drawer = await _drawerRepo.GetByIdAsync(drawerId);
+        var drawer = await _drawerRepo.GetByPositionAsync(containerId, position);
         if (drawer is null) return null;
 
         var piece = await _pieceRepo.GetByIdAsync(id);
@@ -95,18 +95,28 @@ public class BulkPieceService : IBulkPieceService
             throw new InvalidOperationException(
                 $"Cannot allocate {quantity}: total would be {currentlyAllocated + quantity}, exceeding piece quantity {piece.Quantity}.");
 
-        await _allocationRepo.AddOrIncrementAsync(id, "Piece", drawerId, StorageType.Drawer, quantity);
+        await _allocationRepo.AddOrIncrementAsync(id, "Piece", containerId, StorageType.Drawer, quantity, storagePosition: position);
 
         piece.StorageAllocations = (await _allocationRepo.GetByItemAsync(id)).ToList();
         return piece;
     }
 
-    public async Task<BulkPiece?> DeallocateStorageAsync(Guid id, Guid storageId)
+    public async Task<BulkPiece?> DeallocateFromBoxAsync(Guid id, Guid boxId)
     {
         var piece = await _pieceRepo.GetByIdAsync(id);
         if (piece is null) return null;
 
-        await _allocationRepo.RemoveByItemAndStorageAsync(id, storageId);
+        await _allocationRepo.RemoveByItemAndStorageAsync(id, boxId);
+        piece.StorageAllocations = (await _allocationRepo.GetByItemAsync(id)).ToList();
+        return piece;
+    }
+
+    public async Task<BulkPiece?> DeallocateFromDrawerAsync(Guid id, Guid containerId, int position)
+    {
+        var piece = await _pieceRepo.GetByIdAsync(id);
+        if (piece is null) return null;
+
+        await _allocationRepo.RemoveByItemAndStorageAsync(id, containerId, position);
         piece.StorageAllocations = (await _allocationRepo.GetByItemAsync(id)).ToList();
         return piece;
     }

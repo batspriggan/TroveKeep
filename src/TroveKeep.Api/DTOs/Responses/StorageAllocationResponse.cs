@@ -1,3 +1,3 @@
 namespace TroveKeep.Api.DTOs.Responses;
 
-public record StorageAllocationResponse(Guid StorageId, string StorageType, int Quantity);
+public record StorageAllocationResponse(Guid StorageId, int? StoragePosition, string StorageType, int Quantity);

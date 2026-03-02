@@ -20,7 +20,8 @@ public class AllocationRepository : IAllocationRepository
         var uniqueIndex = new CreateIndexModel<StorageAllocationDocument>(
             Builders<StorageAllocationDocument>.IndexKeys
                 .Ascending(x => x.ItemId)
-                .Ascending(x => x.StorageId),
+                .Ascending(x => x.StorageId)
+                .Ascending(x => x.StoragePosition),
             new CreateIndexOptions { Unique = true });
 
         _collection.Indexes.CreateMany([itemIdIndex, storageIdIndex, uniqueIndex]);
@@ -40,9 +41,12 @@ public class AllocationRepository : IAllocationRepository
         return docs.Select(ToModel);
     }
 
-    public async Task<IEnumerable<StorageAllocation>> GetByStorageAsync(Guid storageId)
+    public async Task<IEnumerable<StorageAllocation>> GetByStorageAsync(Guid storageId, int? position = null)
     {
-        var docs = await _collection.Find(x => x.StorageId == storageId).ToListAsync();
+        var filter = Builders<StorageAllocationDocument>.Filter.Eq(x => x.StorageId, storageId);
+        if (position.HasValue)
+            filter &= Builders<StorageAllocationDocument>.Filter.Eq(x => x.StoragePosition, position.Value);
+        var docs = await _collection.Find(filter).ToListAsync();
         return docs.Select(ToModel);
     }
 
@@ -55,11 +59,14 @@ public class AllocationRepository : IAllocationRepository
     }
 
     public async Task<StorageAllocation> AddOrIncrementAsync(
-        Guid itemId, string itemType, Guid storageId, StorageType storageType, int quantity)
+        Guid itemId, string itemType, Guid storageId, StorageType storageType, int quantity, int? storagePosition = null)
     {
-        var existing = await _collection
-            .Find(x => x.ItemId == itemId && x.StorageId == storageId)
-            .FirstOrDefaultAsync();
+        var filter = Builders<StorageAllocationDocument>.Filter.And(
+            Builders<StorageAllocationDocument>.Filter.Eq(x => x.ItemId, itemId),
+            Builders<StorageAllocationDocument>.Filter.Eq(x => x.StorageId, storageId),
+            Builders<StorageAllocationDocument>.Filter.Eq(x => x.StoragePosition, storagePosition));
+
+        var existing = await _collection.Find(filter).FirstOrDefaultAsync();
 
         if (existing is not null)
         {
@@ -82,6 +89,7 @@ public class AllocationRepository : IAllocationRepository
             ItemId = itemId,
             ItemType = itemType,
             StorageId = storageId,
+            StoragePosition = storagePosition,
             StorageType = storageType.ToString(),
             Quantity = quantity,
             CreatedAt = now,
@@ -91,10 +99,14 @@ public class AllocationRepository : IAllocationRepository
         return ToModel(doc);
     }
 
-    public async Task<bool> RemoveByItemAndStorageAsync(Guid itemId, Guid storageId)
+    public async Task<bool> RemoveByItemAndStorageAsync(Guid itemId, Guid storageId, int? storagePosition = null)
     {
-        var result = await _collection.DeleteOneAsync(
-            x => x.ItemId == itemId && x.StorageId == storageId);
+        var filter = Builders<StorageAllocationDocument>.Filter.And(
+            Builders<StorageAllocationDocument>.Filter.Eq(x => x.ItemId, itemId),
+            Builders<StorageAllocationDocument>.Filter.Eq(x => x.StorageId, storageId));
+        if (storagePosition.HasValue)
+            filter &= Builders<StorageAllocationDocument>.Filter.Eq(x => x.StoragePosition, storagePosition.Value);
+        var result = await _collection.DeleteOneAsync(filter);
         return result.DeletedCount > 0;
     }
 
@@ -103,9 +115,19 @@ public class AllocationRepository : IAllocationRepository
         await _collection.DeleteManyAsync(x => x.ItemId == itemId);
     }
 
-    public async Task RemoveAllByStorageAsync(Guid storageId)
+    public async Task RemoveAllByStorageAsync(Guid storageId, int? position = null)
     {
-        await _collection.DeleteManyAsync(x => x.StorageId == storageId);
+        if (position.HasValue)
+        {
+            var filter = Builders<StorageAllocationDocument>.Filter.And(
+                Builders<StorageAllocationDocument>.Filter.Eq(x => x.StorageId, storageId),
+                Builders<StorageAllocationDocument>.Filter.Eq(x => x.StoragePosition, position.Value));
+            await _collection.DeleteManyAsync(filter);
+        }
+        else
+        {
+            await _collection.DeleteManyAsync(x => x.StorageId == storageId);
+        }
     }
 
     private static StorageAllocation ToModel(StorageAllocationDocument doc) => new()
@@ -114,6 +136,7 @@ public class AllocationRepository : IAllocationRepository
         ItemId = doc.ItemId,
         ItemType = doc.ItemType,
         StorageId = doc.StorageId,
+        StoragePosition = doc.StoragePosition,
         StorageType = Enum.Parse<StorageType>(doc.StorageType),
         Quantity = doc.Quantity,
         CreatedAt = new DateTimeOffset(DateTime.SpecifyKind(doc.CreatedAt, DateTimeKind.Utc)),

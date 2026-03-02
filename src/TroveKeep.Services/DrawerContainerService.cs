@@ -28,16 +28,16 @@ public class DrawerContainerService : IDrawerContainerService
         var containers = (await _containerRepo.GetAllAsync()).ToList();
         if (containers.Count == 0) return containers;
 
-        var allDrawerIds = containers.SelectMany(c => c.Drawers).Select(d => d.Id).ToList();
-        if (allDrawerIds.Count == 0) return containers;
-
-        var allAllocs = (await _allocationRepo.GetByStoragesAsync(allDrawerIds)).ToList();
-        var allocsByDrawer = allAllocs.GroupBy(a => a.StorageId).ToDictionary(g => g.Key, g => g.ToList());
+        var containerIds = containers.Select(c => c.Id).ToList();
+        var allAllocs = (await _allocationRepo.GetByStoragesAsync(containerIds)).ToList();
+        var allocsByDrawer = allAllocs
+            .GroupBy(a => (a.StorageId, a.StoragePosition))
+            .ToDictionary(g => g.Key, g => g.Count());
 
         foreach (var container in containers)
             foreach (var drawer in container.Drawers)
             {
-                var count = allocsByDrawer.GetValueOrDefault(drawer.Id)?.Count ?? 0;
+                var count = allocsByDrawer.GetValueOrDefault((container.Id, (int?)drawer.Position));
                 drawer.BulkPieces = Enumerable.Repeat(new BulkPiece(), count).ToList();
             }
 
@@ -50,12 +50,13 @@ public class DrawerContainerService : IDrawerContainerService
     {
         var container = await _containerRepo.GetByIdAsync(id);
         if (container is null) return null;
+        if (container.Drawers.Count == 0) return container;
 
-        var drawerIds = container.Drawers.Select(d => d.Id).ToList();
-        if (drawerIds.Count == 0) return container;
-
-        var allAllocs = (await _allocationRepo.GetByStoragesAsync(drawerIds)).ToList();
-        var allocsByDrawer = allAllocs.GroupBy(a => a.StorageId).ToDictionary(g => g.Key, g => g.ToList());
+        var allAllocs = (await _allocationRepo.GetByStorageAsync(id)).ToList();
+        var allocsByPosition = allAllocs
+            .Where(a => a.StoragePosition.HasValue)
+            .GroupBy(a => a.StoragePosition!.Value)
+            .ToDictionary(g => g.Key, g => g.ToList());
 
         var allPieceIds = allAllocs.Select(a => a.ItemId).Distinct().ToList();
         var pieces = allPieceIds.Count > 0
@@ -64,7 +65,7 @@ public class DrawerContainerService : IDrawerContainerService
 
         foreach (var drawer in container.Drawers)
         {
-            var drawerAllocs = allocsByDrawer.GetValueOrDefault(drawer.Id) ?? [];
+            var drawerAllocs = allocsByPosition.GetValueOrDefault(drawer.Position) ?? [];
             drawer.BulkPieces = drawerAllocs
                 .Select(a => pieces.GetValueOrDefault(a.ItemId))
                 .Where(p => p is not null)
@@ -75,19 +76,25 @@ public class DrawerContainerService : IDrawerContainerService
         return container;
     }
 
-    public Task<DrawerContainer> CreateAsync(DrawerContainer drawerContainer)
-        => _containerRepo.CreateAsync(drawerContainer);
+    public Task<DrawerContainer> CreateAsync(string name, string? description, int drawerCount)
+    {
+        var container = new DrawerContainer
+        {
+            Name = name,
+            Description = description,
+            Drawers = Enumerable.Range(1, drawerCount)
+                .Select(i => new Drawer { Position = i })
+                .ToList()
+        };
+        return _containerRepo.CreateAsync(container);
+    }
 
     public Task<DrawerContainer?> UpdateAsync(DrawerContainer drawerContainer)
         => _containerRepo.UpdateAsync(drawerContainer);
 
     public async Task<bool> DeleteAsync(Guid id)
     {
-        var container = await _containerRepo.GetByIdAsync(id);
-        if (container is not null)
-            foreach (var drawer in container.Drawers)
-                await _allocationRepo.RemoveAllByStorageAsync(drawer.Id);
-
+        await _allocationRepo.RemoveAllByStorageAsync(id);
         return await _containerRepo.DeleteAsync(id);
     }
 

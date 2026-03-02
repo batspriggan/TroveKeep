@@ -119,15 +119,15 @@ public class BulkPiecesController : ControllerBase
         }
     }
 
-    [HttpPost("{id:guid}/storage/drawer/{drawerId:guid}")]
+    [HttpPost("{id:guid}/storage/drawer/{containerId:guid}/{position:int}")]
     [ProducesResponseType(typeof(BulkPieceResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> AllocateToDrawer(Guid id, Guid drawerId, [FromBody] AllocateStorageRequest request)
+    public async Task<IActionResult> AllocateToDrawer(Guid id, Guid containerId, int position, [FromBody] AllocateStorageRequest request)
     {
         try
         {
-            var updated = await _service.AllocateToDrawerAsync(id, drawerId, request.Quantity);
+            var updated = await _service.AllocateToDrawerAsync(id, containerId, position, request.Quantity);
             if (updated is null) return NotFound();
             var colors = await BuildColorLookupAsync();
             return Ok(MapToResponse(updated, colors));
@@ -138,12 +138,23 @@ public class BulkPiecesController : ControllerBase
         }
     }
 
-    [HttpDelete("{id:guid}/storage/{storageId:guid}")]
+    [HttpDelete("{id:guid}/storage/box/{boxId:guid}")]
     [ProducesResponseType(typeof(BulkPieceResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> DeallocateStorage(Guid id, Guid storageId)
+    public async Task<IActionResult> DeallocateFromBox(Guid id, Guid boxId)
     {
-        var updated = await _service.DeallocateStorageAsync(id, storageId);
+        var updated = await _service.DeallocateFromBoxAsync(id, boxId);
+        if (updated is null) return NotFound();
+        var colors = await BuildColorLookupAsync();
+        return Ok(MapToResponse(updated, colors));
+    }
+
+    [HttpDelete("{id:guid}/storage/drawer/{containerId:guid}/{position:int}")]
+    [ProducesResponseType(typeof(BulkPieceResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> DeallocateFromDrawer(Guid id, Guid containerId, int position)
+    {
+        var updated = await _service.DeallocateFromDrawerAsync(id, containerId, position);
         if (updated is null) return NotFound();
         var colors = await BuildColorLookupAsync();
         return Ok(MapToResponse(updated, colors));
@@ -187,7 +198,7 @@ public class BulkPiecesController : ControllerBase
             p.Id, p.LegoId,
             p.LegoColorId, color.Name, color.Rgb,
             p.Description, p.Quantity, p.ImageCached,
-            p.StorageAllocations.Select(a => new StorageAllocationResponse(a.StorageId, a.StorageType.ToString(), a.Quantity)),
+            p.StorageAllocations.Select(a => new StorageAllocationResponse(a.StorageId, a.StoragePosition, a.StorageType.ToString(), a.Quantity)),
             p.CreatedAt, p.UpdatedAt);
     }
 }

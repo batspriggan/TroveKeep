@@ -17,20 +17,20 @@ public class DrawerService : IDrawerService
         _allocationRepo = allocationRepo;
     }
 
-    public async Task<Drawer?> GetByIdAsync(Guid id)
+    public async Task<Drawer?> GetByPositionAsync(Guid containerId, int position)
     {
-        var drawer = await _repo.GetByIdAsync(id);
+        var drawer = await _repo.GetByPositionAsync(containerId, position);
         if (drawer is null) return null;
         await EnrichWithCountAsync(drawer);
         return drawer;
     }
 
-    public async Task<Drawer?> GetByIdWithContentsAsync(Guid id)
+    public async Task<Drawer?> GetByPositionWithContentsAsync(Guid containerId, int position)
     {
-        var drawer = await _repo.GetByIdAsync(id);
+        var drawer = await _repo.GetByPositionAsync(containerId, position);
         if (drawer is null) return null;
 
-        var allocs = (await _allocationRepo.GetByStorageAsync(id)).ToList();
+        var allocs = (await _allocationRepo.GetByStorageAsync(containerId, position)).ToList();
         var pieceIds = allocs.Select(a => a.ItemId).ToList();
         var pieces = (await _pieceRepo.GetByIdsAsync(pieceIds)).ToList();
 
@@ -45,25 +45,23 @@ public class DrawerService : IDrawerService
 
     public async Task<Drawer?> UpdateAsync(Drawer drawer)
     {
-        // DrawerContainerId is not provided by the controller — preserve it from the existing record
-        var existing = await _repo.GetByIdAsync(drawer.Id);
+        var existing = await _repo.GetByPositionAsync(drawer.DrawerContainerId, drawer.Position);
         if (existing is null) return null;
-        drawer.DrawerContainerId = existing.DrawerContainerId;
         var updated = await _repo.UpdateAsync(drawer);
         if (updated is null) return null;
         await EnrichWithCountAsync(updated);
         return updated;
     }
 
-    public async Task<bool> DeleteAsync(Guid id)
+    public async Task<bool> DeleteAsync(Guid containerId, int position)
     {
-        await _allocationRepo.RemoveAllByStorageAsync(id);
-        return await _repo.DeleteAsync(id);
+        await _allocationRepo.RemoveAllByStorageAsync(containerId, position);
+        return await _repo.DeleteAsync(containerId, position);
     }
 
     private async Task EnrichWithCountAsync(Drawer drawer)
     {
-        var allocs = (await _allocationRepo.GetByStorageAsync(drawer.Id)).ToList();
+        var allocs = (await _allocationRepo.GetByStorageAsync(drawer.DrawerContainerId, drawer.Position)).ToList();
         drawer.BulkPieces = Enumerable.Repeat(new BulkPiece(), allocs.Count).ToList();
     }
 }

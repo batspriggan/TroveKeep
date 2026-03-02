@@ -11,6 +11,10 @@
         <label>Description</label>
         <input v-model="form.description" placeholder="Optional description" />
       </div>
+      <div class="form-field">
+        <label>Number of Drawers</label>
+        <input v-model="form.drawerCount" type="number" min="1" placeholder="Number of drawers in container" />
+      </div>
       <button class="primary" type="submit">Add Container</button>
     </form>
 
@@ -95,8 +99,8 @@ async function load() {
 async function submit() {
   error.value = ''
   try {
-    await createDrawerContainer({ name: form.value.name, description: form.value.description || null })
-    form.value = { name: '', description: '' }
+    await createDrawerContainer({ name: form.value.name, description: form.value.description || null, drawerCount: form.value.drawerCount || 0 })
+    form.value = { name: '', description: '', drawerCount: 0 }
     await load()
   } catch (e) {
     error.value = e.message

@@ -20,45 +20,45 @@ public class DrawersController : ControllerBase
         _colorRepo = colorRepo;
     }
 
-    [HttpGet("{id:guid}")]
+    [HttpGet("{containerId:guid}/{position:int}")]
     [ProducesResponseType(typeof(DrawerResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetById(Guid id)
+    public async Task<IActionResult> GetByPosition(Guid containerId, int position)
     {
-        var drawer = await _service.GetByIdAsync(id);
+        var drawer = await _service.GetByPositionAsync(containerId, position);
         if (drawer is null) return NotFound();
         return Ok(MapToResponse(drawer));
     }
 
-    [HttpGet("{id:guid}/contents")]
+    [HttpGet("{containerId:guid}/{position:int}/contents")]
     [ProducesResponseType(typeof(DrawerDetailResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetContents(Guid id)
+    public async Task<IActionResult> GetContents(Guid containerId, int position)
     {
-        var drawer = await _service.GetByIdWithContentsAsync(id);
+        var drawer = await _service.GetByPositionWithContentsAsync(containerId, position);
         if (drawer is null) return NotFound();
         var colors = await BuildColorLookupAsync();
         return Ok(MapToDetailResponse(drawer, colors));
     }
 
-    [HttpPut("{id:guid}")]
+    [HttpPut("{containerId:guid}/{position:int}")]
     [ProducesResponseType(typeof(DrawerResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    public async Task<IActionResult> Update(Guid id, [FromBody] UpdateDrawerRequest request)
+    public async Task<IActionResult> Update(Guid containerId, int position, [FromBody] UpdateDrawerRequest request)
     {
-        var model = new Drawer { Id = id, Position = request.Position, Label = request.Label };
+        var model = new Drawer { DrawerContainerId = containerId, Position = position, Label = request.Label };
         var updated = await _service.UpdateAsync(model);
         if (updated is null) return NotFound();
         return Ok(MapToResponse(updated));
     }
 
-    [HttpDelete("{id:guid}")]
+    [HttpDelete("{containerId:guid}/{position:int}")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> Delete(Guid id)
+    public async Task<IActionResult> Delete(Guid containerId, int position)
     {
-        var deleted = await _service.DeleteAsync(id);
+        var deleted = await _service.DeleteAsync(containerId, position);
         if (!deleted) return NotFound();
         return NoContent();
     }
@@ -70,17 +70,17 @@ public class DrawersController : ControllerBase
     }
 
     private static DrawerResponse MapToResponse(Drawer d) =>
-        new(d.Id, d.Position, d.Label, d.DrawerContainerId, d.BulkPieces.Count, null, d.CreatedAt, d.UpdatedAt);
+        new(d.Position, d.Label, d.DrawerContainerId, d.BulkPieces.Count, null, d.CreatedAt, d.UpdatedAt);
 
     private static DrawerDetailResponse MapToDetailResponse(Drawer d, Dictionary<int, (string Name, string Rgb)> colors) =>
-        new(d.Id, d.Position, d.Label, d.DrawerContainerId,
+        new(d.Position, d.Label, d.DrawerContainerId,
             d.BulkPieces.Select(p =>
             {
                 colors.TryGetValue(p.LegoColorId, out var color);
                 return new BulkPieceResponse(p.Id, p.LegoId,
                     p.LegoColorId, color.Name, color.Rgb,
                     p.Description, p.Quantity, p.ImageCached,
-                    p.StorageAllocations.Select(a => new StorageAllocationResponse(a.StorageId, a.StorageType.ToString(), a.Quantity)),
+                    p.StorageAllocations.Select(a => new StorageAllocationResponse(a.StorageId, a.StoragePosition, a.StorageType.ToString(), a.Quantity)),
                     p.CreatedAt, p.UpdatedAt);
             }),
             d.CreatedAt, d.UpdatedAt);

@@ -25,7 +25,7 @@ const routes = [
   { path: '/boxes/:id', component: BoxDetail },
   { path: '/drawercontainers', component: DrawerContainerList },
   { path: '/drawercontainers/:id', component: DrawerContainerDetail },
-  { path: '/drawers/:id', component: DrawerDetail },
+  { path: '/drawers/:containerId/:position', component: DrawerDetail },
   { path: '/search', component: SearchView },
   { path: '/archives', component: ArchivesView },
   { path: '/settings', component: SettingsView },

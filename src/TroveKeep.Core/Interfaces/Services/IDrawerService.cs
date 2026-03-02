@@ -4,8 +4,8 @@ namespace TroveKeep.Core.Interfaces.Services;
 
 public interface IDrawerService
 {
-    Task<Drawer?> GetByIdAsync(Guid id);
-    Task<Drawer?> GetByIdWithContentsAsync(Guid id);
+    Task<Drawer?> GetByPositionAsync(Guid containerId, int position);
+    Task<Drawer?> GetByPositionWithContentsAsync(Guid containerId, int position);
     Task<Drawer?> UpdateAsync(Drawer drawer);
-    Task<bool> DeleteAsync(Guid id);
+    Task<bool> DeleteAsync(Guid containerId, int position);
 }

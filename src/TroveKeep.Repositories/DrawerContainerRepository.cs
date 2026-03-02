@@ -8,34 +8,22 @@ namespace TroveKeep.Repositories;
 public class DrawerContainerRepository : IDrawerContainerRepository
 {
     private readonly IMongoCollection<DrawerContainerDocument> _containers;
-    private readonly IMongoCollection<DrawerDocument> _drawers;
 
     public DrawerContainerRepository(IMongoDatabase database)
     {
         _containers = database.GetCollection<DrawerContainerDocument>("drawercontainers");
-        _drawers = database.GetCollection<DrawerDocument>("drawers");
     }
 
     public async Task<IEnumerable<DrawerContainer>> GetAllAsync()
     {
-        var containerDocs = await _containers.Find(_ => true).ToListAsync();
-        if (containerDocs.Count == 0) return [];
-
-        var containerIds = containerDocs.Select(c => c.Id).ToList();
-        var drawerDocs = await _drawers.Find(x => containerIds.Contains(x.DrawerContainerId)).ToListAsync();
-        var drawersByContainer = drawerDocs.GroupBy(d => d.DrawerContainerId)
-            .ToDictionary(g => g.Key, g => g.ToList());
-
-        return containerDocs.Select(c => ToModel(c, drawersByContainer.GetValueOrDefault(c.Id) ?? []));
+        var docs = await _containers.Find(_ => true).ToListAsync();
+        return docs.Select(ToModel);
     }
 
     public async Task<DrawerContainer?> GetByIdAsync(Guid id)
     {
         var doc = await _containers.Find(x => x.Id == id).FirstOrDefaultAsync();
-        if (doc is null) return null;
-
-        var drawerDocs = await _drawers.Find(x => x.DrawerContainerId == id).ToListAsync();
-        return ToModel(doc, drawerDocs);
+        return doc is null ? null : ToModel(doc);
     }
 
     public async Task<DrawerContainer?> GetByIdWithDrawersAsync(Guid id)
@@ -45,13 +33,24 @@ public class DrawerContainerRepository : IDrawerContainerRepository
 
     public async Task<DrawerContainer> CreateAsync(DrawerContainer drawerContainer)
     {
-        var doc = ToDocument(drawerContainer);
-        doc.Id = Guid.NewGuid();
         var now = DateTime.UtcNow;
-        doc.CreatedAt = now;
-        doc.UpdatedAt = now;
+        var doc = new DrawerContainerDocument
+        {
+            Id = Guid.NewGuid(),
+            Name = drawerContainer.Name,
+            Description = drawerContainer.Description,
+            Drawers = drawerContainer.Drawers.Select(d => new DrawerDocument
+            {
+                Position = d.Position,
+                Label = d.Label,
+                CreatedAt = now,
+                UpdatedAt = now,
+            }).ToList(),
+            CreatedAt = now,
+            UpdatedAt = now,
+        };
         await _containers.InsertOneAsync(doc);
-        return ToModel(doc, []);
+        return ToModel(doc);
     }
 
     public async Task<DrawerContainer?> UpdateAsync(DrawerContainer drawerContainer)
@@ -59,13 +58,17 @@ public class DrawerContainerRepository : IDrawerContainerRepository
         var existing = await _containers.Find(x => x.Id == drawerContainer.Id).FirstOrDefaultAsync();
         if (existing is null) return null;
 
-        var doc = ToDocument(drawerContainer);
-        doc.CreatedAt = existing.CreatedAt;
-        doc.UpdatedAt = DateTime.UtcNow;
+        var doc = new DrawerContainerDocument
+        {
+            Id = drawerContainer.Id,
+            Name = drawerContainer.Name,
+            Description = drawerContainer.Description,
+            Drawers = existing.Drawers,
+            CreatedAt = existing.CreatedAt,
+            UpdatedAt = DateTime.UtcNow,
+        };
         await _containers.ReplaceOneAsync(x => x.Id == drawerContainer.Id, doc);
-
-        var drawerDocs = await _drawers.Find(x => x.DrawerContainerId == drawerContainer.Id).ToListAsync();
-        return ToModel(doc, drawerDocs);
+        return ToModel(doc);
     }
 
     public async Task<bool> DeleteAsync(Guid id)
@@ -79,33 +82,23 @@ public class DrawerContainerRepository : IDrawerContainerRepository
         var idList = ids.ToList();
         if (idList.Count == 0) return [];
         var docs = await _containers.Find(x => idList.Contains(x.Id)).ToListAsync();
-        return docs.Select(d => ToModel(d, []));
+        return docs.Select(ToModel);
     }
 
-    private static DrawerContainer ToModel(DrawerContainerDocument doc, List<DrawerDocument> drawerDocs) => new()
+    private static DrawerContainer ToModel(DrawerContainerDocument doc) => new()
     {
         Id = doc.Id,
         Name = doc.Name,
         Description = doc.Description,
         CreatedAt = new DateTimeOffset(DateTime.SpecifyKind(doc.CreatedAt, DateTimeKind.Utc)),
         UpdatedAt = new DateTimeOffset(DateTime.SpecifyKind(doc.UpdatedAt, DateTimeKind.Utc)),
-        Drawers = drawerDocs.Select(d => new Drawer
+        Drawers = doc.Drawers.Select(d => new Drawer
         {
-            Id = d.Id,
             Position = d.Position,
             Label = d.Label,
-            DrawerContainerId = d.DrawerContainerId,
+            DrawerContainerId = doc.Id,
             CreatedAt = new DateTimeOffset(DateTime.SpecifyKind(d.CreatedAt, DateTimeKind.Utc)),
             UpdatedAt = new DateTimeOffset(DateTime.SpecifyKind(d.UpdatedAt, DateTimeKind.Utc)),
         }).ToList(),
-    };
-
-    private static DrawerContainerDocument ToDocument(DrawerContainer model) => new()
-    {
-        Id = model.Id,
-        Name = model.Name,
-        Description = model.Description,
-        CreatedAt = model.CreatedAt.UtcDateTime,
-        UpdatedAt = model.UpdatedAt.UtcDateTime,
     };
 }

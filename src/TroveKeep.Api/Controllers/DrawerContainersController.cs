@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.OpenApi;
 using TroveKeep.Api.DTOs.Requests;
 using TroveKeep.Api.DTOs.Responses;
 using TroveKeep.Core.Interfaces.Services;
@@ -50,8 +51,7 @@ public class DrawerContainersController : ControllerBase
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> Create([FromBody] CreateDrawerContainerRequest request)
     {
-        var model = new DrawerContainer { Name = request.Name, Description = request.Description };
-        var created = await _service.CreateAsync(model);
+        var created = await _service.CreateAsync(request.Name, request.Description, request.DrawerCount);
         return CreatedAtAction(nameof(GetById), new { id = created.Id }, MapToResponse(created));
     }
 
@@ -91,7 +91,9 @@ public class DrawerContainersController : ControllerBase
         };
         var created = await _service.AddDrawerAsync(id, drawer);
         if (created is null) return NotFound();
-        return CreatedAtAction("GetById", "Drawers", new { id = created.Id }, MapDrawerToResponse(created));
+        return CreatedAtAction("GetByPosition", "Drawers",
+            new { containerId = created.DrawerContainerId, position = created.Position },
+            MapDrawerToResponse(created));
     }
 
     private static DrawerContainerResponse MapToResponse(DrawerContainer c) =>
@@ -103,7 +105,7 @@ public class DrawerContainersController : ControllerBase
             c.CreatedAt, c.UpdatedAt);
 
     private static DrawerResponse MapDrawerToResponse(Drawer d) =>
-        new(d.Id, d.Position, d.Label, d.DrawerContainerId, d.BulkPieces.Count,
+        new(d.Position, d.Label, d.DrawerContainerId, d.BulkPieces.Count,
             d.BulkPieces.Count > 0 ? d.BulkPieces.Select(p => p.LegoId) : null,
             d.CreatedAt, d.UpdatedAt);
 }

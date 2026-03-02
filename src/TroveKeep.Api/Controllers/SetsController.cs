@@ -136,6 +136,6 @@ public class SetsController : ControllerBase
 
     private static LegoSetResponse MapToResponse(LegoSet s) =>
         new(s.Id, s.SetNumber, s.Description, s.PhotoUrl, s.Quantity, s.ImageCached,
-            s.StorageAllocations.Select(a => new StorageAllocationResponse(a.StorageId, a.StorageType.ToString(), a.Quantity)),
+            s.StorageAllocations.Select(a => new StorageAllocationResponse(a.StorageId, a.StoragePosition, a.StorageType.ToString(), a.Quantity)),
             s.CreatedAt, s.UpdatedAt);
 }

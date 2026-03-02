@@ -1,7 +1,6 @@
 namespace TroveKeep.Api.DTOs.Responses;
 
 public record DrawerResponse(
-    Guid Id,
     int Position,
     string? Label,
     Guid DrawerContainerId,
@@ -11,7 +10,6 @@ public record DrawerResponse(
     DateTimeOffset UpdatedAt);
 
 public record DrawerDetailResponse(
-    Guid Id,
     int Position,
     string? Label,
     Guid DrawerContainerId,

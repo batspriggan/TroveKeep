@@ -9,7 +9,6 @@ public class SearchService : ISearchService
     private readonly ILegoSetRepository _setRepo;
     private readonly IBulkPieceRepository _pieceRepo;
     private readonly IBoxRepository _boxRepo;
-    private readonly IDrawerRepository _drawerRepo;
     private readonly IDrawerContainerRepository _containerRepo;
     private readonly IAllocationRepository _allocationRepo;
 
@@ -17,14 +16,12 @@ public class SearchService : ISearchService
         ILegoSetRepository setRepo,
         IBulkPieceRepository pieceRepo,
         IBoxRepository boxRepo,
-        IDrawerRepository drawerRepo,
         IDrawerContainerRepository containerRepo,
         IAllocationRepository allocationRepo)
     {
         _setRepo = setRepo;
         _pieceRepo = pieceRepo;
         _boxRepo = boxRepo;
-        _drawerRepo = drawerRepo;
         _containerRepo = containerRepo;
         _allocationRepo = allocationRepo;
     }
@@ -52,27 +49,19 @@ public class SearchService : ISearchService
 
         // Resolve storage names
         var boxIds = new HashSet<Guid>();
-        var drawerIds = new HashSet<Guid>();
+        var containerIds = new HashSet<Guid>();
         foreach (var alloc in allAllocs)
         {
             if (alloc.StorageType == StorageType.Box) boxIds.Add(alloc.StorageId);
-            else drawerIds.Add(alloc.StorageId);
+            else containerIds.Add(alloc.StorageId);
         }
 
         var boxesTask = _boxRepo.GetByIdsAsync(boxIds);
-        var drawersTask = _drawerRepo.GetByIdsAsync(drawerIds);
-        await Task.WhenAll(boxesTask, drawersTask);
+        var containersTask = _containerRepo.GetByIdsAsync(containerIds);
+        await Task.WhenAll(boxesTask, containersTask);
 
         var boxes = (await boxesTask).ToDictionary(b => b.Id);
-        var drawers = (await drawersTask).ToDictionary(d => d.Id);
-
-        Dictionary<Guid, DrawerContainer> containers = [];
-        if (drawers.Count > 0)
-        {
-            var containerIds = drawers.Values.Select(d => d.DrawerContainerId).Distinct();
-            var fetched = await _containerRepo.GetByIdsAsync(containerIds);
-            containers = fetched.ToDictionary(c => c.Id);
-        }
+        var containers = (await containersTask).ToDictionary(c => c.Id);
 
         return new SearchResult
         {
@@ -83,7 +72,7 @@ public class SearchService : ISearchService
                 Description = s.Description,
                 Quantity = s.Quantity,
                 Allocations = s.StorageAllocations
-                    .Select(a => ResolveAllocation(a, boxes, drawers, containers))
+                    .Select(a => ResolveAllocation(a, boxes, containers))
                     .ToList(),
             }),
             Pieces = pieces.Select(p => new PieceSearchResult
@@ -94,7 +83,7 @@ public class SearchService : ISearchService
                 Description = p.Description,
                 Quantity = p.Quantity,
                 Allocations = p.StorageAllocations
-                    .Select(a => ResolveAllocation(a, boxes, drawers, containers))
+                    .Select(a => ResolveAllocation(a, boxes, containers))
                     .ToList(),
             }),
         };
@@ -103,7 +92,6 @@ public class SearchService : ISearchService
     private static ResolvedAllocation ResolveAllocation(
         StorageAllocation alloc,
         Dictionary<Guid, Box> boxes,
-        Dictionary<Guid, Drawer> drawers,
         Dictionary<Guid, DrawerContainer> containers)
     {
         if (alloc.StorageType == StorageType.Box)
@@ -119,20 +107,16 @@ public class SearchService : ISearchService
         }
         else
         {
-            var drawer = drawers.GetValueOrDefault(alloc.StorageId);
-            var container = drawer is not null
-                ? containers.GetValueOrDefault(drawer.DrawerContainerId)
-                : null;
+            var container = containers.GetValueOrDefault(alloc.StorageId);
             return new ResolvedAllocation
             {
                 StorageId = alloc.StorageId,
                 StorageType = StorageType.Drawer,
-                StorageName = drawer is null ? "(unknown drawer)"
-                    : drawer.Label is not null ? drawer.Label
-                    : $"Drawer #{drawer.Position}",
-                DrawerContainerId = drawer?.DrawerContainerId,
+                StorageName = container is null ? $"(unknown container) Pos {alloc.StoragePosition}"
+                    : $"{container.Name} Pos {alloc.StoragePosition}",
+                DrawerContainerId = alloc.StorageId,
                 DrawerContainerName = container?.Name,
-                DrawerPosition = drawer?.Position,
+                DrawerPosition = alloc.StoragePosition,
                 Quantity = alloc.Quantity,
             };
         }

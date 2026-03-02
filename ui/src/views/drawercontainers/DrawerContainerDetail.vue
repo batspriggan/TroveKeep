@@ -36,10 +36,10 @@
             </tr>
           </thead>
           <tbody>
-            <tr v-for="d in drawers" :key="d.id">
+            <tr v-for="d in drawers" :key="d.position">
               <td>{{ d.position }}</td>
               <td>
-                <RouterLink :to="`/drawers/${d.id}`">
+                <RouterLink :to="`/drawers/${id}/${d.position}`">
                   {{ d.contentSummary?.join(', ') || '(empty)' }}
                 </RouterLink>
               </td>
@@ -197,7 +197,7 @@ function confirmDeleteDrawer(d) {
 async function doDeleteDrawer() {
   error.value = ''
   try {
-    await deleteDrawer(deleteDrawerTarget.value.id)
+    await deleteDrawer(id, deleteDrawerTarget.value.position)
     deleteDrawerTarget.value = null
     drawers.value = (await getDrawerContainerDrawers(id)).drawers
   } catch (e) {

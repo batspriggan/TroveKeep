@@ -4,10 +4,9 @@ namespace TroveKeep.Core.Interfaces.Repositories;
 
 public interface IDrawerRepository
 {
-    Task<Drawer?> GetByIdAsync(Guid id);
-    Task<Drawer?> GetByIdWithContentsAsync(Guid id);
+    Task<Drawer?> GetByPositionAsync(Guid containerId, int position);
+    Task<Drawer?> GetByPositionWithContentsAsync(Guid containerId, int position);
     Task<Drawer> CreateAsync(Drawer drawer);
     Task<Drawer?> UpdateAsync(Drawer drawer);
-    Task<bool> DeleteAsync(Guid id);
-    Task<IEnumerable<Drawer>> GetByIdsAsync(IEnumerable<Guid> ids);
+    Task<bool> DeleteAsync(Guid containerId, int position);
 }

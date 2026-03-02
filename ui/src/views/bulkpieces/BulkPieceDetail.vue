@@ -53,18 +53,18 @@
             </tr>
           </thead>
           <tbody>
-            <tr v-for="a in piece.storageAllocations" :key="a.storageId">
+            <tr v-for="a in piece.storageAllocations" :key="`${a.storageId}-${a.storagePosition ?? ''}`">
               <td>
                 <RouterLink v-if="a.storageType === 'Box'" :to="`/boxes/${a.storageId}`">
                   {{ boxNameMap[a.storageId] ?? a.storageId }}
                 </RouterLink>
-                <RouterLink v-else :to="`/drawers/${a.storageId}`">
-                  {{ drawerLabelMap[a.storageId] ?? a.storageId }}
+                <RouterLink v-else :to="`/drawers/${a.storageId}/${a.storagePosition}`">
+                  {{ containerNameMap[a.storageId] ? `${containerNameMap[a.storageId]} Pos ${a.storagePosition}` : a.storageId }}
                 </RouterLink>
               </td>
               <td>{{ a.storageType }}</td>
               <td>{{ a.quantity }}</td>
-              <td><button class="danger" @click="deallocate(a.storageId)">Remove</button></td>
+              <td><button class="danger" @click="deallocate(a)">Remove</button></td>
             </tr>
           </tbody>
         </table>
@@ -91,10 +91,10 @@
           <form class="form-row" style="width:100%; margin-top: 0.75rem" @submit.prevent="submitDrawerStorage">
             <div class="form-field">
               <label>Drawer</label>
-              <select v-model="selectedDrawerId">
-                <option value="">— select drawer —</option>
-                <option v-for="d in drawers" :key="d.id" :value="d.id">
-                  {{ d.label || `Position ${d.position}` }} ({{ d.drawerContainerId }})
+              <select v-model="selectedDrawer">
+                <option :value="null">— select drawer —</option>
+                <option v-for="d in drawers" :key="`${d.drawerContainerId}-${d.position}`" :value="d">
+                  {{ d.label || `Position ${d.position}` }} ({{ containerNameMap[d.drawerContainerId] ?? d.drawerContainerId }})
                 </option>
               </select>
             </div>
@@ -102,7 +102,7 @@
               <label>Qty</label>
               <input v-model.number="drawerAllocQty" type="number" min="1" required />
             </div>
-            <button class="primary" type="submit" :disabled="!selectedDrawerId || drawerAllocQty < 1">Allocate to Drawer</button>
+            <button class="primary" type="submit" :disabled="!selectedDrawer || drawerAllocQty < 1">Allocate to Drawer</button>
           </form>
         </fieldset>
 
@@ -137,7 +137,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   getBulkPiece, updateBulkPiece, deleteBulkPiece,
-  allocatePieceToBox, allocatePieceToDrawer, deallocatePieceStorage, clearPieceStorage,
+  allocatePieceToBox, allocatePieceToDrawer, deallocatePieceFromBox, deallocatePieceFromDrawer, clearPieceStorage,
 } from '../../api/bulkpieces.js'
 import { getAllBoxes } from '../../api/boxes.js'
 import { getAllDrawerContainers, getDrawerContainerDrawers } from '../../api/drawercontainers.js'
@@ -152,6 +152,7 @@ const id = route.params.id
 const piece = ref(null)
 const colors = ref([])
 const boxes = ref([])
+const containers = ref([])
 const drawers = ref([])
 const loading = ref(true)
 const error = ref('')
@@ -159,14 +160,13 @@ const editError = ref('')
 const storageError = ref('')
 const showConfirm = ref(false)
 const selectedBoxId = ref('')
-const selectedDrawerId = ref('')
+const selectedDrawer = ref(null)
 const boxAllocQty = ref(1)
 const drawerAllocQty = ref(1)
 const editForm = ref({ legoId: '', legoColorUid: '', description: '', quantity: 1 })
 
 const boxNameMap = computed(() => Object.fromEntries(boxes.value.map(b => [b.id, b.name])))
-const drawerLabelMap = computed(() =>
-  Object.fromEntries(drawers.value.map(d => [d.id, d.label || `Position ${d.position}`])))
+const containerNameMap = computed(() => Object.fromEntries(containers.value.map(c => [c.id, c.name])))
 
 const unallocated = computed(() => {
   if (!piece.value) return 0
@@ -187,6 +187,7 @@ async function load() {
     ])
     piece.value = p
     boxes.value = allBoxes
+    containers.value = allContainers
     colors.value = allColors
     const legoColorUid = allColors.find(c => c.id === p.legoColorId)?.uniqueId ?? ''
     editForm.value = { legoId: p.legoId, legoColorUid, description: p.description, quantity: p.quantity }
@@ -235,19 +236,22 @@ async function submitBoxStorage() {
 async function submitDrawerStorage() {
   storageError.value = ''
   try {
-    const updated = await allocatePieceToDrawer(id, selectedDrawerId.value, drawerAllocQty.value)
+    const updated = await allocatePieceToDrawer(
+      id, selectedDrawer.value.drawerContainerId, selectedDrawer.value.position, drawerAllocQty.value)
     piece.value = updated
-    selectedDrawerId.value = ''
+    selectedDrawer.value = null
     drawerAllocQty.value = 1
   } catch (e) {
     storageError.value = e.message
   }
 }
 
-async function deallocate(storageId) {
+async function deallocate(a) {
   storageError.value = ''
   try {
-    const updated = await deallocatePieceStorage(id, storageId)
+    const updated = a.storageType === 'Box'
+      ? await deallocatePieceFromBox(id, a.storageId)
+      : await deallocatePieceFromDrawer(id, a.storageId, a.storagePosition)
     piece.value = updated
   } catch (e) {
     storageError.value = e.message

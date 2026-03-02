@@ -2,7 +2,7 @@ import { get, put, del } from './client.js'
 
 const BASE = '/api/drawers'
 
-export const getDrawer = (id) => get(`${BASE}/${id}`)
-export const getDrawerContents = (id) => get(`${BASE}/${id}/contents`)
-export const updateDrawer = (id, body) => put(`${BASE}/${id}`, body)
-export const deleteDrawer = (id) => del(`${BASE}/${id}`)
+export const getDrawer = (containerId, position) => get(`${BASE}/${containerId}/${position}`)
+export const getDrawerContents = (containerId, position) => get(`${BASE}/${containerId}/${position}/contents`)
+export const updateDrawer = (containerId, position, body) => put(`${BASE}/${containerId}/${position}`, body)
+export const deleteDrawer = (containerId, position) => del(`${BASE}/${containerId}/${position}`)
