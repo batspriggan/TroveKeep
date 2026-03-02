@@ -6,6 +6,7 @@ public record DrawerResponse(
     string? Label,
     Guid DrawerContainerId,
     int BulkPieceCount,
+    IEnumerable<string>? ContentSummary,
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt);
 

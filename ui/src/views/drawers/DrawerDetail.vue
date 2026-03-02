@@ -8,7 +8,7 @@
     <p v-else-if="error" class="error">{{ error }}</p>
 
     <template v-else-if="drawer">
-      <h1>Drawer — Position {{ drawer.position }}<span v-if="drawer.label"> ({{ drawer.label }})</span></h1>
+      <h1>Drawer — Position {{ drawer.position }}<span v-if="contents.length"> ({{ contents.map(p => p.legoId).join(', ') }})</span></h1>
 
       <div class="card">
         <h2>Edit Drawer</h2>
@@ -16,10 +16,6 @@
           <div class="form-field">
             <label>Position *</label>
             <input v-model.number="editForm.position" type="number" min="1" required />
-          </div>
-          <div class="form-field">
-            <label>Label</label>
-            <input v-model="editForm.label" />
           </div>
           <button class="primary" type="submit">Save</button>
         </form>
@@ -82,7 +78,7 @@ const loading = ref(true)
 const error = ref('')
 const editError = ref('')
 const showConfirm = ref(false)
-const editForm = ref({ position: 1, label: '' })
+const editForm = ref({ position: 1 })
 
 async function load() {
   loading.value = true
@@ -91,7 +87,7 @@ async function load() {
     const detail = await getDrawerContents(id)
     drawer.value = detail
     contents.value = detail.bulkPieces ?? []
-    editForm.value = { position: detail.position, label: detail.label ?? '' }
+    editForm.value = { position: detail.position }
   } catch (e) {
     error.value = e.message
   } finally {
@@ -102,10 +98,7 @@ async function load() {
 async function submitEdit() {
   editError.value = ''
   try {
-    const updated = await updateDrawer(id, {
-      position: editForm.value.position,
-      label: editForm.value.label || null,
-    })
+    const updated = await updateDrawer(id, { position: editForm.value.position, label: null })
     drawer.value = { ...drawer.value, ...updated }
   } catch (e) {
     editError.value = e.message

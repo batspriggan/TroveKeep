@@ -70,7 +70,7 @@ public class DrawersController : ControllerBase
     }
 
     private static DrawerResponse MapToResponse(Drawer d) =>
-        new(d.Id, d.Position, d.Label, d.DrawerContainerId, d.BulkPieces.Count, d.CreatedAt, d.UpdatedAt);
+        new(d.Id, d.Position, d.Label, d.DrawerContainerId, d.BulkPieces.Count, null, d.CreatedAt, d.UpdatedAt);
 
     private static DrawerDetailResponse MapToDetailResponse(Drawer d, Dictionary<int, (string Name, string Rgb)> colors) =>
         new(d.Id, d.Position, d.Label, d.DrawerContainerId,

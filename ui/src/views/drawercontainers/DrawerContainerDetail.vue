@@ -30,7 +30,7 @@
           <thead>
             <tr>
               <th>Position</th>
-              <th>Label</th>
+              <th>Contents</th>
               <th>Bulk Pieces</th>
               <th></th>
             </tr>
@@ -39,7 +39,9 @@
             <tr v-for="d in drawers" :key="d.id">
               <td>{{ d.position }}</td>
               <td>
-                <RouterLink :to="`/drawers/${d.id}`">{{ d.label || '(no label)' }}</RouterLink>
+                <RouterLink :to="`/drawers/${d.id}`">
+                  {{ d.contentSummary?.join(', ') || '(empty)' }}
+                </RouterLink>
               </td>
               <td>{{ d.bulkPieceCount }}</td>
               <td>
@@ -56,13 +58,21 @@
             <label>Position *</label>
             <input v-model.number="drawerForm.position" type="number" min="1" required />
           </div>
-          <div class="form-field">
-            <label>Label</label>
-            <input v-model="drawerForm.label" placeholder="Optional label" />
-          </div>
           <button class="primary" type="submit">Add Drawer</button>
         </form>
         <p v-if="drawerError" class="error">{{ drawerError }}</p>
+
+        <h2 style="margin-top: 1rem">Add Drawers in Bulk</h2>
+        <form class="form-row" @submit.prevent="submitBulk">
+          <div class="form-field">
+            <label>Number of drawers *</label>
+            <input v-model.number="bulkCount" type="number" min="1" max="100" required />
+          </div>
+          <button class="primary" type="submit" :disabled="bulkAdding">
+            {{ bulkAdding ? 'Adding…' : 'Add Drawers' }}
+          </button>
+        </form>
+        <p v-if="bulkError" class="error">{{ bulkError }}</p>
       </div>
 
       <div class="card">
@@ -109,7 +119,10 @@ const drawerError = ref('')
 const showConfirm = ref(false)
 const deleteDrawerTarget = ref(null)
 const editForm = ref({ name: '', description: '' })
-const drawerForm = ref({ position: 1, label: '' })
+const drawerForm = ref({ position: 1 })
+const bulkCount = ref(1)
+const bulkError = ref('')
+const bulkAdding = ref(false)
 
 function nextPosition(drawerList) {
   if (!drawerList.length) return 1
@@ -126,7 +139,7 @@ async function load() {
     ])
     container.value = c
     drawers.value = d.drawers
-    drawerForm.value = { position: nextPosition(d.drawers), label: '' }
+    drawerForm.value = { position: nextPosition(d.drawers) }
     editForm.value = { name: c.name, description: c.description ?? '' }
   } catch (e) {
     error.value = e.message
@@ -151,14 +164,29 @@ async function submitEdit() {
 async function submitDrawer() {
   drawerError.value = ''
   try {
-    await addDrawer(id, {
-      position: drawerForm.value.position,
-      label: drawerForm.value.label || null,
-    })
+    await addDrawer(id, { position: drawerForm.value.position, label: null })
     drawers.value = (await getDrawerContainerDrawers(id)).drawers
-    drawerForm.value = { position: nextPosition(drawers.value), label: '' }
+    drawerForm.value = { position: nextPosition(drawers.value) }
   } catch (e) {
     drawerError.value = e.message
+  }
+}
+
+async function submitBulk() {
+  bulkError.value = ''
+  bulkAdding.value = true
+  try {
+    let start = nextPosition(drawers.value)
+    for (let i = 0; i < bulkCount.value; i++) {
+      await addDrawer(id, { position: start + i, label: null })
+    }
+    drawers.value = (await getDrawerContainerDrawers(id)).drawers
+    drawerForm.value = { position: nextPosition(drawers.value), label: '' }
+    bulkCount.value = 1
+  } catch (e) {
+    bulkError.value = e.message
+  } finally {
+    bulkAdding.value = false
   }
 }
 

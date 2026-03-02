@@ -103,5 +103,7 @@ public class DrawerContainersController : ControllerBase
             c.CreatedAt, c.UpdatedAt);
 
     private static DrawerResponse MapDrawerToResponse(Drawer d) =>
-        new(d.Id, d.Position, d.Label, d.DrawerContainerId, d.BulkPieces.Count, d.CreatedAt, d.UpdatedAt);
+        new(d.Id, d.Position, d.Label, d.DrawerContainerId, d.BulkPieces.Count,
+            d.BulkPieces.Count > 0 ? d.BulkPieces.Select(p => p.LegoId) : null,
+            d.CreatedAt, d.UpdatedAt);
 }
