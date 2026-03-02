@@ -102,6 +102,7 @@ public class DrawerContainerService : IDrawerContainerService
     {
         var container = await _containerRepo.GetByIdAsync(containerId);
         if (container is null) return null;
+        if(container.Drawers.Any(d => d.Position == drawer.Position)) return null;
         return await _drawerRepo.CreateAsync(drawer);
     }
 }

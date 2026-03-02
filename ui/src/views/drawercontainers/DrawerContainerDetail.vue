@@ -62,17 +62,6 @@
         </form>
         <p v-if="drawerError" class="error">{{ drawerError }}</p>
 
-        <h2 style="margin-top: 1rem">Add Drawers in Bulk</h2>
-        <form class="form-row" @submit.prevent="submitBulk">
-          <div class="form-field">
-            <label>Number of drawers *</label>
-            <input v-model.number="bulkCount" type="number" min="1" max="100" required />
-          </div>
-          <button class="primary" type="submit" :disabled="bulkAdding">
-            {{ bulkAdding ? 'Adding…' : 'Add Drawers' }}
-          </button>
-        </form>
-        <p v-if="bulkError" class="error">{{ bulkError }}</p>
       </div>
 
       <div class="card">
@@ -120,9 +109,6 @@ const showConfirm = ref(false)
 const deleteDrawerTarget = ref(null)
 const editForm = ref({ name: '', description: '' })
 const drawerForm = ref({ position: 1 })
-const bulkCount = ref(1)
-const bulkError = ref('')
-const bulkAdding = ref(false)
 
 function nextPosition(drawerList) {
   if (!drawerList.length) return 1
@@ -169,24 +155,6 @@ async function submitDrawer() {
     drawerForm.value = { position: nextPosition(drawers.value) }
   } catch (e) {
     drawerError.value = e.message
-  }
-}
-
-async function submitBulk() {
-  bulkError.value = ''
-  bulkAdding.value = true
-  try {
-    let start = nextPosition(drawers.value)
-    for (let i = 0; i < bulkCount.value; i++) {
-      await addDrawer(id, { position: start + i, label: null })
-    }
-    drawers.value = (await getDrawerContainerDrawers(id)).drawers
-    drawerForm.value = { position: nextPosition(drawers.value), label: '' }
-    bulkCount.value = 1
-  } catch (e) {
-    bulkError.value = e.message
-  } finally {
-    bulkAdding.value = false
   }
 }
 
