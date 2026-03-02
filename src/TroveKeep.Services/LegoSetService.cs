@@ -41,7 +41,13 @@ public class LegoSetService : ILegoSetService
 
     public Task<LegoSet> CreateAsync(LegoSet legoSet) => _setRepo.CreateAsync(legoSet);
 
-    public Task<LegoSet?> UpdateAsync(LegoSet legoSet) => _setRepo.UpdateAsync(legoSet);
+    public async Task<LegoSet?> UpdateAsync(LegoSet legoSet)
+    {
+        var updated = await _setRepo.UpdateAsync(legoSet);
+        if (updated is null) return null;
+        updated.StorageAllocations = (await _allocationRepo.GetByItemAsync(updated.Id)).ToList();
+        return updated;
+    }
 
     public async Task<bool> DeleteAsync(Guid id)
     {

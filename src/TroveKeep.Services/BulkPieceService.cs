@@ -47,7 +47,13 @@ public class BulkPieceService : IBulkPieceService
 
     public Task<BulkPiece> CreateAsync(BulkPiece bulkPiece) => _pieceRepo.CreateAsync(bulkPiece);
 
-    public Task<BulkPiece?> UpdateAsync(BulkPiece bulkPiece) => _pieceRepo.UpdateAsync(bulkPiece);
+    public async Task<BulkPiece?> UpdateAsync(BulkPiece bulkPiece)
+    {
+        var updated = await _pieceRepo.UpdateAsync(bulkPiece);
+        if (updated is null) return null;
+        updated.StorageAllocations = (await _allocationRepo.GetByItemAsync(updated.Id)).ToList();
+        return updated;
+    }
 
     public async Task<bool> DeleteAsync(Guid id)
     {
