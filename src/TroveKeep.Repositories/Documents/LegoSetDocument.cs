@@ -15,7 +15,6 @@ public class LegoSetDocument
     public string? PhotoUrl { get; set; }
     public int Quantity { get; set; } = 1;
     public bool ImageCached { get; set; }
-    public List<StorageAllocationDocument> StorageAllocations { get; set; } = [];
 
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }

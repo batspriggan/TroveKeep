@@ -80,7 +80,7 @@ public class DrawersController : ControllerBase
                 return new BulkPieceResponse(p.Id, p.LegoId,
                     p.LegoColorId, color.Name, color.Rgb,
                     p.Description, p.Quantity, p.ImageCached,
-                    p.StorageAllocations.Select(a => new StorageAllocationResponse(a.StorageId, a.Type.ToString(), a.Quantity)),
+                    p.StorageAllocations.Select(a => new StorageAllocationResponse(a.StorageId, a.StorageType.ToString(), a.Quantity)),
                     p.CreatedAt, p.UpdatedAt);
             }),
             d.CreatedAt, d.UpdatedAt);

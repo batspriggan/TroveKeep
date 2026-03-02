@@ -93,7 +93,7 @@ public class BoxesController : ControllerBase
     private static BoxDetailResponse MapToDetailResponse(Box b, Dictionary<int, (string Name, string Rgb)> colors) =>
         new(b.Id, b.Name, b.PhotoUrl,
             b.Sets.Select(s => new LegoSetResponse(s.Id, s.SetNumber, s.Description, s.PhotoUrl, s.Quantity, s.ImageCached,
-                s.StorageAllocations.Select(a => new StorageAllocationResponse(a.StorageId, a.Type.ToString(), a.Quantity)),
+                s.StorageAllocations.Select(a => new StorageAllocationResponse(a.StorageId, a.StorageType.ToString(), a.Quantity)),
                 s.CreatedAt, s.UpdatedAt)),
             b.BulkPieces.Select(p =>
             {
@@ -101,7 +101,7 @@ public class BoxesController : ControllerBase
                 return new BulkPieceResponse(p.Id, p.LegoId,
                     p.LegoColorId, color.Name, color.Rgb,
                     p.Description, p.Quantity, p.ImageCached,
-                    p.StorageAllocations.Select(a => new StorageAllocationResponse(a.StorageId, a.Type.ToString(), a.Quantity)),
+                    p.StorageAllocations.Select(a => new StorageAllocationResponse(a.StorageId, a.StorageType.ToString(), a.Quantity)),
                     p.CreatedAt, p.UpdatedAt);
             }),
             b.CreatedAt, b.UpdatedAt);

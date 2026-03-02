@@ -9,13 +9,11 @@ public class DrawerContainerRepository : IDrawerContainerRepository
 {
     private readonly IMongoCollection<DrawerContainerDocument> _containers;
     private readonly IMongoCollection<DrawerDocument> _drawers;
-    private readonly IMongoCollection<BulkPieceDocument> _bulkPieces;
 
     public DrawerContainerRepository(IMongoDatabase database)
     {
         _containers = database.GetCollection<DrawerContainerDocument>("drawercontainers");
         _drawers = database.GetCollection<DrawerDocument>("drawers");
-        _bulkPieces = database.GetCollection<BulkPieceDocument>("bulkpieces");
     }
 
     public async Task<IEnumerable<DrawerContainer>> GetAllAsync()
@@ -25,12 +23,10 @@ public class DrawerContainerRepository : IDrawerContainerRepository
 
         var containerIds = containerDocs.Select(c => c.Id).ToList();
         var drawerDocs = await _drawers.Find(x => containerIds.Contains(x.DrawerContainerId)).ToListAsync();
-        var drawersByContainer = drawerDocs.GroupBy(d => d.DrawerContainerId).ToDictionary(g => g.Key, g => g.ToList());
+        var drawersByContainer = drawerDocs.GroupBy(d => d.DrawerContainerId)
+            .ToDictionary(g => g.Key, g => g.ToList());
 
-        var allDrawerIds = drawerDocs.Select(d => d.Id).ToList();
-        var pieceCountByDrawer = await LoadPieceLegoIdsByDrawerAsync(allDrawerIds);
-
-        return containerDocs.Select(c => ToModel(c, drawersByContainer.GetValueOrDefault(c.Id) ?? [], pieceCountByDrawer));
+        return containerDocs.Select(c => ToModel(c, drawersByContainer.GetValueOrDefault(c.Id) ?? []));
     }
 
     public async Task<DrawerContainer?> GetByIdAsync(Guid id)
@@ -39,8 +35,7 @@ public class DrawerContainerRepository : IDrawerContainerRepository
         if (doc is null) return null;
 
         var drawerDocs = await _drawers.Find(x => x.DrawerContainerId == id).ToListAsync();
-        var pieceCountByDrawer = await LoadPieceLegoIdsByDrawerAsync(drawerDocs.Select(d => d.Id).ToList());
-        return ToModel(doc, drawerDocs, pieceCountByDrawer);
+        return ToModel(doc, drawerDocs);
     }
 
     public async Task<DrawerContainer?> GetByIdWithDrawersAsync(Guid id)
@@ -56,7 +51,7 @@ public class DrawerContainerRepository : IDrawerContainerRepository
         doc.CreatedAt = now;
         doc.UpdatedAt = now;
         await _containers.InsertOneAsync(doc);
-        return ToModel(doc, [], []);
+        return ToModel(doc, []);
     }
 
     public async Task<DrawerContainer?> UpdateAsync(DrawerContainer drawerContainer)
@@ -70,8 +65,7 @@ public class DrawerContainerRepository : IDrawerContainerRepository
         await _containers.ReplaceOneAsync(x => x.Id == drawerContainer.Id, doc);
 
         var drawerDocs = await _drawers.Find(x => x.DrawerContainerId == drawerContainer.Id).ToListAsync();
-        var pieceCountByDrawer = await LoadPieceLegoIdsByDrawerAsync(drawerDocs.Select(d => d.Id).ToList());
-        return ToModel(doc, drawerDocs, pieceCountByDrawer);
+        return ToModel(doc, drawerDocs);
     }
 
     public async Task<bool> DeleteAsync(Guid id)
@@ -85,29 +79,10 @@ public class DrawerContainerRepository : IDrawerContainerRepository
         var idList = ids.ToList();
         if (idList.Count == 0) return [];
         var docs = await _containers.Find(x => idList.Contains(x.Id)).ToListAsync();
-        return docs.Select(d => ToModel(d, [], []));
+        return docs.Select(d => ToModel(d, []));
     }
 
-    private async Task<Dictionary<Guid, List<string>>> LoadPieceLegoIdsByDrawerAsync(List<Guid> drawerIds)
-    {
-        if (drawerIds.Count == 0) return [];
-        var filter = Builders<BulkPieceDocument>.Filter.ElemMatch(
-            x => x.StorageAllocations,
-            a => a.StorageType == "Drawer" && drawerIds.Contains(a.StorageId));
-        var pieces = await _bulkPieces.Find(filter).ToListAsync();
-        var result = new Dictionary<Guid, List<string>>();
-        foreach (var piece in pieces)
-            foreach (var alloc in piece.StorageAllocations)
-                if (alloc.StorageType == "Drawer" && drawerIds.Contains(alloc.StorageId))
-                {
-                    if (!result.TryGetValue(alloc.StorageId, out var list))
-                        result[alloc.StorageId] = list = [];
-                    list.Add(piece.LegoId);
-                }
-        return result;
-    }
-
-    private static DrawerContainer ToModel(DrawerContainerDocument doc, List<DrawerDocument> drawerDocs, Dictionary<Guid, List<string>> pieceLegoIdsByDrawer) => new()
+    private static DrawerContainer ToModel(DrawerContainerDocument doc, List<DrawerDocument> drawerDocs) => new()
     {
         Id = doc.Id,
         Name = doc.Name,
@@ -120,8 +95,6 @@ public class DrawerContainerRepository : IDrawerContainerRepository
             Position = d.Position,
             Label = d.Label,
             DrawerContainerId = d.DrawerContainerId,
-            BulkPieces = (pieceLegoIdsByDrawer.GetValueOrDefault(d.Id) ?? [])
-                .Select(legoId => new BulkPiece { LegoId = legoId }).ToList(),
             CreatedAt = new DateTimeOffset(DateTime.SpecifyKind(d.CreatedAt, DateTimeKind.Utc)),
             UpdatedAt = new DateTimeOffset(DateTime.SpecifyKind(d.UpdatedAt, DateTimeKind.Utc)),
         }).ToList(),

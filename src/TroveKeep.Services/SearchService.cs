@@ -11,19 +11,22 @@ public class SearchService : ISearchService
     private readonly IBoxRepository _boxRepo;
     private readonly IDrawerRepository _drawerRepo;
     private readonly IDrawerContainerRepository _containerRepo;
+    private readonly IAllocationRepository _allocationRepo;
 
     public SearchService(
         ILegoSetRepository setRepo,
         IBulkPieceRepository pieceRepo,
         IBoxRepository boxRepo,
         IDrawerRepository drawerRepo,
-        IDrawerContainerRepository containerRepo)
+        IDrawerContainerRepository containerRepo,
+        IAllocationRepository allocationRepo)
     {
         _setRepo = setRepo;
         _pieceRepo = pieceRepo;
         _boxRepo = boxRepo;
         _drawerRepo = drawerRepo;
         _containerRepo = containerRepo;
+        _allocationRepo = allocationRepo;
     }
 
     public async Task<SearchResult> SearchAsync(string query)
@@ -35,12 +38,24 @@ public class SearchService : ISearchService
         var sets = (await setsTask).ToList();
         var pieces = (await piecesTask).ToList();
 
+        // Batch fetch allocations for all found items
+        var allItemIds = sets.Select(s => s.Id).Concat(pieces.Select(p => p.Id)).ToList();
+        var allAllocs = allItemIds.Count > 0
+            ? (await _allocationRepo.GetByItemsAsync(allItemIds)).ToList()
+            : [];
+
+        var allocsByItem = allAllocs.GroupBy(a => a.ItemId).ToDictionary(g => g.Key, g => g.ToList());
+        foreach (var set in sets)
+            set.StorageAllocations = allocsByItem.GetValueOrDefault(set.Id) ?? [];
+        foreach (var piece in pieces)
+            piece.StorageAllocations = allocsByItem.GetValueOrDefault(piece.Id) ?? [];
+
+        // Resolve storage names
         var boxIds = new HashSet<Guid>();
         var drawerIds = new HashSet<Guid>();
-        foreach (var alloc in sets.SelectMany(s => s.StorageAllocations)
-            .Concat(pieces.SelectMany(p => p.StorageAllocations)))
+        foreach (var alloc in allAllocs)
         {
-            if (alloc.Type == StorageType.Box) boxIds.Add(alloc.StorageId);
+            if (alloc.StorageType == StorageType.Box) boxIds.Add(alloc.StorageId);
             else drawerIds.Add(alloc.StorageId);
         }
 
@@ -91,7 +106,7 @@ public class SearchService : ISearchService
         Dictionary<Guid, Drawer> drawers,
         Dictionary<Guid, DrawerContainer> containers)
     {
-        if (alloc.Type == StorageType.Box)
+        if (alloc.StorageType == StorageType.Box)
         {
             var box = boxes.GetValueOrDefault(alloc.StorageId);
             return new ResolvedAllocation

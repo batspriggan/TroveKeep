@@ -22,6 +22,7 @@ builder.Services.AddSingleton<IMongoDatabase>(sp =>
     sp.GetRequiredService<IMongoClient>().GetDatabase(mongoSettings.DatabaseName));
 
 // Repositories
+builder.Services.AddScoped<IAllocationRepository, AllocationRepository>();
 builder.Services.AddScoped<ILegoSetRepository, LegoSetRepository>();
 builder.Services.AddScoped<IBulkPieceRepository, BulkPieceRepository>();
 builder.Services.AddScoped<IBoxRepository, BoxRepository>();

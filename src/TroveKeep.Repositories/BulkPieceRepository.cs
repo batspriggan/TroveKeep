@@ -27,6 +27,14 @@ public class BulkPieceRepository : IBulkPieceRepository
         return doc is null ? null : ToModel(doc);
     }
 
+    public async Task<IEnumerable<BulkPiece>> GetByIdsAsync(IEnumerable<Guid> ids)
+    {
+        var idList = ids.ToList();
+        if (idList.Count == 0) return [];
+        var docs = await _collection.Find(x => idList.Contains(x.Id)).ToListAsync();
+        return docs.Select(ToModel);
+    }
+
     public async Task<BulkPiece> CreateAsync(BulkPiece bulkPiece)
     {
         var doc = ToDocument(bulkPiece);
@@ -44,7 +52,6 @@ public class BulkPieceRepository : IBulkPieceRepository
         if (existing is null) return null;
 
         var doc = ToDocument(bulkPiece);
-        doc.StorageAllocations = existing.StorageAllocations;
         doc.ImageCached = existing.ImageCached;
         doc.CreatedAt = existing.CreatedAt;
         doc.UpdatedAt = DateTime.UtcNow;
@@ -58,53 +65,6 @@ public class BulkPieceRepository : IBulkPieceRepository
         return result.DeletedCount > 0;
     }
 
-    public async Task<BulkPiece?> AddStorageAsync(Guid id, Guid storageId, StorageType type, int quantity)
-    {
-        var typeStr = type.ToString();
-        var options = new FindOneAndUpdateOptions<BulkPieceDocument> { ReturnDocument = ReturnDocument.After };
-
-        // Try to increment an existing allocation for this storageId+type
-        var matchFilter = Builders<BulkPieceDocument>.Filter.And(
-            Builders<BulkPieceDocument>.Filter.Eq(x => x.Id, id),
-            Builders<BulkPieceDocument>.Filter.ElemMatch(x => x.StorageAllocations,
-                a => a.StorageId == storageId && a.StorageType == typeStr));
-        var incUpdate = Builders<BulkPieceDocument>.Update
-            .Inc("StorageAllocations.$.Quantity", quantity)
-            .Set(x => x.UpdatedAt, DateTime.UtcNow);
-
-        var doc = await _collection.FindOneAndUpdateAsync(matchFilter, incUpdate, options);
-        if (doc is not null) return ToModel(doc);
-
-        // No existing allocation — push a new entry
-        var newAlloc = new StorageAllocationDocument { StorageId = storageId, StorageType = typeStr, Quantity = quantity };
-        var pushUpdate = Builders<BulkPieceDocument>.Update
-            .Push(x => x.StorageAllocations, newAlloc)
-            .Set(x => x.UpdatedAt, DateTime.UtcNow);
-
-        doc = await _collection.FindOneAndUpdateAsync(x => x.Id == id, pushUpdate, options);
-        return doc is null ? null : ToModel(doc);
-    }
-
-    public async Task<BulkPiece?> RemoveStorageAsync(Guid id, Guid storageId)
-    {
-        var update = Builders<BulkPieceDocument>.Update
-            .PullFilter(x => x.StorageAllocations, a => a.StorageId == storageId)
-            .Set(x => x.UpdatedAt, DateTime.UtcNow);
-        var options = new FindOneAndUpdateOptions<BulkPieceDocument> { ReturnDocument = ReturnDocument.After };
-        var doc = await _collection.FindOneAndUpdateAsync(x => x.Id == id, update, options);
-        return doc is null ? null : ToModel(doc);
-    }
-
-    public async Task<BulkPiece?> ClearStorageAsync(Guid id)
-    {
-        var update = Builders<BulkPieceDocument>.Update
-            .Set(x => x.StorageAllocations, new List<StorageAllocationDocument>())
-            .Set(x => x.UpdatedAt, DateTime.UtcNow);
-        var options = new FindOneAndUpdateOptions<BulkPieceDocument> { ReturnDocument = ReturnDocument.After };
-        var doc = await _collection.FindOneAndUpdateAsync(x => x.Id == id, update, options);
-        return doc is null ? null : ToModel(doc);
-    }
-
     public async Task<IEnumerable<BulkPiece>> SearchAsync(string query)
     {
         var regex = new BsonRegularExpression(query, "i");
@@ -114,6 +74,7 @@ public class BulkPieceRepository : IBulkPieceRepository
         var docs = await _collection.Find(filter).ToListAsync();
         return docs.Select(ToModel);
     }
+
     public async Task UpdateImageCachedAsync(Guid id)
     {
         var filter = Builders<BulkPieceDocument>.Filter.Eq(x => x.Id, id);
@@ -128,12 +89,6 @@ public class BulkPieceRepository : IBulkPieceRepository
         LegoColorId = doc.LegoColorId,
         Description = doc.Description,
         Quantity = doc.Quantity,
-        StorageAllocations = doc.StorageAllocations.Select(a => new StorageAllocation
-        {
-            StorageId = a.StorageId,
-            Type = Enum.Parse<StorageType>(a.StorageType),
-            Quantity = a.Quantity,
-        }).ToList(),
         CreatedAt = new DateTimeOffset(DateTime.SpecifyKind(doc.CreatedAt, DateTimeKind.Utc)),
         UpdatedAt = new DateTimeOffset(DateTime.SpecifyKind(doc.UpdatedAt, DateTimeKind.Utc)),
         ImageCached = doc.ImageCached,
@@ -146,12 +101,6 @@ public class BulkPieceRepository : IBulkPieceRepository
         LegoColorId = model.LegoColorId,
         Description = model.Description,
         Quantity = model.Quantity,
-        StorageAllocations = model.StorageAllocations.Select(a => new StorageAllocationDocument
-        {
-            StorageId = a.StorageId,
-            StorageType = a.Type.ToString(),
-            Quantity = a.Quantity,
-        }).ToList(),
         CreatedAt = model.CreatedAt.UtcDateTime,
         UpdatedAt = model.UpdatedAt.UtcDateTime,
         ImageCached = model.ImageCached,
