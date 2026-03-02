@@ -16,7 +16,7 @@ A self-hosted inventory manager for Lego collections. Track sets and bulk pieces
 ## Tech stack
 
 | Layer | Technology |
-|---|---|
+| --- | --- |
 | Backend | .NET 10, ASP.NET Core, MongoDB |
 | Frontend | Vue 3, Vite, Vue Router 4 |
 | Database | MongoDB |
@@ -57,9 +57,56 @@ npm run build   # output in ui/dist/
 
 Serve `ui/dist/` as static files alongside the API, or configure ASP.NET Core to serve it directly.
 
+## Deployment
+
+Compose files for Docker and Podman are provided in the `deploy/` directory. Two variants exist for each runtime:
+
+| File | Description |
+| --- | --- |
+| `docker-compose.image.yml` | Pull the pre-built image from the registry |
+| `docker-compose.build.yml` | Build the image locally from source |
+| `podman-compose.image.yml` | Pull the pre-built image (Podman) |
+| `podman-compose.build.yml` | Build locally (Podman) |
+
+Both variants include an optional MongoDB service. If you already have a MongoDB instance running, remove the `mongo` service block and update `MongoDb__ConnectionString` accordingly.
+
+Note : the prebuild images is on the way, I am still setting up the pipeline.
+
+### Using the pre-built image (recommended)
+
+```bash
+# Docker
+docker compose -f deploy/docker-compose.image.yml up -d
+
+# Podman
+podman-compose -f deploy/podman-compose.image.yml up -d
+```
+
+The app is available at `http://localhost:8080`.
+
+### Building from source
+
+```bash
+# Docker
+docker compose -f deploy/docker-compose.build.yml up -d --build
+
+# Podman
+podman-compose -f deploy/podman-compose.build.yml up -d --build
+```
+
+### Environment variables
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `ASPNETCORE_ENVIRONMENT` | `Production` | ASP.NET Core environment |
+| `MongoDb__ConnectionString` | `mongodb://admin:password@mongo:27017` | MongoDB connection string |
+| `MongoDb__DatabaseName` | `trovekeep` | MongoDB database name |
+
+> **Note:** Change the default MongoDB credentials before exposing the instance to a network.
+
 ## Project structure
 
-```
+```text
 src/
 ├── TroveKeep.Core/          Domain models and interfaces
 ├── TroveKeep.Services/      Business logic
