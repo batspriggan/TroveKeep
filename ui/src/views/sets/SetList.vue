@@ -41,7 +41,7 @@
           <th>Set Number</th>
           <th>Description</th>
           <th>Qty</th>
-          <th>Box</th>
+          <th class="mobile-hide">Box</th>
           <th></th>
         </tr>
       </thead>
@@ -55,7 +55,7 @@
           </td>
           <td>{{ s.description }}</td>
           <td>{{ s.quantity }}</td>
-          <td>{{ (s.storageAllocations && s.storageAllocations.length) ? `${s.storageAllocations.length} location(s)` : '—' }}</td>
+          <td class="mobile-hide">{{ (s.storageAllocations && s.storageAllocations.length) ? `${s.storageAllocations.length} location(s)` : '—' }}</td>
           <td>
             <button class="danger" @click="confirmDelete(s)">Delete</button>
           </td>
@@ -193,5 +193,9 @@ onMounted(load)
   width: 36px;
   height: 36px;
   object-fit: contain;
+}
+
+@media (max-width: 640px) {
+  .mobile-hide { display: none; }
 }
 </style>

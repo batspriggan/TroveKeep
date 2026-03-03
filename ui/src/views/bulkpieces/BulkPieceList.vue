@@ -36,18 +36,18 @@
     <table>
       <thead>
         <tr>
-          <th class="thumb-col"></th>
+          <th class="thumb-col mobile-hide"></th>
           <th>Lego ID</th>
           <th>Color</th>
-          <th>Description</th>
+          <th class="mobile-hide">Description</th>
           <th>Qty</th>
-          <th>Storage</th>
+          <th class="mobile-hide">Storage</th>
           <th></th>
         </tr>
       </thead>
       <tbody>
         <tr v-for="p in filteredPieces" :key="p.id">
-          <td class="thumb-col">
+          <td class="thumb-col mobile-hide">
             <img v-if="p.imageCached" :src="`/api/bulkpieces/${p.id}/image`" class="list-thumb" alt="" />
           </td>
           <td>
@@ -57,9 +57,9 @@
             <span v-if="p.legoColorRgb" class="swatch" :style="{ background: '#' + p.legoColorRgb }"></span>
             <span>{{ p.legoColorName ?? `#${p.legoColorId}` }}</span>
           </td>
-          <td>{{ p.description }}</td>
+          <td class="mobile-hide">{{ p.description }}</td>
           <td>{{ p.quantity }}</td>
-          <td>{{ (p.storageAllocations && p.storageAllocations.length) ? `${p.storageAllocations.length} location(s)` : '—' }}</td>
+          <td class="mobile-hide">{{ (p.storageAllocations && p.storageAllocations.length) ? `${p.storageAllocations.length} location(s)` : '—' }}</td>
           <td>
             <button class="danger" @click="confirmDelete(p)">Delete</button>
           </td>
@@ -184,5 +184,9 @@ onMounted(load)
   border: 1px solid rgba(0, 0, 0, 0.15);
   vertical-align: middle;
   margin-right: 0.35rem;
+}
+
+@media (max-width: 640px) {
+  .mobile-hide { display: none; }
 }
 </style>

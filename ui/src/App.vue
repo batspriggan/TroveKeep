@@ -109,4 +109,14 @@ a:hover { text-decoration: underline; }
 .back-link { display: inline-block; margin-bottom: 1rem; font-size: 0.875rem; }
 
 .actions { display: flex; gap: 0.5rem; }
+
+@media (max-width: 640px) {
+  main { padding: 1rem 0.75rem; }
+
+  table { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+  input[type="search"] { max-width: 100% !important; }
+
+  button { min-height: 2.25rem; padding: 0.4rem 0.9rem; }
+}
 </style>

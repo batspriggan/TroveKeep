@@ -85,14 +85,15 @@ onUnmounted(() => document.removeEventListener('mousedown', onClickOutside))
 <style scoped>
 .cs-wrap {
   position: relative;
-  display: inline-block;
+  display: block;
 }
 
 .cs-trigger {
   display: flex;
   align-items: center;
   gap: 0.4rem;
-  min-width: 180px;
+  min-width: 0;
+  width: 100%;
   padding: 0.3rem 0.5rem;
   background: #fff;
   border: 1px solid #ccc;
