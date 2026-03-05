@@ -94,6 +94,8 @@ public class BoxService : IBoxService
         return await _boxRepo.DeleteAsync(id);
     }
 
+    public Task UpdateImageCachedAsync(Guid id, bool cached) => _boxRepo.UpdateImageCachedAsync(id, cached);
+
     private async Task EnrichWithCountsAsync(Box box)
     {
         var allocs = (await _allocationRepo.GetByStorageAsync(box.Id)).ToList();

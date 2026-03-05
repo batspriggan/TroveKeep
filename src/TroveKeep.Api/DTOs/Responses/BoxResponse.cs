@@ -3,7 +3,7 @@ namespace TroveKeep.Api.DTOs.Responses;
 public record BoxResponse(
     Guid Id,
     string Name,
-    string? PhotoUrl,
+    bool ImageCached,
     int SetCount,
     int BulkPieceCount,
     DateTimeOffset CreatedAt,
@@ -12,7 +12,7 @@ public record BoxResponse(
 public record BoxDetailResponse(
     Guid Id,
     string Name,
-    string? PhotoUrl,
+    bool ImageCached,
     IEnumerable<LegoSetResponse> Sets,
     IEnumerable<BulkPieceResponse> BulkPieces,
     DateTimeOffset CreatedAt,

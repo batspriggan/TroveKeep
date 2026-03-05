@@ -49,9 +49,16 @@ public class BoxRepository : IBoxRepository
 
         var doc = ToDocument(box);
         doc.CreatedAt = existing.CreatedAt;
+        doc.ImageCached = existing.ImageCached;
         doc.UpdatedAt = DateTime.UtcNow;
         await _boxes.ReplaceOneAsync(x => x.Id == box.Id, doc);
         return ToModel(doc);
+    }
+
+    public async Task UpdateImageCachedAsync(Guid id, bool cached)
+    {
+        var update = Builders<BoxDocument>.Update.Set(x => x.ImageCached, cached);
+        await _boxes.UpdateOneAsync(x => x.Id == id, update);
     }
 
     public async Task<bool> DeleteAsync(Guid id)
@@ -72,7 +79,7 @@ public class BoxRepository : IBoxRepository
     {
         Id = doc.Id,
         Name = doc.Name,
-        PhotoUrl = doc.PhotoUrl,
+        ImageCached = doc.ImageCached,
         CreatedAt = new DateTimeOffset(DateTime.SpecifyKind(doc.CreatedAt, DateTimeKind.Utc)),
         UpdatedAt = new DateTimeOffset(DateTime.SpecifyKind(doc.UpdatedAt, DateTimeKind.Utc)),
     };
@@ -81,7 +88,7 @@ public class BoxRepository : IBoxRepository
     {
         Id = model.Id,
         Name = model.Name,
-        PhotoUrl = model.PhotoUrl,
+        ImageCached = model.ImageCached,
         CreatedAt = model.CreatedAt.UtcDateTime,
         UpdatedAt = model.UpdatedAt.UtcDateTime,
     };

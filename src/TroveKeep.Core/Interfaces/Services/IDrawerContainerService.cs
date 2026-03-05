@@ -11,4 +11,5 @@ public interface IDrawerContainerService
     Task<DrawerContainer?> UpdateAsync(DrawerContainer drawerContainer);
     Task<bool> DeleteAsync(Guid id);
     Task<Drawer?> AddDrawerAsync(Guid containerId, Drawer drawer);
+    Task UpdateImageCachedAsync(Guid id, bool cached);
 }

@@ -13,11 +13,13 @@ public class BoxesController : ControllerBase
 {
     private readonly IBoxService _service;
     private readonly IColorRepository _colorRepo;
+    private readonly IImageService _imageService;
 
-    public BoxesController(IBoxService service, IColorRepository colorRepo)
+    public BoxesController(IBoxService service, IColorRepository colorRepo, IImageService imageService)
     {
         _service = service;
         _colorRepo = colorRepo;
+        _imageService = imageService;
     }
 
     [HttpGet]
@@ -54,7 +56,7 @@ public class BoxesController : ControllerBase
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> Create([FromBody] CreateBoxRequest request)
     {
-        var model = new Box { Name = request.Name, PhotoUrl = request.PhotoUrl };
+        var model = new Box { Name = request.Name };
         var created = await _service.CreateAsync(model);
         return CreatedAtAction(nameof(GetById), new { id = created.Id }, MapToResponse(created));
     }
@@ -65,7 +67,7 @@ public class BoxesController : ControllerBase
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> Update(Guid id, [FromBody] UpdateBoxRequest request)
     {
-        var model = new Box { Id = id, Name = request.Name, PhotoUrl = request.PhotoUrl };
+        var model = new Box { Id = id, Name = request.Name };
         var updated = await _service.UpdateAsync(model);
         if (updated is null) return NotFound();
         return Ok(MapToResponse(updated));
@@ -78,6 +80,44 @@ public class BoxesController : ControllerBase
     {
         var deleted = await _service.DeleteAsync(id);
         if (!deleted) return NotFound();
+        await _imageService.DeleteAsync(id.ToString(), ImageReferenceType.Box);
+        return NoContent();
+    }
+
+    [HttpGet("{id:guid}/image")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetImage(Guid id)
+    {
+        var image = await _imageService.GetImageAsync(id.ToString(), ImageReferenceType.Box);
+        if (image is null) return NotFound();
+        return File(image.Data, image.ContentType);
+    }
+
+    [HttpPost("{id:guid}/image")]
+    [RequestSizeLimit(10_000_000)]
+    [RequestFormLimits(MultipartBodyLengthLimit = 10_000_000)]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> UploadImage(Guid id, IFormFile file)
+    {
+        var box = await _service.GetByIdAsync(id);
+        if (box is null) return NotFound();
+        await _imageService.StoreUploadAsync(id.ToString(), ImageReferenceType.Box, file.OpenReadStream(), file.ContentType);
+        await _service.UpdateImageCachedAsync(id, true);
+        return NoContent();
+    }
+
+    [HttpDelete("{id:guid}/image")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> DeleteImage(Guid id)
+    {
+        var box = await _service.GetByIdAsync(id);
+        if (box is null) return NotFound();
+        await _imageService.DeleteAsync(id.ToString(), ImageReferenceType.Box);
+        await _service.UpdateImageCachedAsync(id, false);
         return NoContent();
     }
 
@@ -88,10 +128,10 @@ public class BoxesController : ControllerBase
     }
 
     private static BoxResponse MapToResponse(Box b) =>
-        new(b.Id, b.Name, b.PhotoUrl, b.Sets.Count, b.BulkPieces.Count, b.CreatedAt, b.UpdatedAt);
+        new(b.Id, b.Name, b.ImageCached, b.Sets.Count, b.BulkPieces.Count, b.CreatedAt, b.UpdatedAt);
 
     private static BoxDetailResponse MapToDetailResponse(Box b, Dictionary<int, (string Name, string Rgb)> colors) =>
-        new(b.Id, b.Name, b.PhotoUrl,
+        new(b.Id, b.Name, b.ImageCached,
             b.Sets.Select(s => new LegoSetResponse(s.Id, s.SetNumber, s.Description, s.PhotoUrl, s.Quantity, s.ImageCached,
                 s.StorageAllocations.Select(a => new StorageAllocationResponse(a.StorageId, a.StoragePosition, a.StorageType.ToString(), a.Quantity)),
                 s.CreatedAt, s.UpdatedAt)),

@@ -25,6 +25,23 @@
       </div>
 
       <div class="card">
+        <h2>Photo</h2>
+        <img v-if="container.imageCached" :src="`/api/drawercontainers/${id}/image?t=${imgTs}`" style="max-width: 100%; max-height: 300px; display: block; margin-bottom: 0.75rem;" />
+        <p v-else style="color: var(--color-text-muted, #888); margin-bottom: 0.75rem;">No photo yet.</p>
+        <div class="form-row" style="align-items: flex-end;">
+          <div class="form-field">
+            <label>Choose file</label>
+            <input type="file" accept="image/*" @change="onFileChange" />
+          </div>
+          <button type="button" @click="cameraInput.click()">Take Photo</button>
+          <input ref="cameraInput" type="file" accept="image/*" capture="environment" style="display:none" @change="onCameraCapture" />
+          <button class="primary" :disabled="!photoFile" @click="uploadPhoto">Upload</button>
+          <button v-if="container.imageCached" class="danger" @click="removePhoto">Remove</button>
+        </div>
+        <p v-if="photoError" class="error">{{ photoError }}</p>
+      </div>
+
+      <div class="card">
         <h2>Drawers</h2>
         <table v-if="drawers.length">
           <thead>
@@ -90,7 +107,7 @@ import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   getDrawerContainer, updateDrawerContainer, deleteDrawerContainer,
-  getDrawerContainerDrawers, addDrawer,
+  getDrawerContainerDrawers, addDrawer, uploadContainerImage, deleteContainerImage,
 } from '../../api/drawercontainers.js'
 import { deleteDrawer } from '../../api/drawers.js'
 import ConfirmDialog from '../../components/ConfirmDialog.vue'
@@ -109,6 +126,10 @@ const showConfirm = ref(false)
 const deleteDrawerTarget = ref(null)
 const editForm = ref({ name: '', description: '' })
 const drawerForm = ref({ position: 1 })
+const photoFile = ref(null)
+const photoError = ref('')
+const imgTs = ref(Date.now())
+const cameraInput = ref(null)
 
 function nextPosition(drawerList) {
   if (!drawerList.length) return 1
@@ -181,6 +202,39 @@ async function doDelete() {
   } catch (e) {
     error.value = e.message
     showConfirm.value = false
+  }
+}
+
+function onFileChange(e) {
+  photoFile.value = e.target.files[0] ?? null
+}
+
+async function onCameraCapture(e) {
+  const file = e.target.files[0]
+  if (!file) return
+  photoFile.value = file
+  await uploadPhoto()
+}
+
+async function uploadPhoto() {
+  photoError.value = ''
+  try {
+    await uploadContainerImage(id, photoFile.value)
+    photoFile.value = null
+    container.value = { ...container.value, imageCached: true }
+    imgTs.value = Date.now()
+  } catch (e) {
+    photoError.value = e.message
+  }
+}
+
+async function removePhoto() {
+  photoError.value = ''
+  try {
+    await deleteContainerImage(id)
+    container.value = { ...container.value, imageCached: false }
+  } catch (e) {
+    photoError.value = e.message
   }
 }
 

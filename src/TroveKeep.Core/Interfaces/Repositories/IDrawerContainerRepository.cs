@@ -11,4 +11,5 @@ public interface IDrawerContainerRepository
     Task<DrawerContainer?> UpdateAsync(DrawerContainer drawerContainer);
     Task<bool> DeleteAsync(Guid id);
     Task<IEnumerable<DrawerContainer>> GetByIdsAsync(IEnumerable<Guid> ids);
+    Task UpdateImageCachedAsync(Guid id, bool cached);
 }

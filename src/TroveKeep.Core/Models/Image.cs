@@ -12,5 +12,7 @@ public class Image
 public enum ImageReferenceType
 {
     Set,
-    Part
+    Part,
+    Box,
+    DrawerContainer
 }

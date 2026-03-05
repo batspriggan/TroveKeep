@@ -15,13 +15,26 @@
             <label>Name *</label>
             <input v-model="editForm.name" required />
           </div>
-          <div class="form-field">
-            <label>Photo URL</label>
-            <input v-model="editForm.photoUrl" />
-          </div>
           <button class="primary" type="submit">Save</button>
         </form>
         <p v-if="editError" class="error">{{ editError }}</p>
+      </div>
+
+      <div class="card">
+        <h2>Photo</h2>
+        <img v-if="box.imageCached" :src="`/api/boxes/${id}/image?t=${imgTs}`" style="max-width: 100%; max-height: 300px; display: block; margin-bottom: 0.75rem;" />
+        <p v-else style="color: var(--color-text-muted, #888); margin-bottom: 0.75rem;">No photo yet.</p>
+        <div class="form-row" style="align-items: flex-end;">
+          <div class="form-field">
+            <label>Choose file</label>
+            <input type="file" accept="image/*" @change="onFileChange" />
+          </div>
+          <button type="button" @click="cameraInput.click()">Take Photo</button>
+          <input ref="cameraInput" type="file" accept="image/*" capture="environment" style="display:none" @change="onCameraCapture" />
+          <button class="primary" :disabled="!photoFile" @click="uploadPhoto">Upload</button>
+          <button v-if="box.imageCached" class="danger" @click="removePhoto">Remove</button>
+        </div>
+        <p v-if="photoError" class="error">{{ photoError }}</p>
       </div>
 
       <div class="card">
@@ -85,7 +98,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { getBox, getBoxContents, updateBox, deleteBox } from '../../api/boxes.js'
+import { getBoxContents, updateBox, deleteBox, uploadBoxImage, deleteBoxImage } from '../../api/boxes.js'
 import ConfirmDialog from '../../components/ConfirmDialog.vue'
 
 const route = useRoute()
@@ -96,17 +109,20 @@ const box = ref(null)
 const loading = ref(true)
 const error = ref('')
 const editError = ref('')
+const photoError = ref('')
 const showConfirm = ref(false)
-const editForm = ref({ name: '', photoUrl: '' })
+const editForm = ref({ name: '' })
+const photoFile = ref(null)
+const imgTs = ref(Date.now())
+const cameraInput = ref(null)
 
 async function load() {
   loading.value = true
   error.value = ''
   try {
-    // getBoxContents returns the BoxDetailResponse which includes sets + bulkPieces
     const detail = await getBoxContents(id)
     box.value = detail
-    editForm.value = { name: detail.name, photoUrl: detail.photoUrl ?? '' }
+    editForm.value = { name: detail.name }
   } catch (e) {
     error.value = e.message
   } finally {
@@ -117,10 +133,43 @@ async function load() {
 async function submitEdit() {
   editError.value = ''
   try {
-    const updated = await updateBox(id, { name: editForm.value.name, photoUrl: editForm.value.photoUrl || null })
+    const updated = await updateBox(id, { name: editForm.value.name })
     box.value = { ...box.value, ...updated }
   } catch (e) {
     editError.value = e.message
+  }
+}
+
+function onFileChange(e) {
+  photoFile.value = e.target.files[0] ?? null
+}
+
+async function onCameraCapture(e) {
+  const file = e.target.files[0]
+  if (!file) return
+  photoFile.value = file
+  await uploadPhoto()
+}
+
+async function uploadPhoto() {
+  photoError.value = ''
+  try {
+    await uploadBoxImage(id, photoFile.value)
+    photoFile.value = null
+    box.value = { ...box.value, imageCached: true }
+    imgTs.value = Date.now()
+  } catch (e) {
+    photoError.value = e.message
+  }
+}
+
+async function removePhoto() {
+  photoError.value = ''
+  try {
+    await deleteBoxImage(id)
+    box.value = { ...box.value, imageCached: false }
+  } catch (e) {
+    photoError.value = e.message
   }
 }
 

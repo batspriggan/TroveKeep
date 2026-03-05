@@ -10,4 +10,5 @@ public interface IBoxService
     Task<Box> CreateAsync(Box box);
     Task<Box?> UpdateAsync(Box box);
     Task<bool> DeleteAsync(Guid id);
+    Task UpdateImageCachedAsync(Guid id, bool cached);
 }

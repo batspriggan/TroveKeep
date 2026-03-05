@@ -6,4 +6,5 @@ public interface IImageRepository
 {
     Task<Image?> GetAsync(string setNum, ImageReferenceType referenceType);
     Task StoreAsync(Image image);
+    Task DeleteAsync(string referenceNumber, ImageReferenceType referenceType);
 }

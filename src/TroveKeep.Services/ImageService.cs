@@ -55,4 +55,21 @@ public class ImageService : IImageService
 
     public Task<Image?> GetImageAsync(string referenceNumber, ImageReferenceType referenceType) =>
         _repository.GetAsync(referenceNumber, referenceType);
+
+    public async Task StoreUploadAsync(string referenceNumber, ImageReferenceType referenceType, Stream stream, string contentType)
+    {
+        using var ms = new MemoryStream();
+        await stream.CopyToAsync(ms);
+        await _repository.StoreAsync(new Image
+        {
+            ReferenceNumber = referenceNumber,
+            Data = ms.ToArray(),
+            ContentType = contentType,
+            DownloadedAt = DateTimeOffset.UtcNow,
+            ReferenceType = referenceType,
+        });
+    }
+
+    public Task DeleteAsync(string referenceNumber, ImageReferenceType referenceType) =>
+        _repository.DeleteAsync(referenceNumber, referenceType);
 }

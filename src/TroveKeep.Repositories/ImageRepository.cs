@@ -43,4 +43,9 @@ public class ImageRepository : IImageRepository
             doc,
             new ReplaceOptions { IsUpsert = true });
     }
+
+    public async Task DeleteAsync(string referenceNumber, ImageReferenceType referenceType)
+    {
+        await _collection.DeleteOneAsync(x => x.ReferenceNumber == referenceNumber && x.ReferenceType == referenceType.ToString());
+    }
 }

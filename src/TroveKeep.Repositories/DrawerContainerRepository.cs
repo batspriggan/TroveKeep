@@ -63,12 +63,19 @@ public class DrawerContainerRepository : IDrawerContainerRepository
             Id = drawerContainer.Id,
             Name = drawerContainer.Name,
             Description = drawerContainer.Description,
+            ImageCached = existing.ImageCached,
             Drawers = existing.Drawers,
             CreatedAt = existing.CreatedAt,
             UpdatedAt = DateTime.UtcNow,
         };
         await _containers.ReplaceOneAsync(x => x.Id == drawerContainer.Id, doc);
         return ToModel(doc);
+    }
+
+    public async Task UpdateImageCachedAsync(Guid id, bool cached)
+    {
+        var update = Builders<DrawerContainerDocument>.Update.Set(x => x.ImageCached, cached);
+        await _containers.UpdateOneAsync(x => x.Id == id, update);
     }
 
     public async Task<bool> DeleteAsync(Guid id)
@@ -90,6 +97,7 @@ public class DrawerContainerRepository : IDrawerContainerRepository
         Id = doc.Id,
         Name = doc.Name,
         Description = doc.Description,
+        ImageCached = doc.ImageCached,
         CreatedAt = new DateTimeOffset(DateTime.SpecifyKind(doc.CreatedAt, DateTimeKind.Utc)),
         UpdatedAt = new DateTimeOffset(DateTime.SpecifyKind(doc.UpdatedAt, DateTimeKind.Utc)),
         Drawers = doc.Drawers.Select(d => new Drawer

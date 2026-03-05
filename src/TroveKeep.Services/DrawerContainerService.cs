@@ -105,4 +105,6 @@ public class DrawerContainerService : IDrawerContainerService
         if(container.Drawers.Any(d => d.Position == drawer.Position)) return null;
         return await _drawerRepo.CreateAsync(drawer);
     }
+
+    public Task UpdateImageCachedAsync(Guid id, bool cached) => _containerRepo.UpdateImageCachedAsync(id, cached);
 }

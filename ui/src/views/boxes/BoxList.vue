@@ -7,10 +7,6 @@
         <label>Name *</label>
         <input v-model="form.name" required placeholder="Box name" />
       </div>
-      <div class="form-field">
-        <label>Photo URL</label>
-        <input v-model="form.photoUrl" placeholder="https://..." />
-      </div>
       <button class="primary" type="submit">Add Box</button>
     </form>
 
@@ -75,7 +71,7 @@ const filteredBoxes = computed(() => {
 const loading = ref(true)
 const error = ref('')
 const deleteTarget = ref(null)
-const form = ref({ name: '', photoUrl: '' })
+const form = ref({ name: '' })
 
 async function load() {
   loading.value = true
@@ -92,8 +88,8 @@ async function load() {
 async function submit() {
   error.value = ''
   try {
-    await createBox({ name: form.value.name, photoUrl: form.value.photoUrl || null })
-    form.value = { name: '', photoUrl: '' }
+    await createBox({ name: form.value.name })
+    form.value = { name: '' }
     await load()
   } catch (e) {
     error.value = e.message

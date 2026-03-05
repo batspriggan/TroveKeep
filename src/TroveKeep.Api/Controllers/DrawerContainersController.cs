@@ -1,5 +1,4 @@
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.OpenApi;
 using TroveKeep.Api.DTOs.Requests;
 using TroveKeep.Api.DTOs.Responses;
 using TroveKeep.Core.Interfaces.Services;
@@ -12,10 +11,12 @@ namespace TroveKeep.Api.Controllers;
 public class DrawerContainersController : ControllerBase
 {
     private readonly IDrawerContainerService _service;
+    private readonly IImageService _imageService;
 
-    public DrawerContainersController(IDrawerContainerService service)
+    public DrawerContainersController(IDrawerContainerService service, IImageService imageService)
     {
         _service = service;
+        _imageService = imageService;
     }
 
     [HttpGet]
@@ -74,6 +75,7 @@ public class DrawerContainersController : ControllerBase
     {
         var deleted = await _service.DeleteAsync(id);
         if (!deleted) return NotFound();
+        await _imageService.DeleteAsync(id.ToString(), ImageReferenceType.DrawerContainer);
         return NoContent();
     }
 
@@ -96,11 +98,48 @@ public class DrawerContainersController : ControllerBase
             MapDrawerToResponse(created));
     }
 
+    [HttpGet("{id:guid}/image")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetImage(Guid id)
+    {
+        var image = await _imageService.GetImageAsync(id.ToString(), ImageReferenceType.DrawerContainer);
+        if (image is null) return NotFound();
+        return File(image.Data, image.ContentType);
+    }
+
+    [HttpPost("{id:guid}/image")]
+    [RequestSizeLimit(10_000_000)]
+    [RequestFormLimits(MultipartBodyLengthLimit = 10_000_000)]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> UploadImage(Guid id, IFormFile file)
+    {
+        var container = await _service.GetByIdAsync(id);
+        if (container is null) return NotFound();
+        await _imageService.StoreUploadAsync(id.ToString(), ImageReferenceType.DrawerContainer, file.OpenReadStream(), file.ContentType);
+        await _service.UpdateImageCachedAsync(id, true);
+        return NoContent();
+    }
+
+    [HttpDelete("{id:guid}/image")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> DeleteImage(Guid id)
+    {
+        var container = await _service.GetByIdAsync(id);
+        if (container is null) return NotFound();
+        await _imageService.DeleteAsync(id.ToString(), ImageReferenceType.DrawerContainer);
+        await _service.UpdateImageCachedAsync(id, false);
+        return NoContent();
+    }
+
     private static DrawerContainerResponse MapToResponse(DrawerContainer c) =>
-        new(c.Id, c.Name, c.Description, c.Drawers.Count, c.CreatedAt, c.UpdatedAt);
+        new(c.Id, c.Name, c.Description, c.ImageCached, c.Drawers.Count, c.CreatedAt, c.UpdatedAt);
 
     private static DrawerContainerDetailResponse MapToDetailResponse(DrawerContainer c) =>
-        new(c.Id, c.Name, c.Description,
+        new(c.Id, c.Name, c.Description, c.ImageCached,
             c.Drawers.Select(MapDrawerToResponse),
             c.CreatedAt, c.UpdatedAt);
 
