@@ -57,6 +57,16 @@ Connection configured in `appsettings.json` under key `MongoDb` (`ConnectionStri
 - `UpdateAsync` preserves existing `StorageAllocations` — never overwritten by a model update.
 - Business keys: `SetNumber` for LegoSet; `LegoId + LegoColor` for BulkPiece.
 
+## Database Versioning & Migrations (from v1.0.0)
+
+The project was tagged at **v1.0.0**. From this point forward:
+
+- Any breaking change to the MongoDB schema (renamed fields, removed fields, changed types, restructured documents, new required indexes) **must** be accompanied by a migration.
+- Migrations live in `src/TroveKeep.Migrations/` as numbered scripts (e.g., `Migration_001_Description.cs`) implementing a common `IMigration` interface with `VersionFrom`, `VersionTo`, and `RunAsync(IMongoDatabase)`.
+- The current database schema version is tracked in the `meta` collection under key `"schema_version"`.
+- On startup, `Program.cs` runs pending migrations in order before the app accepts requests.
+- Never tell the user to "drop the database and restart" as a migration strategy — always write a real migration.
+
 ### Controller → Service → Repository Pattern
 Each domain entity has a matching controller, service, and repository triple, all registered as `Scoped` in `Program.cs`. Controllers catch `InvalidOperationException` and return 400, `KeyNotFoundException` and return 404.
 
