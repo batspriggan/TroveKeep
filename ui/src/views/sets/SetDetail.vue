@@ -27,10 +27,6 @@
             <label>Description *</label>
             <input v-model="editForm.description" required />
           </div>
-          <div class="form-field">
-            <label>Photo URL</label>
-            <input v-model="editForm.photoUrl" />
-          </div>
           <div class="form-field" style="max-width: 80px">
             <label>Qty *</label>
             <input v-model.number="editForm.quantity" type="number" min="1" required />
