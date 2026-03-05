@@ -71,7 +71,9 @@ jobs:
         uses: dataaxiom/ghcr-cleanup-action@v1
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+          package: trovekeep
+          use-regex: true
           # on stable: keep semver + latest, delete dev
-          # on prerelease: keep semver + dev, keep latest untouched
-          keep-tags-regexes: ${{ needs.build-and-push.outputs.prerelease == 'true' && '^\d+\.\d+(\.\d+)?$|^latest$|^dev$' || '^\d+\.\d+(\.\d+)?$|^latest$' }}
+          # on prerelease: keep semver + dev + latest
+          exclude-tags: ${{ needs.build-and-push.outputs.prerelease == 'true' && '^\d+\.\d+(\.\d+)?$|^latest$|^dev$' || '^\d+\.\d+(\.\d+)?$|^latest$' }}
           delete-untagged: true
