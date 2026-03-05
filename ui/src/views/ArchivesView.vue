@@ -5,12 +5,12 @@
     <!-- Import from Folder (collapsible) -->
     <div class="collapsible-header" @click="folderExpanded = !folderExpanded">
       <span class="chevron">{{ folderExpanded ? '▴' : '▾' }}</span>
-      Import from Folder
+      Bulk Import
     </div>
     <div v-if="folderExpanded" class="folder-body">
-      <p class="muted">Select a folder containing Rebrickable CSV archives. Known files will be detected and imported in parallel.</p>
+      <p class="muted">Select one or more Rebrickable archive files. Known files (<code>colors.csv.zip</code>, <code>sets.csv.zip</code>, <code>parts.csv.zip</code>, <code>part_categories.csv.zip</code>, <code>inventory_parts.csv.zip</code>) will be detected and imported in parallel.</p>
       <div class="upload-row">
-        <input type="file" webkitdirectory multiple @change="onFolderSelected" />
+        <input type="file" multiple accept=".zip,.csv" @change="onFolderSelected" />
       </div>
       <template v-if="folderFiles.length > 0">
         <p class="detected-label">Detected files ({{ folderFiles.length }} of 5):</p>
