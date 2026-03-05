@@ -8,6 +8,8 @@ on:
 jobs:
   build-and-push:
     runs-on: docker
+    container:
+      image: data.forgejo.org/oci/docker:cli   # has docker CLI built in
     steps:
       - name: Checkout
         uses: actions/checkout@v4
