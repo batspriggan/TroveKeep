@@ -6,23 +6,24 @@ on:
       - 'v*'
 
 jobs:
-  build-and-push:
-    runs-on: docker
-    container:
-      image: data.forgejo.org/oci/docker:cli   # has docker CLI built in
+  docker-push:
+    runs-on: docker-node
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Install Docker CLI
+        run: apt-get update && apt-get install -y docker.io
+
       - name: Log in to Codeberg container registry
-        uses: docker/login-action@v3
+        uses: https://data.forgejo.org/docker/login-action@v3
         with:
           registry: codeberg.org
           username: ${{ vars.CODEBERG_USERNAME }}
           password: ${{ secrets.FORGEJO_TOKEN }}
 
       - name: Build and push
-        uses: docker/build-push-action@v6
+        uses: https://data.forgejo.org/docker/build-push-action@v6
         with:
           context: .
           push: true
