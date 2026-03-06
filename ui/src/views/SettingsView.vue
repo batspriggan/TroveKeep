@@ -3,6 +3,25 @@
     <h1>Settings</h1>
 
     <section class="card">
+      <h2>Features</h2>
+      <div class="feature-row">
+        <label class="toggle-label">
+          <input type="checkbox" v-model="settings.bulkPiecesEnabled" />
+          Bulk Pieces Management
+        </label>
+        <span class="muted">Show Bulk Pieces and Drawer Containers sections.<br>
+        Note: if any Bulk Piece is already present it will not be removed</span>
+      </div>
+      <div class="feature-row">
+        <label class="toggle-label">
+          <input type="checkbox" v-model="settings.tablePlannerEnabled" />
+          Table Planner
+        </label>
+        <span class="muted">Enable the Table Planner, including rooms, table templates and plates configuration.</span>
+      </div>
+    </section>
+
+    <section class="card">
       <h2>Backup</h2>
       <p class="muted">Download a compressed snapshot of all data including Rebrickable catalog and cached images.</p>
       <p v-if="backupError" class="error">{{ backupError }}</p>
@@ -38,6 +57,9 @@
 import { ref } from 'vue'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
 import { downloadBackup, uploadRestore } from '../api/settings.js'
+import { useSettings } from '../composables/useSettings.js'
+
+const settings = useSettings()
 
 const backupLoading = ref(false)
 const backupError = ref('')
@@ -110,6 +132,25 @@ h2 {
   color: #64748b;
   font-size: 0.875rem;
   margin-bottom: 1rem;
+}
+
+.feature-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.toggle-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.toggle-label input[type="checkbox"] {
+  width: auto;
+  cursor: pointer;
 }
 
 .restore-row {

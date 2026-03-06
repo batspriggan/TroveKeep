@@ -257,7 +257,7 @@
     </div>
 
     <!-- Baseplates -->
-    <div class="baseplates-section">
+    <div v-if="settings.tablePlannerEnabled" class="baseplates-section">
       <h2 class="section-heading">Baseplates</h2>
       <p class="muted">Define LEGO baseplates used by the plate calculator in the Table Planner.</p>
 
@@ -305,7 +305,7 @@
       </form>
     </div>
     <!-- Table Templates -->
-    <div class="tpl-section">
+    <div v-if="settings.tablePlannerEnabled" class="tpl-section">
       <h2 class="section-heading">Table Templates</h2>
       <p class="muted">Define table shapes used in the Table Planner.</p>
 
@@ -361,6 +361,9 @@
 <script setup>
 import { ref, watch, onMounted } from 'vue'
 import ColorSelect from '../components/ColorSelect.vue'
+import { useSettings } from '../composables/useSettings.js'
+
+const settings = useSettings()
 import {
   getColorsStatus, uploadColors, getColorsList,
   getSetsStatus, uploadSets,
@@ -739,8 +742,10 @@ onMounted(async () => {
   await loadPartsInventoryStatus()
   await loadPartCategoriesStatus()
   if (partCategoriesStatus.value.count > 0) await loadPartCategories()
-  baseplates.value = await getAllBaseplates()
-  await loadTemplates()
+  if (settings.tablePlannerEnabled) {
+    baseplates.value = await getAllBaseplates()
+    await loadTemplates()
+  }
 })
 </script>
 

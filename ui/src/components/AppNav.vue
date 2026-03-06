@@ -3,14 +3,14 @@
     <span class="brand">TroveKeep</span>
     <button class="hamburger" @click="open = !open" aria-label="Toggle menu">☰</button>
     <div class="nav-links" :class="{ open }">
-      <RouterLink to="/sets">Sets</RouterLink>
-      <RouterLink to="/bulkpieces">Bulk Pieces</RouterLink>
-      <RouterLink to="/boxes">Boxes</RouterLink>
-      <RouterLink to="/drawercontainers">Drawer Containers</RouterLink>
-      <RouterLink to="/search">Search</RouterLink>
+      <RouterLink to="/sets" class="mobile-hide">Sets</RouterLink>
+      <RouterLink v-if="settings.bulkPiecesEnabled" to="/bulkpieces" class="mobile-hide">Bulk Pieces</RouterLink>
+      <RouterLink to="/boxes" class="mobile-hide">Boxes</RouterLink>
+      <RouterLink v-if="settings.bulkPiecesEnabled" to="/drawercontainers" class="mobile-hide">Drawer Containers</RouterLink>
+      <RouterLink to="/search" class="mobile-hide">Search</RouterLink>
       <RouterLink to="/archives">Archives</RouterLink>
       <RouterLink to="/settings">Settings</RouterLink>
-      <RouterLink to="/table-planner" class="mobile-hide">Table Planner</RouterLink>
+      <RouterLink v-if="settings.tablePlannerEnabled" to="/table-planner" class="mobile-hide">Table Planner</RouterLink>
     </div>
   </nav>
 </template>
@@ -18,9 +18,11 @@
 <script setup>
 import { ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
+import { useSettings } from '../composables/useSettings.js'
 
 const open = ref(false)
 const route = useRoute()
+const settings = useSettings()
 
 watch(route, () => { open.value = false })
 </script>

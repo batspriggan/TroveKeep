@@ -58,7 +58,7 @@
         <p v-else>No sets stored here.</p>
       </div>
 
-      <div class="card">
+      <div v-if="settings.bulkPiecesEnabled" class="card">
         <h2>Bulk Pieces in this Box</h2>
         <table v-if="box.bulkPieces && box.bulkPieces.length">
           <thead>
@@ -100,6 +100,9 @@ import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getBoxContents, updateBox, deleteBox, uploadBoxImage, deleteBoxImage } from '../../api/boxes.js'
 import ConfirmDialog from '../../components/ConfirmDialog.vue'
+import { useSettings } from '../../composables/useSettings.js'
+
+const settings = useSettings()
 
 const route = useRoute()
 const router = useRouter()
