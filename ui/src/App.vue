@@ -3,13 +3,59 @@
   <main>
     <RouterView />
   </main>
+  <BottomNav />
 </template>
 
 <script setup>
 import AppNav from './components/AppNav.vue'
+import BottomNav from './components/BottomNav.vue'
 </script>
 
 <style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Sora:wght@400;500;600;700&display=swap');
+
+:root {
+  --color-bg:           #F7F6F3;
+  --color-surface:      #FFFFFF;
+  --color-surface-alt:  #F0EEE9;
+  --color-border:       #E2DED8;
+
+  --color-text-primary:   #1A1917;
+  --color-text-secondary: #6B6760;
+  --color-text-muted:     #A8A39C;
+
+  --color-accent:      #E3000B;
+  --color-accent-soft: #FFF0F0;
+
+  --color-success: #2D6A4F;
+  --color-warning: #F4A015;
+  --color-info:    #2563EB;
+
+  --font-display: 'Sora', sans-serif;
+  --font-mono:    'DM Mono', monospace;
+  --font-body:    'Sora', sans-serif;
+
+  --text-xs:   11px;
+  --text-sm:   13px;
+  --text-base: 15px;
+  --text-lg:   17px;
+  --text-xl:   20px;
+  --text-2xl:  26px;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+
+  --transition-fast: 120ms ease;
+  --transition-base: 200ms ease;
+  --transition-slow: 300ms ease-in-out;
+
+  --bottom-nav-height: 56px;
+}
+
 * {
   box-sizing: border-box;
   margin: 0;
@@ -17,9 +63,9 @@ import AppNav from './components/AppNav.vue'
 }
 
 body {
-  font-family: system-ui, sans-serif;
-  background: #f5f5f5;
-  color: #222;
+  font-family: var(--font-body);
+  background: var(--color-bg);
+  color: var(--color-text-primary);
 }
 
 main {
@@ -111,7 +157,10 @@ a:hover { text-decoration: underline; }
 .actions { display: flex; gap: 0.5rem; }
 
 @media (max-width: 640px) {
-  main { padding: 1rem 0.75rem; }
+  main {
+    padding: 1rem 0.75rem;
+    padding-bottom: calc(var(--bottom-nav-height) + 1rem);
+  }
 
   table { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
 
