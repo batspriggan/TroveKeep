@@ -119,11 +119,15 @@ button.danger {
 
 button:hover { opacity: 0.85; }
 
+input, select, textarea, button {
+  font-family: inherit;
+  font-size: 0.875rem;
+}
+
 input, select, textarea {
   padding: 0.4rem 0.6rem;
   border: 1px solid #ccc;
   border-radius: 4px;
-  font-size: 0.875rem;
   width: 100%;
 }
 

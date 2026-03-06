@@ -134,19 +134,26 @@ function select(p) {
 
 .search-row {
   display: flex;
+  flex-direction: column;
   gap: 4px;
-  align-items: stretch;
 }
 
 .category-filter {
-  flex-shrink: 0;
-  width: 200px;
+  width: 100%;
   font-size: 0.82rem;
   padding: 0.2rem 0.3rem;
   color: #555;
   border: 1px solid #ccc;
   border-radius: 3px;
   background: #fafafa;
+}
+
+@media (min-width: 640px) {
+  .search-row {
+    display: grid;
+    grid-template-columns: 130px 1fr;
+    gap: 4px;
+  }
 }
 
 .typeahead input {
@@ -159,7 +166,9 @@ function select(p) {
   z-index: 100;
   top: calc(100% + 2px);
   left: 0;
-  right: 0;
+  min-width: 100%;
+  width: max-content;
+  max-width: min(600px, 90vw);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -186,9 +195,6 @@ function select(p) {
 
 .part-name {
   color: #555;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .overflow-hint {

@@ -1,88 +1,106 @@
+<!-- Redesigned: 2026-03-06 — Two-column desktop layout; contents tables prominent -->
 <template>
-  <div>
+  <div class="page">
     <RouterLink class="back-link" to="/boxes">← Back to Boxes</RouterLink>
 
-    <p v-if="loading">Loading…</p>
+    <p v-if="loading" class="loading-msg">Loading…</p>
     <p v-else-if="error" class="error">{{ error }}</p>
 
     <template v-else-if="box">
-      <h1>{{ box.name }}</h1>
+      <h1 class="box-title">{{ box.name }}</h1>
 
-      <div class="card">
-        <h2>Edit Box</h2>
-        <form class="form-row" @submit.prevent="submitEdit">
-          <div class="form-field">
-            <label>Name *</label>
-            <input v-model="editForm.name" required />
+      <div class="detail-layout">
+        <!-- Photo (top-left on desktop, first on mobile) -->
+        <div class="col-photo">
+          <div class="card photo-card">
+            <div class="photo-display">
+              <img v-if="box.imageCached" :src="`/api/boxes/${id}/image?t=${imgTs}`" class="box-photo" alt="" />
+              <div v-else class="photo-placeholder">No photo</div>
+            </div>
+            <div class="photo-actions">
+              <label class="file-label">
+                <input type="file" accept="image/*" class="file-input" @change="onFileChange" />
+                <span>Choose file</span>
+              </label>
+              <button type="button" class="btn-secondary mobile-only" @click="cameraInput.click()">Take Photo</button>
+              <input ref="cameraInput" type="file" accept="image/*" capture="environment" style="display:none" @change="onCameraCapture" />
+              <button class="primary" :disabled="!photoFile" @click="uploadPhoto">Upload</button>
+              <button v-if="box.imageCached" class="danger" @click="removePhoto">Remove</button>
+            </div>
+            <p v-if="photoError" class="error">{{ photoError }}</p>
           </div>
-          <button class="primary" type="submit">Save</button>
-        </form>
-        <p v-if="editError" class="error">{{ editError }}</p>
-      </div>
 
-      <div class="card">
-        <h2>Photo</h2>
-        <img v-if="box.imageCached" :src="`/api/boxes/${id}/image?t=${imgTs}`" style="max-width: 100%; max-height: 300px; display: block; margin-bottom: 0.75rem;" />
-        <p v-else style="color: var(--color-text-muted, #888); margin-bottom: 0.75rem;">No photo yet.</p>
-        <div class="form-row" style="align-items: flex-end;">
-          <div class="form-field">
-            <label>Choose file</label>
-            <input type="file" accept="image/*" @change="onFileChange" />
-          </div>
-          <button type="button" @click="cameraInput.click()">Take Photo</button>
-          <input ref="cameraInput" type="file" accept="image/*" capture="environment" style="display:none" @change="onCameraCapture" />
-          <button class="primary" :disabled="!photoFile" @click="uploadPhoto">Upload</button>
-          <button v-if="box.imageCached" class="danger" @click="removePhoto">Remove</button>
         </div>
-        <p v-if="photoError" class="error">{{ photoError }}</p>
-      </div>
 
-      <div class="card">
-        <h2>Sets in this Box</h2>
-        <table v-if="box.sets && box.sets.length">
-          <thead>
-            <tr>
-              <th>Set Number</th>
-              <th>Description</th>
-              <th>Qty in box</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="s in box.sets" :key="s.id">
-              <td><RouterLink :to="`/sets/${s.id}`">{{ s.setNumber }}</RouterLink></td>
-              <td>{{ s.description }}</td>
-              <td>{{ getAllocQty(s, id) }}</td>
-            </tr>
-          </tbody>
-        </table>
-        <p v-else>No sets stored here.</p>
-      </div>
+        <!-- Contents (right on desktop, middle on mobile) -->
+        <div class="col-contents">
+          <div class="card">
+            <h2>Sets in this Box</h2>
+            <table v-if="box.sets?.length" class="contents-table">
+              <thead>
+                <tr>
+                  <th>Set Number</th>
+                  <th>Description</th>
+                  <th class="th-qty">Qty</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="s in box.sets" :key="s.id">
+                  <td class="td-id">
+                    <RouterLink :to="`/sets/${s.id}`">{{ s.setNumber }}</RouterLink>
+                  </td>
+                  <td class="td-desc">{{ s.description }}</td>
+                  <td class="td-qty">{{ getAllocQty(s, id) }}</td>
+                </tr>
+              </tbody>
+            </table>
+            <p v-else class="empty-msg">No sets stored here.</p>
+          </div>
 
-      <div v-if="settings.bulkPiecesEnabled" class="card">
-        <h2>Bulk Pieces in this Box</h2>
-        <table v-if="box.bulkPieces && box.bulkPieces.length">
-          <thead>
-            <tr>
-              <th>Lego ID</th>
-              <th>Color</th>
-              <th>Description</th>
-              <th>Qty in box</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="p in box.bulkPieces" :key="p.id">
-              <td><RouterLink :to="`/bulkpieces/${p.id}`">{{ p.legoId }}</RouterLink></td>
-              <td>{{ p.legoColor }}</td>
-              <td>{{ p.description }}</td>
-              <td>{{ getAllocQty(p, id) }}</td>
-            </tr>
-          </tbody>
-        </table>
-        <p v-else>No bulk pieces stored here.</p>
-      </div>
+          <div v-if="settings.bulkPiecesEnabled" class="card">
+            <h2>Bulk Pieces in this Box</h2>
+            <table v-if="box.bulkPieces?.length" class="contents-table">
+              <thead>
+                <tr>
+                  <th>Lego ID</th>
+                  <th>Color</th>
+                  <th>Description</th>
+                  <th class="th-qty">Qty</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="p in box.bulkPieces" :key="p.id">
+                  <td class="td-id">
+                    <RouterLink :to="`/bulkpieces/${p.id}`">{{ p.legoId }}</RouterLink>
+                  </td>
+                  <td class="td-color">
+                    <span v-if="p.legoColorRgb" class="swatch" :style="{ background: '#' + p.legoColorRgb }"></span>
+                    <span>{{ p.legoColorName ?? `#${p.legoColorId}` }}</span>
+                  </td>
+                  <td class="td-desc">{{ p.description }}</td>
+                  <td class="td-qty">{{ getAllocQty(p, id) }}</td>
+                </tr>
+              </tbody>
+            </table>
+            <p v-else class="empty-msg">No bulk pieces stored here.</p>
+          </div>
+        </div>
 
-      <div class="card">
-        <button class="danger" @click="showConfirm = true">Delete Box</button>
+        <!-- Rename + delete (bottom-left on desktop, last on mobile) -->
+        <div class="col-edit">
+          <div class="card">
+            <h2>Rename</h2>
+            <div class="edit-row">
+              <input v-model="editForm.name" required placeholder="Box name" />
+              <button class="primary" @click="submitEdit">Save</button>
+            </div>
+            <p v-if="editError" class="error">{{ editError }}</p>
+          </div>
+
+          <div class="card danger-zone">
+            <button class="danger" @click="showConfirm = true">Delete Box</button>
+          </div>
+        </div>
       </div>
     </template>
 
@@ -193,3 +211,196 @@ async function doDelete() {
 
 onMounted(load)
 </script>
+
+<style scoped>
+.page {
+  font-family: var(--font-body);
+}
+
+.loading-msg {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  margin: var(--space-4) 0;
+}
+
+.box-title {
+  margin-bottom: var(--space-4);
+}
+
+/* ── Layout ── */
+.detail-layout {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.col-photo    { order: 1; }
+.col-contents { order: 2; }
+.col-edit     { order: 3; display: flex; flex-direction: column; gap: var(--space-4); }
+
+@media (min-width: 640px) {
+  .detail-layout {
+    display: grid;
+    grid-template-columns: 280px 1fr;
+    grid-template-rows: auto 1fr;
+    grid-template-areas:
+      "photo    contents"
+      "edit     contents";
+    align-items: start;
+  }
+
+  .col-photo    { grid-area: photo; }
+  .col-contents { grid-area: contents; }
+  .col-edit     { grid-area: edit; }
+}
+
+/* ── Photo card ── */
+.photo-display {
+  margin-bottom: var(--space-3);
+}
+
+.box-photo {
+  width: 100%;
+  max-height: 240px;
+  object-fit: contain;
+  border-radius: 4px;
+  display: block;
+}
+
+.photo-placeholder {
+  height: 120px;
+  background: var(--color-surface-alt);
+  border: 1px dashed var(--color-border);
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.photo-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+.file-label {
+  position: relative;
+  cursor: pointer;
+}
+
+.file-label span {
+  display: inline-block;
+  padding: 0.35rem 0.8rem;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  font-size: var(--text-sm);
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+
+.file-label span:hover {
+  background: var(--color-surface-alt);
+}
+
+.file-input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+  width: 100%;
+  padding: 0;
+  border: none;
+}
+
+.btn-secondary {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-primary);
+}
+
+.mobile-only {
+  display: none;
+}
+
+@media (max-width: 640px) {
+  .mobile-only {
+    display: inline-flex;
+  }
+}
+
+/* ── Rename card ── */
+.edit-row {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+.edit-row input {
+  flex: 1;
+}
+
+/* ── Danger zone ── */
+.danger-zone {
+  border-color: #fee2e2;
+}
+
+/* ── Contents tables ── */
+.contents-table {
+  font-size: var(--text-sm);
+}
+
+.contents-table th {
+  font-family: var(--font-display);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  background: var(--color-surface-alt);
+}
+
+.th-qty { width: 60px; text-align: right; }
+
+.td-id a {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--color-text-primary);
+}
+
+.td-desc {
+  color: var(--color-text-secondary);
+}
+
+.td-qty {
+  font-family: var(--font-mono);
+  text-align: right;
+  font-weight: 500;
+}
+
+.td-color {
+  white-space: nowrap;
+  font-size: var(--text-sm);
+}
+
+.swatch {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  border: 1px solid rgba(0,0,0,0.15);
+  vertical-align: middle;
+  margin-right: var(--space-1);
+  flex-shrink: 0;
+}
+
+.empty-msg {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+</style>
