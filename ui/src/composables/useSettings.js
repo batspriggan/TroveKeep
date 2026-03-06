@@ -12,6 +12,7 @@ function loadFromStorage() {
 
 const defaults = {
   tablePlannerEnabled: true,
+  bulkPiecesEnabled: true,
 }
 
 const settings = reactive({ ...defaults, ...loadFromStorage() })

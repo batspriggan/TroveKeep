@@ -40,10 +40,9 @@ const router = createRouter({
 })
 
 router.beforeEach((to) => {
-  if (to.path.startsWith('/table-planner')) {
-    const settings = useSettings()
-    if (!settings.tablePlannerEnabled) return '/'
-  }
+  const settings = useSettings()
+  if (to.path.startsWith('/table-planner') && !settings.tablePlannerEnabled) return '/'
+  if ((to.path.startsWith('/bulkpieces') || to.path.startsWith('/drawercontainers') || to.path.startsWith('/drawers')) && !settings.bulkPiecesEnabled) return '/'
 })
 
 export default router

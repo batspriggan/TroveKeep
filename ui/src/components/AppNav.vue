@@ -4,9 +4,9 @@
     <button class="hamburger" @click="open = !open" aria-label="Toggle menu">☰</button>
     <div class="nav-links" :class="{ open }">
       <RouterLink to="/sets">Sets</RouterLink>
-      <RouterLink to="/bulkpieces">Bulk Pieces</RouterLink>
+      <RouterLink v-if="settings.bulkPiecesEnabled" to="/bulkpieces">Bulk Pieces</RouterLink>
       <RouterLink to="/boxes">Boxes</RouterLink>
-      <RouterLink to="/drawercontainers">Drawer Containers</RouterLink>
+      <RouterLink v-if="settings.bulkPiecesEnabled" to="/drawercontainers">Drawer Containers</RouterLink>
       <RouterLink to="/search">Search</RouterLink>
       <RouterLink to="/archives">Archives</RouterLink>
       <RouterLink to="/settings">Settings</RouterLink>

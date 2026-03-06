@@ -6,6 +6,14 @@
       <h2>Features</h2>
       <div class="feature-row">
         <label class="toggle-label">
+          <input type="checkbox" v-model="settings.bulkPiecesEnabled" />
+          Bulk Pieces Management
+        </label>
+        <span class="muted">Show Bulk Pieces and Drawer Containers sections.<br>
+        Note: if any Bulk Piece is already present it will not be removed</span>
+      </div>
+      <div class="feature-row">
+        <label class="toggle-label">
           <input type="checkbox" v-model="settings.tablePlannerEnabled" />
           Table Planner
         </label>

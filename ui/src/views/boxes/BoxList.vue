@@ -22,7 +22,7 @@
         <tr>
           <th>Name</th>
           <th>Sets</th>
-          <th>Bulk Pieces</th>
+          <th v-if="settings.bulkPiecesEnabled">Bulk Pieces</th>
           <th></th>
         </tr>
       </thead>
@@ -32,16 +32,16 @@
             <RouterLink :to="`/boxes/${b.id}`">{{ b.name }}</RouterLink>
           </td>
           <td>{{ b.setCount }}</td>
-          <td>{{ b.bulkPieceCount }}</td>
+          <td v-if="settings.bulkPiecesEnabled">{{ b.bulkPieceCount }}</td>
           <td>
             <button class="danger" @click="confirmDelete(b)">Delete</button>
           </td>
         </tr>
         <tr v-if="boxes.length === 0">
-          <td colspan="4">No boxes yet.</td>
+          <td :colspan="settings.bulkPiecesEnabled ? 4 : 3">No boxes yet.</td>
         </tr>
         <tr v-else-if="filteredBoxes.length === 0">
-          <td colspan="4">No results match your filter.</td>
+          <td :colspan="settings.bulkPiecesEnabled ? 4 : 3">No results match your filter.</td>
         </tr>
       </tbody>
     </table>
@@ -60,6 +60,9 @@
 import { ref, computed, onMounted } from 'vue'
 import { getAllBoxes, createBox, deleteBox } from '../../api/boxes.js'
 import ConfirmDialog from '../../components/ConfirmDialog.vue'
+import { useSettings } from '../../composables/useSettings.js'
+
+const settings = useSettings()
 
 const boxes = ref([])
 const filterText = ref('')
