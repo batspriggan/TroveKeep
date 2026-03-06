@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import { useSettings } from '../composables/useSettings.js'
 
 import SetList from '../views/sets/SetList.vue'
 import SetDetail from '../views/sets/SetDetail.vue'
@@ -33,7 +34,16 @@ const routes = [
   { path: '/table-planner/rooms/:id', component: RoomPlannerView },
 ]
 
-export default createRouter({
+const router = createRouter({
   history: createWebHistory(),
   routes,
 })
+
+router.beforeEach((to) => {
+  if (to.path.startsWith('/table-planner')) {
+    const settings = useSettings()
+    if (!settings.tablePlannerEnabled) return '/'
+  }
+})
+
+export default router

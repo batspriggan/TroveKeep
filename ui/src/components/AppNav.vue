@@ -10,7 +10,7 @@
       <RouterLink to="/search">Search</RouterLink>
       <RouterLink to="/archives">Archives</RouterLink>
       <RouterLink to="/settings">Settings</RouterLink>
-      <RouterLink to="/table-planner" class="mobile-hide">Table Planner</RouterLink>
+      <RouterLink v-if="settings.tablePlannerEnabled" to="/table-planner" class="mobile-hide">Table Planner</RouterLink>
     </div>
   </nav>
 </template>
@@ -18,9 +18,11 @@
 <script setup>
 import { ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
+import { useSettings } from '../composables/useSettings.js'
 
 const open = ref(false)
 const route = useRoute()
+const settings = useSettings()
 
 watch(route, () => { open.value = false })
 </script>
