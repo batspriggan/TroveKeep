@@ -4,6 +4,7 @@ using MongoDB.Bson.Serialization.Serializers;
 using MongoDB.Driver;
 using TroveKeep.Core.Interfaces.Repositories;
 using TroveKeep.Core.Interfaces.Services;
+using TroveKeep.Migrations;
 using TroveKeep.Repositories;
 using TroveKeep.Services;
 
@@ -57,6 +58,11 @@ builder.Services.AddScoped<IBaseplateService, BaseplateService>();
 builder.Services.AddHttpClient("SetImages");
 
 var app = builder.Build();
+
+// Run pending migrations before accepting requests
+await new MigrationRunner(
+    app.Services.GetRequiredService<IMongoDatabase>()
+).RunAsync();
 
 if (app.Environment.IsDevelopment())
 {

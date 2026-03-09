@@ -15,7 +15,9 @@ public class BaseplateService : IBaseplateService
     }
 
     public Task<IEnumerable<Baseplate>> GetAllAsync() => _repo.GetAllAsync();
+    public Task<Baseplate?> GetByIdAsync(Guid id) => _repo.GetByIdAsync(id);
     public Task<Baseplate> CreateAsync(Baseplate baseplate) => _repo.CreateAsync(baseplate);
+    public Task UpdateImageCachedAsync(Guid id) => _repo.UpdateImageCachedAsync(id);
     public Task DeleteAsync(Guid id) => _repo.DeleteAsync(id);
     // Matches patterns like "48 x 48", "16 x 32", "24X32", "48×48"
     private static readonly Regex _studPattern =

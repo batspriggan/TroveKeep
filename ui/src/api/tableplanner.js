@@ -14,6 +14,14 @@ export const deleteTemplate = (id) => del(`${TEMPLATES}/${id}`)
 export const getAllBaseplates = () => get(BASEPLATES)
 export const createBaseplate = (data) => post(BASEPLATES, data)
 export const deleteBaseplate = (id) => del(`${BASEPLATES}/${id}`)
+export const getBaseplateImageUrl = (id) => `${BASEPLATES}/${id}/image`
+
+export async function uploadBaseplateImage(id, file) {
+  const form = new FormData()
+  form.append('file', file)
+  const res = await fetch(`${BASEPLATES}/${id}/image`, { method: 'POST', body: form })
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+}
 
 // Rooms
 export const getAllRooms = () => get(ROOMS)

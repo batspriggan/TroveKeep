@@ -264,21 +264,42 @@
       <table v-if="baseplates.length" class="data-table bp-table">
         <thead>
           <tr>
-            <th>Color</th>
+            <th>Preview</th>
+            <th>Type</th>
             <th>Part #</th>
             <th>Name</th>
             <th>Size (studs)</th>
+            <th>Image</th>
             <th></th>
           </tr>
         </thead>
         <tbody>
           <tr v-for="b in baseplates" :key="b.id">
-            <td><span class="swatch" :style="{ background: b.legoColorRgb ? '#' + b.legoColorRgb : '#ccc' }" :title="b.legoColorName ?? ''"></span></td>
-            <td class="id-col">{{ b.partNum }}</td>
+            <td>
+              <span v-if="b.type === 'Standard'"
+                class="swatch" :style="{ background: b.legoColorRgb ? '#' + b.legoColorRgb : '#ccc' }"
+                :title="b.legoColorName ?? ''"></span>
+              <img v-else-if="b.imageCached || (b.type === 'Custom' && b.linkedSetId)"
+                :src="getBaseplateImageUrl(b.id)" class="bp-thumb"
+                :alt="b.name" @error="e => e.target.style.display='none'" />
+              <span v-else class="muted">—</span>
+            </td>
+            <td><span class="bp-type-badge" :class="b.type.toLowerCase()">{{ b.type }}</span></td>
+            <td class="id-col">{{ b.partNum || '—' }}</td>
             <td>{{ b.name }}</td>
             <td>{{ b.widthStuds }}×{{ b.depthStuds }}</td>
+            <td class="bp-img-col">
+              <template v-if="b.type !== 'Standard'">
+                <label class="bp-upload-label">
+                  <input type="file" accept="image/*" @change="e => onBpFileChange(e, b.id)" style="display:none" />
+                  <span class="bp-upload-link">{{ bpPendingFile[b.id] ? bpPendingFile[b.id].name : (b.imageCached ? 'Replace' : 'Upload') }}</span>
+                </label>
+                <button v-if="bpPendingFile[b.id]" class="primary small" style="margin-left:0.4rem" @click="saveBpImage(b.id)">Save</button>
+              </template>
+              <span v-else class="muted">—</span>
+            </td>
             <td class="bp-action-col">
-              <button class="import-btn" @click="removeBaseplate(b.id)">Delete</button>
+              <button class="import-btn danger-btn" @click="removeBaseplate(b.id)">Delete</button>
             </td>
           </tr>
         </tbody>
@@ -286,21 +307,46 @@
       <p v-else class="muted" style="margin-top:0.5rem">No baseplates yet.</p>
 
       <form class="bp-add-form" @submit.prevent="addBaseplate">
-        <div class="bp-search-wrap">
-          <input v-model="newBpQuery" placeholder="Search part…" class="bp-search-input" />
-          <ul v-if="newBpResults.length > 0" class="bp-dropdown">
-            <li
-              v-for="r in newBpResults"
-              :key="r.partNum"
-              class="bp-dropdown-item"
-              @click="selectBpResult(r)"
-            >{{ r.partNum }} — {{ r.name }}</li>
-          </ul>
-        </div>
-        <span v-if="newBpSelected" class="bp-selected-badge">{{ newBpSelected.partNum }} — {{ newBpSelected.name }}</span>
+        <!-- Type selector -->
+        <label class="bp-label">Type
+          <select v-model="newBpType" class="bp-type-select">
+            <option>Standard</option>
+            <option>Road</option>
+            <option>Custom</option>
+          </select>
+        </label>
+
+        <!-- Part search (Standard + Road) -->
+        <template v-if="newBpType !== 'Custom'">
+          <div class="bp-search-wrap">
+            <input v-model="newBpQuery" placeholder="Search part…" class="bp-search-input" />
+            <ul v-if="newBpResults.length > 0" class="bp-dropdown">
+              <li v-for="r in newBpResults" :key="r.partNum" class="bp-dropdown-item" @click="selectBpResult(r)">
+                {{ r.partNum }} — {{ r.name }}
+              </li>
+            </ul>
+          </div>
+        </template>
+
+        <!-- Set search (Custom) -->
+        <template v-else>
+          <div class="bp-search-wrap">
+            <input v-model="newBpSetQuery" placeholder="Search your sets…" class="bp-search-input" />
+            <ul v-if="newBpSetResults.length > 0" class="bp-dropdown">
+              <li v-for="s in newBpSetResults" :key="s.id" class="bp-dropdown-item" @click="selectBpSet(s)">
+                {{ s.setNumber ? s.setNumber + ' — ' : '' }}{{ s.description }}{{ s.isMoc ? ' (MOC)' : '' }}
+              </li>
+            </ul>
+          </div>
+        </template>
+
+        <span v-if="newBpSelected" class="bp-selected-badge">{{ newBpSelected.partNum ? newBpSelected.partNum + ' — ' : '' }}{{ newBpSelected.name }}</span>
+
         <label class="bp-label">W <input v-model.number="newBpWidth" type="number" min="1" max="256" class="bp-num-input" required /> studs</label>
         <label class="bp-label">D <input v-model.number="newBpDepth" type="number" min="1" max="256" class="bp-num-input" required /> studs</label>
-        <label class="bp-label">Color <ColorSelect v-model="newBpColorUid" :colors="colors" /></label>
+
+        <label v-if="newBpType === 'Standard'" class="bp-label">Color <ColorSelect v-model="newBpColorUid" :colors="colors" /></label>
+
         <button class="primary small" type="submit" :disabled="!newBpSelected">Add Baseplate</button>
       </form>
     </div>
@@ -372,7 +418,8 @@ import {
   getPartCategoriesStatus, uploadPartCategories, getPartCategoriesList,
   searchArchivePartsBaseplates,
 } from '../api/archives.js'
-import { getAllBaseplates, createBaseplate, deleteBaseplate, getAllTemplates, createTemplate, updateTemplate, deleteTemplate } from '../api/tableplanner.js'
+import { getAllBaseplates, createBaseplate, deleteBaseplate, getBaseplateImageUrl, uploadBaseplateImage, getAllTemplates, createTemplate, updateTemplate, deleteTemplate } from '../api/tableplanner.js'
+import { getAllSets } from '../api/sets.js'
 
 // --- Folder import ---
 const KNOWN_ARCHIVES = {
@@ -631,16 +678,39 @@ async function reloadPartCategoriesData() {
 
 // --- Baseplates ---
 const baseplates = ref([])
+const allSets = ref([])
+const newBpType = ref('Standard')
 const newBpQuery = ref('')
 const newBpResults = ref([])
 const newBpSelected = ref(null)
 const newBpWidth = ref(null)
 const newBpDepth = ref(null)
 const newBpColorUid = ref('')
+const newBpSetQuery = ref('')
+const newBpSetResults = ref([])
+const newBpLinkedSetId = ref(null)
+const bpPendingFile = ref({})  // id → File
 
 watch(newBpQuery, async (q) => {
   if (q.length >= 2) newBpResults.value = await searchArchivePartsBaseplates(q, 10)
   else newBpResults.value = []
+})
+
+watch(newBpSetQuery, (q) => {
+  if (!q) { newBpSetResults.value = []; return }
+  const lq = q.toLowerCase()
+  newBpSetResults.value = allSets.value.filter(s =>
+    (s.setNumber ?? '').toLowerCase().includes(lq) ||
+    (s.description ?? '').toLowerCase().includes(lq)
+  ).slice(0, 10)
+})
+
+watch(newBpType, () => {
+  newBpSelected.value = null
+  newBpLinkedSetId.value = null
+  newBpSetQuery.value = ''
+  newBpResults.value = []
+  newBpQuery.value = ''
 })
 
 function selectBpResult(result) {
@@ -651,27 +721,57 @@ function selectBpResult(result) {
   newBpQuery.value = ''
 }
 
+function selectBpSet(s) {
+  newBpLinkedSetId.value = s.id
+  newBpSelected.value = { partNum: s.setNumber ?? '', name: s.description }
+  newBpSetResults.value = []
+  newBpSetQuery.value = ''
+}
+
 async function addBaseplate() {
   if (!newBpSelected.value) return
-  const legoColorId = colors.value.find(c => c.uniqueId === newBpColorUid.value)?.id ?? 0
+  const legoColorId = newBpType.value === 'Standard'
+    ? (colors.value.find(c => c.uniqueId === newBpColorUid.value)?.id ?? 0)
+    : 0
   const bp = await createBaseplate({
+    type: newBpType.value,
     partNum: newBpSelected.value.partNum,
     name: newBpSelected.value.name,
     widthStuds: newBpWidth.value,
     depthStuds: newBpDepth.value,
     legoColorId,
+    linkedSetId: newBpType.value === 'Custom' ? newBpLinkedSetId.value : null,
   })
   baseplates.value.push(bp)
   newBpSelected.value = null
   newBpWidth.value = null
   newBpDepth.value = null
   newBpColorUid.value = ''
+  newBpLinkedSetId.value = null
 }
 
 async function removeBaseplate(id) {
   if (!confirm('Delete this baseplate?')) return
   await deleteBaseplate(id)
   baseplates.value = baseplates.value.filter(b => b.id !== id)
+}
+
+function onBpFileChange(e, id) {
+  const file = e.target.files[0]
+  if (!file) return
+  bpPendingFile.value = { ...bpPendingFile.value, [id]: file }
+}
+
+async function saveBpImage(id) {
+  const file = bpPendingFile.value[id]
+  if (!file) return
+  await uploadBaseplateImage(id, file)
+  const next = { ...bpPendingFile.value }
+  delete next[id]
+  bpPendingFile.value = next
+  // refresh the plate so imageCached flips
+  const fresh = await getAllBaseplates()
+  baseplates.value = fresh
 }
 
 // --- Table Templates ---
@@ -744,6 +844,7 @@ onMounted(async () => {
   if (partCategoriesStatus.value.count > 0) await loadPartCategories()
   if (settings.tablePlannerEnabled) {
     baseplates.value = await getAllBaseplates()
+    allSets.value = await getAllSets().catch(() => [])
     await loadTemplates()
   }
 })
@@ -977,6 +1078,50 @@ onMounted(async () => {
 .hex {
   font-family: monospace;
   font-size: 0.85rem;
+}
+
+/* ── Baseplate type badge ── */
+.bp-type-badge {
+  display: inline-block;
+  font-size: 0.72rem;
+  padding: 0.1rem 0.45rem;
+  border-radius: 10px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.bp-type-badge.standard { background: #e3f0e8; color: #2a7a3a; }
+.bp-type-badge.road     { background: #e8eaf6; color: #3949ab; }
+.bp-type-badge.custom   { background: #fff3e0; color: #e65100; }
+
+.bp-thumb {
+  width: 32px;
+  height: 20px;
+  object-fit: cover;
+  border-radius: 2px;
+  border: 1px solid #e2e8f0;
+  vertical-align: middle;
+}
+
+.bp-img-col {
+  white-space: nowrap;
+}
+
+.bp-upload-label {
+  cursor: pointer;
+}
+
+.bp-upload-link {
+  font-size: 0.78rem;
+  color: #3b82f6;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.bp-type-select {
+  padding: 0.25rem 0.4rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  font-size: 0.875rem;
 }
 
 /* ── Baseplates section ── */
