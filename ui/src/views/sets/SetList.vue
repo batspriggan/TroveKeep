@@ -4,31 +4,52 @@
     <h1>Lego Sets</h1>
 
     <section class="add-section">
+      <div class="add-tabs">
+        <button type="button" class="add-tab" :class="{ active: !form.isMoc }" @click="onMocToggle(false)">Official Set</button>
+        <button type="button" class="add-tab" :class="{ active: form.isMoc }" @click="onMocToggle(true)">MOC</button>
+      </div>
+
       <form @submit.prevent="submit">
         <div class="add-row">
-          <div class="form-field add-search-field">
-            <label>Search Archive</label>
-            <SetArchiveTypeahead @select="onArchiveSelect" />
-          </div>
+          <template v-if="!form.isMoc">
+            <div class="form-field add-search-field">
+              <label>Search Archive</label>
+              <SetArchiveTypeahead @select="onArchiveSelect" />
+            </div>
 
-          <div v-if="selectedArchiveSet" class="selected-pill">
-            <span><strong>{{ selectedArchiveSet.setNum }}</strong> — {{ selectedArchiveSet.name }}</span>
-            <button type="button" class="clear-btn" @click="clearSelected" aria-label="Clear selection">✕</button>
-          </div>
+            <div v-if="selectedArchiveSet" class="selected-pill">
+              <span><strong>{{ selectedArchiveSet.setNum }}</strong> — {{ selectedArchiveSet.name }}</span>
+              <button type="button" class="clear-btn" @click="clearSelected" aria-label="Clear selection">✕</button>
+            </div>
 
-          <div v-if="!selectedArchiveSet" class="form-field add-num-field">
-            <label>Set Number *</label>
-            <input v-model="form.setNumber" required placeholder="e.g. 75313" />
-          </div>
+            <div v-if="!selectedArchiveSet" class="form-field add-num-field">
+              <label>Set Number *</label>
+              <input v-model="form.setNumber" required placeholder="e.g. 75313" />
+            </div>
+          </template>
+
+          <template v-else>
+            <div class="form-field add-search-field">
+              <label>Description *</label>
+              <input v-model="form.description" required placeholder="e.g. My custom spaceship" />
+            </div>
+            <div class="form-field add-num-field">
+              <label>Custom ID</label>
+              <input v-model="form.setNumber" placeholder="e.g. MOC-001 (optional)" />
+            </div>
+          </template>
 
           <div class="add-submit-row">
             <div class="form-field add-qty-field">
               <label>Qty *</label>
               <input v-model.number="form.quantity" type="number" min="1" required />
             </div>
-            <button class="primary add-btn" type="submit" :disabled="!selectedArchiveSet && !form.setNumber">Add Set</button>
+            <button class="primary add-btn" type="submit" :disabled="form.isMoc ? !form.description : (!selectedArchiveSet && !form.setNumber)">
+              {{ form.isMoc ? 'Add MOC' : 'Add Set' }}
+            </button>
           </div>
         </div>
+
         <p v-if="error" class="error">{{ error }}</p>
       </form>
     </section>
@@ -38,6 +59,11 @@
     <template v-else>
       <div class="filter-bar">
         <input v-model="filterText" type="search" placeholder="Filter by set number or description…" class="filter-input" />
+        <div class="type-filter">
+          <button type="button" class="type-btn" :class="{ active: typeFilter === 'all' }" @click="typeFilter = 'all'">All</button>
+          <button type="button" class="type-btn" :class="{ active: typeFilter === 'official' }" @click="typeFilter = 'official'">Official</button>
+          <button type="button" class="type-btn" :class="{ active: typeFilter === 'moc' }" @click="typeFilter = 'moc'">MOC</button>
+        </div>
       </div>
 
       <!-- Desktop table -->
@@ -59,7 +85,8 @@
               <div v-else class="thumb-placeholder"></div>
             </td>
             <td class="td-id">
-              <RouterLink :to="`/sets/${s.id}`">{{ s.setNumber }}</RouterLink>
+              <RouterLink :to="`/sets/${s.id}`">{{ s.setNumber || '—' }}</RouterLink>
+              <span v-if="s.isMoc" class="moc-badge">MOC</span>
             </td>
             <td class="td-desc">{{ s.description }}</td>
             <td class="td-qty">{{ s.quantity }}</td>
@@ -93,7 +120,8 @@
           </div>
           <div class="card-body">
             <div class="card-top">
-              <span class="card-id">{{ s.setNumber }}</span>
+              <span class="card-id">{{ s.setNumber || s.description }}</span>
+              <span v-if="s.isMoc" class="moc-badge">MOC</span>
               <span class="card-qty">× {{ s.quantity }}</span>
             </div>
             <div class="card-desc">{{ s.description }}</div>
@@ -123,19 +151,28 @@ import SetArchiveTypeahead from '../../components/SetArchiveTypeahead.vue'
 
 const sets = ref([])
 const filterText = ref('')
+const typeFilter = ref('all')
 const filteredSets = computed(() => {
+  let result = sets.value
+  if (typeFilter.value === 'moc') result = result.filter(s => s.isMoc)
+  else if (typeFilter.value === 'official') result = result.filter(s => !s.isMoc)
   const q = filterText.value.trim().toLowerCase()
-  if (!q) return sets.value
-  return sets.value.filter(s =>
-    s.setNumber.toLowerCase().includes(q) ||
+  if (!q) return result
+  return result.filter(s =>
+    (s.setNumber ?? '').toLowerCase().includes(q) ||
     s.description.toLowerCase().includes(q)
   )
 })
 const loading = ref(true)
 const error = ref('')
 const deleteTarget = ref(null)
-const form = ref({ setNumber: '', description: '', photoUrl: '', quantity: 1 })
+const form = ref({ setNumber: '', description: '', quantity: 1, isMoc: false })
 const selectedArchiveSet = ref(null)
+
+function onMocToggle(isMoc) {
+  selectedArchiveSet.value = null
+  form.value = { setNumber: '', description: '', quantity: form.value.quantity, isMoc }
+}
 
 function onArchiveSelect(s) {
   selectedArchiveSet.value = s
@@ -146,7 +183,7 @@ function onArchiveSelect(s) {
 
 function clearSelected() {
   selectedArchiveSet.value = null
-  form.value = { setNumber: '', description: '', photoUrl: '', quantity: 1 }
+  form.value = { setNumber: '', description: '', quantity: 1, isMoc: false }
 }
 
 async function load() {
@@ -165,12 +202,13 @@ async function submit() {
   error.value = ''
   try {
     await createSet({
-      setNumber: form.value.setNumber,
+      setNumber: form.value.setNumber || null,
       description: form.value.description,
-      photoUrl: form.value.photoUrl || null,
+      photoUrl: form.value.photoUrl || null, // still passed for auto-download trigger
       quantity: form.value.quantity,
+      isMoc: form.value.isMoc,
     })
-    form.value = { setNumber: '', description: '', photoUrl: '', quantity: 1 }
+    form.value = { setNumber: '', description: '', quantity: 1, isMoc: false }
     selectedArchiveSet.value = null
     await load()
   } catch (e) {
@@ -244,8 +282,8 @@ onMounted(load)
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  background: var(--color-accent-soft);
-  border: 1px solid #fca5a5;
+  background: var(--color-surface-alt);
+  border: 1px solid var(--color-border);
   border-radius: 6px;
   padding: var(--space-2) var(--space-3);
   font-size: var(--text-sm);
@@ -255,11 +293,15 @@ onMounted(load)
   background: none;
   border: none;
   cursor: pointer;
-  color: var(--color-accent);
+  color: var(--color-text-muted);
   font-size: var(--text-sm);
   padding: 0 var(--space-1);
   line-height: 1;
   margin-left: auto;
+}
+
+.clear-btn:hover {
+  color: var(--color-text-secondary);
 }
 
 @media (min-width: 640px) {
@@ -281,15 +323,88 @@ onMounted(load)
 
 /* ── Filter ── */
 .filter-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
   margin-bottom: var(--space-3);
 }
 
 .filter-input {
-  width: 100%;
+  flex: 1;
+  min-width: 180px;
   max-width: 360px;
   font-size: var(--text-sm);
   border-color: var(--color-border);
   background: var(--color-surface);
+}
+
+.type-filter {
+  display: flex;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.type-btn {
+  padding: 0.3rem var(--space-3);
+  font-size: var(--text-sm);
+  background: var(--color-surface);
+  border: none;
+  border-right: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.type-btn:last-child { border-right: none; }
+
+.type-btn:hover { background: var(--color-surface-alt); color: var(--color-text-secondary); }
+
+.type-btn.active {
+  background: var(--color-surface-alt);
+  color: var(--color-text-primary);
+  font-weight: 500;
+}
+
+.add-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--color-border);
+  margin-bottom: var(--space-4);
+}
+
+.add-tab {
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: color var(--transition-fast), border-color var(--transition-fast);
+}
+
+.add-tab:hover { color: var(--color-text-secondary); }
+
+.add-tab.active {
+  color: var(--color-accent);
+  border-bottom-color: var(--color-accent);
+}
+
+.moc-badge {
+  display: inline-block;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  background: #dbeafe;
+  color: #1d4ed8;
+  border: 1px solid #93c5fd;
+  border-radius: 3px;
+  padding: 0 4px;
+  vertical-align: middle;
+  margin-left: var(--space-1);
 }
 
 .loading-msg {
@@ -400,7 +515,7 @@ onMounted(load)
 @media (max-width: 640px) {
   .sets-table { display: none; }
 
-  .filter-input { max-width: 100%; }
+  .filter-input { max-width: none; }
 
   .set-cards {
     display: flex;

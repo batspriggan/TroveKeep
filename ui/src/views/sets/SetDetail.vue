@@ -8,15 +8,43 @@
 
     <template v-else-if="set">
       <header class="set-header">
-        <span class="set-number">{{ set.setNumber }}</span>
+        <span v-if="set.setNumber" class="set-number">{{ set.setNumber }}</span>
+        <span v-if="set.isMoc" class="moc-badge">MOC</span>
         <span class="set-desc">{{ set.description }}</span>
       </header>
 
       <div class="detail-layout">
         <!-- Image (top-left on desktop, first on mobile) -->
         <div class="col-image">
+          <!-- Rebrickable cached image -->
           <div v-if="set.imageCached" class="card image-card">
             <img :src="`/api/sets/${id}/image`" class="set-image" alt="" />
+          </div>
+
+          <!-- User-uploaded photos -->
+          <div class="card photo-card">
+            <div class="photo-header">
+              <h2>Photos</h2>
+            </div>
+            <div v-if="photos.length" class="photo-grid">
+              <div v-for="p in photos" :key="p.id" class="photo-item">
+                <img :src="`/api/sets/${id}/photos/${p.id}`" class="photo-thumb" alt="" />
+                <button class="photo-delete" @click="deletePhoto(p.id)" title="Delete photo">✕</button>
+              </div>
+            </div>
+            <p v-else class="no-photos">No photos yet.</p>
+            <label class="upload-btn">
+              <input
+                type="file"
+                accept="image/*"
+                capture="environment"
+                multiple
+                class="upload-input"
+                @change="onPhotoUpload"
+              />
+              Add Photo
+            </label>
+            <p v-if="photoError" class="error photo-error">{{ photoError }}</p>
           </div>
         </div>
 
@@ -78,8 +106,8 @@
             <h2>Edit</h2>
             <div class="edit-grid">
               <div class="form-field">
-                <label>Set Number *</label>
-                <input v-model="editForm.setNumber" required />
+                <label>{{ editForm.isMoc ? 'Custom ID' : 'Set Number *' }}</label>
+                <input v-model="editForm.setNumber" :required="!editForm.isMoc" :placeholder="editForm.isMoc ? 'e.g. MOC-001 (optional)' : ''" />
               </div>
               <div class="form-field edit-qty-field">
                 <label>Qty *</label>
@@ -113,7 +141,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { getSet, updateSet, deleteSet, allocateSetToBox, deallocateSetStorage, clearSetStorage } from '../../api/sets.js'
+import { getSet, updateSet, deleteSet, allocateSetToBox, deallocateSetStorage, clearSetStorage, getSetPhotos, uploadSetPhoto, deleteSetPhoto } from '../../api/sets.js'
 import { getAllBoxes } from '../../api/boxes.js'
 import ConfirmDialog from '../../components/ConfirmDialog.vue'
 
@@ -123,14 +151,16 @@ const id = route.params.id
 
 const set = ref(null)
 const boxes = ref([])
+const photos = ref([])
 const loading = ref(true)
 const error = ref('')
 const editError = ref('')
 const storageError = ref('')
+const photoError = ref('')
 const showConfirm = ref(false)
 const selectedBoxId = ref('')
 const allocQty = ref(1)
-const editForm = ref({ setNumber: '', description: '', photoUrl: '', quantity: 1 })
+const editForm = ref({ setNumber: '', description: '', quantity: 1, isMoc: false })
 
 const boxNameMap = computed(() => Object.fromEntries(boxes.value.map(b => [b.id, b.name])))
 
@@ -146,10 +176,11 @@ async function load() {
   loading.value = true
   error.value = ''
   try {
-    const [s, b] = await Promise.all([getSet(id), getAllBoxes()])
+    const [s, b, p] = await Promise.all([getSet(id), getAllBoxes(), getSetPhotos(id)])
     set.value = s
     boxes.value = b
-    editForm.value = { setNumber: s.setNumber, description: s.description, photoUrl: s.photoUrl ?? '', quantity: s.quantity }
+    photos.value = p
+    editForm.value = { setNumber: s.setNumber ?? '', description: s.description, quantity: s.quantity, isMoc: s.isMoc }
   } catch (e) {
     error.value = e.message
   } finally {
@@ -161,14 +192,38 @@ async function submitEdit() {
   editError.value = ''
   try {
     const updated = await updateSet(id, {
-      setNumber: editForm.value.setNumber,
+      setNumber: editForm.value.setNumber || null,
       description: editForm.value.description,
-      photoUrl: editForm.value.photoUrl || null,
       quantity: editForm.value.quantity,
+      isMoc: editForm.value.isMoc,
     })
     set.value = updated
   } catch (e) {
     editError.value = e.message
+  }
+}
+
+async function onPhotoUpload(event) {
+  photoError.value = ''
+  const files = Array.from(event.target.files ?? [])
+  event.target.value = ''
+  for (const file of files) {
+    try {
+      const photo = await uploadSetPhoto(id, file)
+      photos.value.push(photo)
+    } catch (e) {
+      photoError.value = e.message
+    }
+  }
+}
+
+async function deletePhoto(photoId) {
+  photoError.value = ''
+  try {
+    await deleteSetPhoto(id, photoId)
+    photos.value = photos.value.filter(p => p.id !== photoId)
+  } catch (e) {
+    photoError.value = e.message
   }
 }
 
@@ -244,6 +299,19 @@ onMounted(load)
   color: var(--color-text-primary);
 }
 
+.moc-badge {
+  display: inline-block;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  background: #dbeafe;
+  color: #1d4ed8;
+  border: 1px solid #93c5fd;
+  border-radius: 4px;
+  padding: 2px 6px;
+  vertical-align: middle;
+}
+
 .set-desc {
   font-size: var(--text-lg);
   color: var(--color-text-secondary);
@@ -288,6 +356,89 @@ onMounted(load)
   max-height: 220px;
   object-fit: contain;
 }
+
+/* ── Photo card ── */
+.photo-card { margin-top: var(--space-4); }
+
+.photo-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-3);
+}
+
+.photo-header h2 { margin: 0; }
+
+.photo-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+
+.photo-item {
+  position: relative;
+}
+
+.photo-thumb {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  border-radius: 4px;
+  border: 1px solid var(--color-border);
+  display: block;
+}
+
+.photo-delete {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(0,0,0,0.5);
+  color: #fff;
+  font-size: 0.6rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  line-height: 1;
+}
+
+.photo-delete:hover { background: #b91c1c; }
+
+.no-photos {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  margin-bottom: var(--space-3);
+}
+
+.upload-btn {
+  display: inline-block;
+  cursor: pointer;
+  font-size: var(--text-sm);
+  font-weight: 500;
+  padding: 0.4rem var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-surface);
+  color: var(--color-text-secondary);
+  transition: background var(--transition-fast), border-color var(--transition-fast);
+}
+
+.upload-btn:hover {
+  background: var(--color-surface-alt);
+  border-color: var(--color-text-muted);
+}
+
+.upload-input {
+  display: none;
+}
+
+.photo-error { margin-top: var(--space-2); }
 
 /* ── Storage card ── */
 .storage-header {

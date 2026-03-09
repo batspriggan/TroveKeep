@@ -4,9 +4,10 @@ public record LegoSetResponse(
     Guid Id,
     string SetNumber,
     string Description,
-    string? PhotoUrl,
     int Quantity,
+    bool IsMoc,
     bool ImageCached,
+    int PhotoCount,
     IEnumerable<StorageAllocationResponse> StorageAllocations,
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt);
