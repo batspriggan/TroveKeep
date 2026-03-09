@@ -1,4 +1,5 @@
 using MongoDB.Driver;
+using TroveKeep.Core.Exceptions;
 using TroveKeep.Core.Interfaces.Repositories;
 using TroveKeep.Core.Models;
 using TroveKeep.Repositories.Documents;
@@ -33,6 +34,7 @@ public class RoomRepository : IRoomRepository
         var now = DateTime.UtcNow;
         doc.CreatedAt = now;
         doc.UpdatedAt = now;
+        doc.Version = 0;
         await _rooms.InsertOneAsync(doc);
         return ToModel(doc);
     }
@@ -45,14 +47,21 @@ public class RoomRepository : IRoomRepository
         var doc = ToDocument(room);
         doc.CreatedAt = existing.CreatedAt;
         doc.UpdatedAt = DateTime.UtcNow;
+        doc.Version = existing.Version + 1;
         // Preserve existing layout and aggregate selections
         doc.Layout = existing.Layout;
         doc.AggregateSelections = existing.AggregateSelections;
-        await _rooms.ReplaceOneAsync(x => x.Id == room.Id, doc);
+
+        var result = await _rooms.ReplaceOneAsync(
+            x => x.Id == room.Id && x.Version == room.Version, doc);
+
+        if (result.ModifiedCount == 0)
+            throw new ConcurrencyException($"Room {room.Id} was modified by someone else. Please refresh and try again.");
+
         return ToModel(doc);
     }
 
-    public async Task<Room?> SaveLayoutAsync(Guid id, IEnumerable<PlacedTable> layout, IEnumerable<AggregateSelection> aggregateSelections)
+    public async Task<Room?> SaveLayoutAsync(Guid id, IEnumerable<PlacedTable> layout, IEnumerable<AggregateSelection> aggregateSelections, int expectedVersion)
     {
         var layoutDocs = layout.Select(p => new PlacedTableDocument
         {
@@ -71,14 +80,24 @@ public class RoomRepository : IRoomRepository
         var update = Builders<RoomDocument>.Update
             .Set(r => r.Layout, layoutDocs)
             .Set(r => r.AggregateSelections, selectionDocs)
-            .Set(r => r.UpdatedAt, DateTime.UtcNow);
+            .Set(r => r.UpdatedAt, DateTime.UtcNow)
+            .Inc(r => r.Version, 1);
 
         var result = await _rooms.FindOneAndUpdateAsync(
-            x => x.Id == id,
+            x => x.Id == id && x.Version == expectedVersion,
             update,
             new FindOneAndUpdateOptions<RoomDocument> { ReturnDocument = ReturnDocument.After });
 
-        return result is null ? null : ToModel(result);
+        if (result is null)
+        {
+            // Check if room exists at all; if yes it's a concurrency conflict
+            var exists = await _rooms.Find(x => x.Id == id).AnyAsync();
+            if (exists)
+                throw new ConcurrencyException($"Room {id} layout was saved by someone else. Please refresh and try again.");
+            return null;
+        }
+
+        return ToModel(result);
     }
 
     public async Task<bool> DeleteAsync(Guid id)
@@ -107,6 +126,7 @@ public class RoomRepository : IRoomRepository
         }).ToList(),
         CreatedAt = new DateTimeOffset(DateTime.SpecifyKind(doc.CreatedAt, DateTimeKind.Utc)),
         UpdatedAt = new DateTimeOffset(DateTime.SpecifyKind(doc.UpdatedAt, DateTimeKind.Utc)),
+        Version = doc.Version,
     };
 
     private static RoomDocument ToDocument(Room model) => new()
@@ -129,5 +149,6 @@ public class RoomRepository : IRoomRepository
         }).ToList(),
         CreatedAt = model.CreatedAt.UtcDateTime,
         UpdatedAt = model.UpdatedAt.UtcDateTime,
+        Version = model.Version,
     };
 }

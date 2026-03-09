@@ -12,4 +12,6 @@ public record BaseplateResponse(
     string? LegoColorRgb,
     bool ImageCached,
     Guid? LinkedSetId,
-    DateTimeOffset CreatedAt);
+    DateTimeOffset CreatedAt,
+    DateTimeOffset UpdatedAt,
+    int Version);

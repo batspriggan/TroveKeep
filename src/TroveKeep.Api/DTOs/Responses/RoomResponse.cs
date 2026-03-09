@@ -12,4 +12,5 @@ public record RoomResponse(
     IEnumerable<PlacedTableResponse> Layout,
     IEnumerable<AggregateSelectionResponse> AggregateSelections,
     DateTimeOffset CreatedAt,
-    DateTimeOffset UpdatedAt);
+    DateTimeOffset UpdatedAt,
+    int Version);

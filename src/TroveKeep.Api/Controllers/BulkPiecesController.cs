@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using TroveKeep.Api.DTOs.Requests;
 using TroveKeep.Api.DTOs.Responses;
+using TroveKeep.Core.Exceptions;
 using TroveKeep.Core.Interfaces.Repositories;
 using TroveKeep.Core.Interfaces.Services;
 using TroveKeep.Core.Models;
@@ -74,20 +75,29 @@ public class BulkPiecesController : ControllerBase
     [ProducesResponseType(typeof(BulkPieceResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<IActionResult> Update(Guid id, [FromBody] UpdateBulkPieceRequest request)
     {
-        var model = new BulkPiece
+        try
         {
-            Id = id,
-            LegoId = request.LegoId,
-            LegoColorId = request.LegoColorId,
-            Description = request.Description,
-            Quantity = request.Quantity,
-        };
-        var updated = await _service.UpdateAsync(model);
-        if (updated is null) return NotFound();
-        var colors = await BuildColorLookupAsync();
-        return Ok(MapToResponse(updated, colors));
+            var model = new BulkPiece
+            {
+                Id = id,
+                LegoId = request.LegoId,
+                LegoColorId = request.LegoColorId,
+                Description = request.Description,
+                Quantity = request.Quantity,
+                Version = request.Version,
+            };
+            var updated = await _service.UpdateAsync(model);
+            if (updated is null) return NotFound();
+            var colors = await BuildColorLookupAsync();
+            return Ok(MapToResponse(updated, colors));
+        }
+        catch (ConcurrencyException ex)
+        {
+            return Conflict(new { error = ex.Message });
+        }
     }
 
     [HttpDelete("{id:guid}")]
@@ -199,6 +209,6 @@ public class BulkPiecesController : ControllerBase
             p.LegoColorId, color.Name, color.Rgb,
             p.Description, p.Quantity, p.ImageCached,
             p.StorageAllocations.Select(a => new StorageAllocationResponse(a.StorageId, a.StoragePosition, a.StorageType.ToString(), a.Quantity)),
-            p.CreatedAt, p.UpdatedAt);
+            p.CreatedAt, p.UpdatedAt, p.Version);
     }
 }

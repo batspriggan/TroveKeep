@@ -10,4 +10,5 @@ public record LegoSetResponse(
     int PhotoCount,
     IEnumerable<StorageAllocationResponse> StorageAllocations,
     DateTimeOffset CreatedAt,
-    DateTimeOffset UpdatedAt);
+    DateTimeOffset UpdatedAt,
+    int Version);

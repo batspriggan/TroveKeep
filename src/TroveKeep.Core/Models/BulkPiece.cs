@@ -11,4 +11,5 @@ public class BulkPiece
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
     public bool ImageCached { get; set; } = false;
+    public int Version { get; set; }
 }

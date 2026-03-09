@@ -3,6 +3,7 @@ using MongoDB.Bson;
 
 namespace TroveKeep.Repositories.Documents;
 
+[BsonIgnoreExtraElements]
 public class DrawerContainerDocument
 {
     [BsonId]
@@ -15,4 +16,5 @@ public class DrawerContainerDocument
     public List<DrawerDocument> Drawers { get; set; } = [];
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
+    public int Version { get; set; }
 }

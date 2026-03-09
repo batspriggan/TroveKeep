@@ -14,4 +14,5 @@ public class BoxDocument
     public bool ImageCached { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
+    public int Version { get; set; }
 }

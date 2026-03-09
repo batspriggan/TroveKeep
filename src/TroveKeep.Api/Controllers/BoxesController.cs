@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using TroveKeep.Api.DTOs.Requests;
 using TroveKeep.Api.DTOs.Responses;
+using TroveKeep.Core.Exceptions;
 using TroveKeep.Core.Interfaces.Repositories;
 using TroveKeep.Core.Interfaces.Services;
 using TroveKeep.Core.Models;
@@ -65,12 +66,20 @@ public class BoxesController : ControllerBase
     [ProducesResponseType(typeof(BoxResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<IActionResult> Update(Guid id, [FromBody] UpdateBoxRequest request)
     {
-        var model = new Box { Id = id, Name = request.Name };
-        var updated = await _service.UpdateAsync(model);
-        if (updated is null) return NotFound();
-        return Ok(MapToResponse(updated));
+        try
+        {
+            var model = new Box { Id = id, Name = request.Name, Version = request.Version };
+            var updated = await _service.UpdateAsync(model);
+            if (updated is null) return NotFound();
+            return Ok(MapToResponse(updated));
+        }
+        catch (ConcurrencyException ex)
+        {
+            return Conflict(new { error = ex.Message });
+        }
     }
 
     [HttpDelete("{id:guid}")]
@@ -128,13 +137,13 @@ public class BoxesController : ControllerBase
     }
 
     private static BoxResponse MapToResponse(Box b) =>
-        new(b.Id, b.Name, b.ImageCached, b.Sets.Count, b.BulkPieces.Count, b.CreatedAt, b.UpdatedAt);
+        new(b.Id, b.Name, b.ImageCached, b.Sets.Count, b.BulkPieces.Count, b.CreatedAt, b.UpdatedAt, b.Version);
 
     private static BoxDetailResponse MapToDetailResponse(Box b, Dictionary<int, (string Name, string Rgb)> colors) =>
         new(b.Id, b.Name, b.ImageCached,
             b.Sets.Select(s => new LegoSetResponse(s.Id, s.SetNumber, s.Description, s.Quantity, s.IsMoc, s.ImageCached, 0,
                 s.StorageAllocations.Select(a => new StorageAllocationResponse(a.StorageId, a.StoragePosition, a.StorageType.ToString(), a.Quantity)),
-                s.CreatedAt, s.UpdatedAt)),
+                s.CreatedAt, s.UpdatedAt, s.Version)),
             b.BulkPieces.Select(p =>
             {
                 colors.TryGetValue(p.LegoColorId, out var color);
@@ -142,7 +151,7 @@ public class BoxesController : ControllerBase
                     p.LegoColorId, color.Name, color.Rgb,
                     p.Description, p.Quantity, p.ImageCached,
                     p.StorageAllocations.Select(a => new StorageAllocationResponse(a.StorageId, a.StoragePosition, a.StorageType.ToString(), a.Quantity)),
-                    p.CreatedAt, p.UpdatedAt);
+                    p.CreatedAt, p.UpdatedAt, p.Version);
             }),
-            b.CreatedAt, b.UpdatedAt);
+            b.CreatedAt, b.UpdatedAt, b.Version);
 }

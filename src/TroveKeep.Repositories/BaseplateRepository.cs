@@ -33,6 +33,7 @@ public class BaseplateRepository : IBaseplateRepository
         var now = DateTime.UtcNow;
         doc.CreatedAt = now;
         doc.UpdatedAt = now;
+        doc.Version = 0;
         await _baseplates.InsertOneAsync(doc);
         return ToModel(doc);
     }
@@ -63,6 +64,7 @@ public class BaseplateRepository : IBaseplateRepository
         LinkedSetId = doc.LinkedSetId,
         CreatedAt = new DateTimeOffset(DateTime.SpecifyKind(doc.CreatedAt, DateTimeKind.Utc)),
         UpdatedAt = new DateTimeOffset(DateTime.SpecifyKind(doc.UpdatedAt, DateTimeKind.Utc)),
+        Version = doc.Version,
     };
 
     private static BaseplateDocument ToDocument(Baseplate model) => new()
@@ -78,5 +80,6 @@ public class BaseplateRepository : IBaseplateRepository
         LinkedSetId = model.LinkedSetId,
         CreatedAt = model.CreatedAt.UtcDateTime,
         UpdatedAt = model.UpdatedAt.UtcDateTime,
+        Version = model.Version,
     };
 }

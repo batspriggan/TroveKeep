@@ -7,4 +7,5 @@ public record TableTemplateResponse(
     int DepthCm,
     string Color,
     DateTimeOffset CreatedAt,
-    DateTimeOffset UpdatedAt);
+    DateTimeOffset UpdatedAt,
+    int Version);

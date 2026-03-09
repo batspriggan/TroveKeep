@@ -11,4 +11,5 @@ public record BulkPieceResponse(
     bool ImageCached,
     IEnumerable<StorageAllocationResponse> StorageAllocations,
     DateTimeOffset CreatedAt,
-    DateTimeOffset UpdatedAt);
+    DateTimeOffset UpdatedAt,
+    int Version);

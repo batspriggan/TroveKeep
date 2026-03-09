@@ -3,6 +3,7 @@ using MongoDB.Bson.Serialization.Attributes;
 
 namespace TroveKeep.Repositories.Documents;
 
+[BsonIgnoreExtraElements]
 public class RoomDocument
 {
     [BsonId]
@@ -16,6 +17,7 @@ public class RoomDocument
     public List<AggregateSelectionDocument> AggregateSelections { get; set; } = [];
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
+    public int Version { get; set; }
 }
 
 public class AggregateSelectionDocument

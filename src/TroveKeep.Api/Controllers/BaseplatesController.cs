@@ -112,6 +112,6 @@ public class BaseplatesController : ControllerBase
     {
         colors.TryGetValue(b.LegoColorId, out var color);
         return new(b.Id, b.Type.ToString(), b.PartNum, b.Name, b.WidthStuds, b.DepthStuds,
-            b.LegoColorId, color.Name, color.Rgb, b.ImageCached, b.LinkedSetId, b.CreatedAt);
+            b.LegoColorId, color.Name, color.Rgb, b.ImageCached, b.LinkedSetId, b.CreatedAt, b.UpdatedAt, b.Version);
     }
 }

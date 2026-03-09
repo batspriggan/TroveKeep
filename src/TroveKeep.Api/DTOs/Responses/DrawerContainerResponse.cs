@@ -7,7 +7,8 @@ public record DrawerContainerResponse(
     bool ImageCached,
     int DrawerCount,
     DateTimeOffset CreatedAt,
-    DateTimeOffset UpdatedAt);
+    DateTimeOffset UpdatedAt,
+    int Version);
 
 public record DrawerContainerDetailResponse(
     Guid Id,
@@ -16,4 +17,5 @@ public record DrawerContainerDetailResponse(
     bool ImageCached,
     IEnumerable<DrawerResponse> Drawers,
     DateTimeOffset CreatedAt,
-    DateTimeOffset UpdatedAt);
+    DateTimeOffset UpdatedAt,
+    int Version);

@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using TroveKeep.Api.DTOs.Requests;
 using TroveKeep.Api.DTOs.Responses;
+using TroveKeep.Core.Exceptions;
 using TroveKeep.Core.Interfaces.Services;
 using TroveKeep.Core.Models;
 
@@ -60,12 +61,20 @@ public class DrawerContainersController : ControllerBase
     [ProducesResponseType(typeof(DrawerContainerResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<IActionResult> Update(Guid id, [FromBody] UpdateDrawerContainerRequest request)
     {
-        var model = new DrawerContainer { Id = id, Name = request.Name, Description = request.Description };
-        var updated = await _service.UpdateAsync(model);
-        if (updated is null) return NotFound();
-        return Ok(MapToResponse(updated));
+        try
+        {
+            var model = new DrawerContainer { Id = id, Name = request.Name, Description = request.Description, Version = request.Version };
+            var updated = await _service.UpdateAsync(model);
+            if (updated is null) return NotFound();
+            return Ok(MapToResponse(updated));
+        }
+        catch (ConcurrencyException ex)
+        {
+            return Conflict(new { error = ex.Message });
+        }
     }
 
     [HttpDelete("{id:guid}")]
@@ -136,12 +145,12 @@ public class DrawerContainersController : ControllerBase
     }
 
     private static DrawerContainerResponse MapToResponse(DrawerContainer c) =>
-        new(c.Id, c.Name, c.Description, c.ImageCached, c.Drawers.Count, c.CreatedAt, c.UpdatedAt);
+        new(c.Id, c.Name, c.Description, c.ImageCached, c.Drawers.Count, c.CreatedAt, c.UpdatedAt, c.Version);
 
     private static DrawerContainerDetailResponse MapToDetailResponse(DrawerContainer c) =>
         new(c.Id, c.Name, c.Description, c.ImageCached,
             c.Drawers.Select(MapDrawerToResponse),
-            c.CreatedAt, c.UpdatedAt);
+            c.CreatedAt, c.UpdatedAt, c.Version);
 
     private static DrawerResponse MapDrawerToResponse(Drawer d) =>
         new(d.Position, d.Label, d.DrawerContainerId, d.BulkPieces.Count,

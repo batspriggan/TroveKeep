@@ -9,4 +9,5 @@ public class TableTemplate
     public string Color { get; set; } = "#8b6340";
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
+    public int Version { get; set; }
 }

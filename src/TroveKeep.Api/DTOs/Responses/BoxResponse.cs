@@ -7,7 +7,8 @@ public record BoxResponse(
     int SetCount,
     int BulkPieceCount,
     DateTimeOffset CreatedAt,
-    DateTimeOffset UpdatedAt);
+    DateTimeOffset UpdatedAt,
+    int Version);
 
 public record BoxDetailResponse(
     Guid Id,
@@ -16,4 +17,5 @@ public record BoxDetailResponse(
     IEnumerable<LegoSetResponse> Sets,
     IEnumerable<BulkPieceResponse> BulkPieces,
     DateTimeOffset CreatedAt,
-    DateTimeOffset UpdatedAt);
+    DateTimeOffset UpdatedAt,
+    int Version);

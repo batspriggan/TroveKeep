@@ -17,6 +17,6 @@ public class RoomService : IRoomService
     public Task<Room?> GetByIdAsync(Guid id) => _repo.GetByIdAsync(id);
     public Task<Room> CreateAsync(Room room) => _repo.CreateAsync(room);
     public Task<Room?> UpdateAsync(Room room) => _repo.UpdateAsync(room);
-    public Task<Room?> SaveLayoutAsync(Guid id, IEnumerable<PlacedTable> layout, IEnumerable<AggregateSelection> aggregateSelections) => _repo.SaveLayoutAsync(id, layout, aggregateSelections);
+    public Task<Room?> SaveLayoutAsync(Guid id, IEnumerable<PlacedTable> layout, IEnumerable<AggregateSelection> aggregateSelections, int expectedVersion) => _repo.SaveLayoutAsync(id, layout, aggregateSelections, expectedVersion);
     public Task<bool> DeleteAsync(Guid id) => _repo.DeleteAsync(id);
 }
