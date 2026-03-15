@@ -58,12 +58,13 @@
 
     <template v-else>
       <div class="filter-bar">
-        <input v-model="filterText" type="search" placeholder="Filter by set number or description…" class="filter-input" />
+        <input :value="query" @input="onQueryInput" type="search" placeholder="Filter by set number or description…" class="filter-input" />
         <div class="type-filter">
           <button type="button" class="type-btn" :class="{ active: typeFilter === 'all' }" @click="typeFilter = 'all'">All</button>
           <button type="button" class="type-btn" :class="{ active: typeFilter === 'official' }" @click="typeFilter = 'official'">Official</button>
           <button type="button" class="type-btn" :class="{ active: typeFilter === 'moc' }" @click="typeFilter = 'moc'">MOC</button>
         </div>
+        <span class="total-count">{{ total }} set{{ total !== 1 ? 's' : '' }}</span>
       </div>
 
       <!-- Desktop table -->
@@ -98,16 +99,19 @@
           <tr v-if="sets.length === 0">
             <td colspan="6" class="empty-cell">No sets yet.</td>
           </tr>
-          <tr v-else-if="filteredSets.length === 0">
-            <td colspan="6" class="empty-cell">No results match your filter.</td>
-          </tr>
         </tbody>
       </table>
+
+      <!-- Pagination -->
+      <div v-if="totalPages > 1" class="pagination">
+        <button class="page-btn" :disabled="page === 1" @click="page--; load()">Prev</button>
+        <span class="page-info">Page {{ page }} of {{ totalPages }}</span>
+        <button class="page-btn" :disabled="page >= totalPages" @click="page++; load()">Next</button>
+      </div>
 
       <!-- Mobile card stack -->
       <div class="set-cards">
         <p v-if="sets.length === 0" class="empty-msg">No sets yet.</p>
-        <p v-else-if="filteredSets.length === 0" class="empty-msg">No results match your filter.</p>
         <RouterLink
           v-for="s in filteredSets"
           :key="s.id"
@@ -131,6 +135,11 @@
           </div>
           <button class="card-delete" @click.prevent="confirmDelete(s)" aria-label="Delete set">✕</button>
         </RouterLink>
+        <div v-if="totalPages > 1" class="pagination pagination-mobile">
+          <button class="page-btn" :disabled="page === 1" @click="page--; load()">Prev</button>
+          <span class="page-info">Page {{ page }} of {{ totalPages }}</span>
+          <button class="page-btn" :disabled="page >= totalPages" @click="page++; load()">Next</button>
+        </div>
       </div>
     </template>
 
@@ -145,29 +154,40 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { getAllSets, createSet, deleteSet } from '../../api/sets.js'
 import ConfirmDialog from '../../components/ConfirmDialog.vue'
 import SetArchiveTypeahead from '../../components/SetArchiveTypeahead.vue'
 
+const route = useRoute()
+const router = useRouter()
+
 const sets = ref([])
-const filterText = ref('')
+const total = ref(0)
+const page = ref(Number(route.query.page) || 1)
+const totalPages = ref(1)
+const query = ref(route.query.q ?? '')
 const typeFilter = ref('all')
 const filteredSets = computed(() => {
-  let result = sets.value
-  if (typeFilter.value === 'moc') result = result.filter(s => s.isMoc)
-  else if (typeFilter.value === 'official') result = result.filter(s => !s.isMoc)
-  const q = filterText.value.trim().toLowerCase()
-  if (!q) return result
-  return result.filter(s =>
-    (s.setNumber ?? '').toLowerCase().includes(q) ||
-    s.description.toLowerCase().includes(q)
-  )
+  if (typeFilter.value === 'moc') return sets.value.filter(s => s.isMoc)
+  if (typeFilter.value === 'official') return sets.value.filter(s => !s.isMoc)
+  return sets.value
 })
 const loading = ref(true)
 const error = ref('')
 const deleteTarget = ref(null)
 const form = ref({ setNumber: '', description: '', quantity: 1, isMoc: false })
 const selectedArchiveSet = ref(null)
+
+let debounceTimer = null
+function onQueryInput(e) {
+  query.value = e.target.value
+  clearTimeout(debounceTimer)
+  debounceTimer = setTimeout(() => {
+    page.value = 1
+    load()
+  }, 300)
+}
 
 function onMocToggle(isMoc) {
   selectedArchiveSet.value = null
@@ -189,8 +209,12 @@ function clearSelected() {
 async function load() {
   loading.value = true
   error.value = ''
+  router.replace({ query: { ...(query.value ? { q: query.value } : {}), ...(page.value !== 1 ? { page: page.value } : {}) } })
   try {
-    sets.value = await getAllSets()
+    const data = await getAllSets(page.value, 50, query.value)
+    sets.value = data.items
+    total.value = data.total
+    totalPages.value = data.totalPages
   } catch (e) {
     error.value = e.message
   } finally {
@@ -413,6 +437,49 @@ onMounted(load)
   margin: var(--space-4) 0;
 }
 
+.total-count {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  margin-left: auto;
+}
+
+.pagination {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+  justify-content: center;
+}
+
+.pagination-mobile {
+  display: none;
+}
+
+.page-btn {
+  padding: 0.3rem var(--space-3);
+  font-size: var(--text-sm);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--color-text-secondary);
+  transition: background var(--transition-fast);
+}
+
+.page-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.page-btn:not(:disabled):hover {
+  background: var(--color-surface-alt);
+}
+
+.page-info {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+
 /* ── Desktop table ── */
 .sets-table {
   font-size: var(--text-sm);
@@ -514,6 +581,8 @@ onMounted(load)
 
 @media (max-width: 640px) {
   .sets-table { display: none; }
+  .pagination:not(.pagination-mobile) { display: none; }
+  .pagination-mobile { display: flex; padding: var(--space-3); background: var(--color-surface); }
 
   .filter-input { max-width: none; }
 

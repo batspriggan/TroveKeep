@@ -2,7 +2,8 @@ import { get, post, put, del } from './client.js'
 
 const BASE = '/api/sets'
 
-export const getAllSets = () => get(BASE)
+export const getAllSets = (page = 1, size = 50, q = '') =>
+  get(`${BASE}?page=${page}&size=${size}&q=${encodeURIComponent(q)}`)
 export const getSet = (id) => get(`${BASE}/${id}`)
 export const createSet = (body) => post(BASE, body)
 export const updateSet = (id, body) => put(`${BASE}/${id}`, body)

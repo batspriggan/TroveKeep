@@ -2,7 +2,8 @@ import { get, post, put, del } from './client.js'
 
 const BASE = '/api/bulkpieces'
 
-export const getAllBulkPieces = () => get(BASE)
+export const getAllBulkPieces = (page = 1, size = 50, q = '') =>
+  get(`${BASE}?page=${page}&size=${size}&q=${encodeURIComponent(q)}`)
 export const getBulkPiece = (id) => get(`${BASE}/${id}`)
 export const createBulkPiece = (body) => post(BASE, body)
 export const updateBulkPiece = (id, body) => put(`${BASE}/${id}`, body)
