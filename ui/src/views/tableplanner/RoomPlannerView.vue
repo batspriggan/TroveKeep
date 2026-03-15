@@ -9,7 +9,7 @@ const roomId = route.params.id
 
 // Scale: 100 px = 1 m → 1 px = 1 cm
 const SCALE = 1         // 1 px per cm
-const SNAP = 1          // 1 cm snap
+const SNAP = 0.8        // 0.8 cm = 1 stud (8 mm)
 const BORDER_SNAP = 20  // cm — magnetism threshold for edge-to-edge snap
 const MIN_ZOOM = 0.25
 const MAX_ZOOM = 4
@@ -313,8 +313,8 @@ function onMoveSingle(e) {
   // Step 1+2: raw position → 1 cm snap → room-bounds clamp
   const rawX = _drag.startX + (e.clientX - _drag.startMouseX) / (SCALE * zoom.value)
   const rawY = _drag.startY + (e.clientY - _drag.startMouseY) / (SCALE * zoom.value)
-  let cx = Math.max(0, Math.min(room.value.widthCm - cw, Math.round(rawX / SNAP) * SNAP))
-  let cy = Math.max(0, Math.min(room.value.depthCm - cd, Math.round(rawY / SNAP) * SNAP))
+  let cx = parseFloat((Math.max(0, Math.min(room.value.widthCm - cw, Math.round(rawX / SNAP) * SNAP))).toFixed(2))
+  let cy = parseFloat((Math.max(0, Math.min(room.value.depthCm - cd, Math.round(rawY / SNAP) * SNAP))).toFixed(2))
 
   // Step 3: border-to-border snap (per axis, independently)
   const others = placedTables.value.filter(t => t.instanceId !== _drag.instanceId)
@@ -385,8 +385,8 @@ function onMoveGroup(e) {
 
   const rawDx = (e.clientX - _drag.startMouseX) / (SCALE * zoom.value)
   const rawDy = (e.clientY - _drag.startMouseY) / (SCALE * zoom.value)
-  const snapDx = Math.round(rawDx / SNAP) * SNAP
-  const snapDy = Math.round(rawDy / SNAP) * SNAP
+  const snapDx = parseFloat((Math.round(rawDx / SNAP) * SNAP).toFixed(2))
+  const snapDy = parseFloat((Math.round(rawDy / SNAP) * SNAP).toFixed(2))
 
   const proposed = gsp.map(sp => ({
     instanceId: sp.instanceId,
@@ -818,12 +818,13 @@ async function saveLayout() {
 }
 
 .canvas--grid {
+  /* major lines every 32 studs = 25.6 cm = 25.6 px; minor every 8 studs = 6.4 px */
   background-image:
     linear-gradient(to right,  #9aa8bb 1px, transparent 1px),
     linear-gradient(to bottom, #9aa8bb 1px, transparent 1px),
     linear-gradient(to right,  #dde4ef 1px, transparent 1px),
     linear-gradient(to bottom, #dde4ef 1px, transparent 1px);
-  background-size: 100px 100px, 100px 100px, 20px 20px, 20px 20px;
+  background-size: 25.6px 25.6px, 25.6px 25.6px, 6.4px 6.4px, 6.4px 6.4px;
 }
 
 /* ── Table item ───────────────────────────────────────────────────────────── */

@@ -109,6 +109,24 @@ public class RoomsController : ControllerBase
         }
     }
 
+    [HttpPut("{id:guid}/aggregate-bp-layouts/{representativeId}")]
+    [ProducesResponseType(typeof(RoomResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> SaveAggregateBpLayout(Guid id, string representativeId, [FromBody] SaveAggregateBpLayoutRequest request)
+    {
+        var plates = request.PlacedBaseplates.Select(p => new PlacedBaseplate
+        {
+            InstanceId = p.InstanceId,
+            BaseplateId = p.BaseplateId,
+            XMm = p.XMm,
+            YMm = p.YMm,
+            Rotation = p.Rotation,
+        });
+        var updated = await _service.SaveAggregateBpLayoutAsync(id, representativeId, plates);
+        if (updated is null) return NotFound();
+        return Ok(MapToResponse(updated));
+    }
+
     [HttpDelete("{id:guid}")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -151,5 +169,7 @@ public class RoomsController : ControllerBase
         new(r.Id, r.Name, r.WidthCm, r.DepthCm,
             r.Layout.Select(p => new PlacedTableResponse(p.InstanceId, p.TemplateId, p.XCm, p.YCm)),
             r.AggregateSelections.Select(s => new AggregateSelectionResponse(s.RepresentativeId, s.BpKey)),
+            r.AggregateBpLayouts.Select(l => new AggregateBpLayoutResponse(l.RepresentativeId,
+                l.PlacedBaseplates.Select(p => new PlacedBaseplateResponse(p.InstanceId, p.BaseplateId, p.XMm, p.YMm, p.Rotation)))),
             r.CreatedAt, r.UpdatedAt, r.Version);
 }

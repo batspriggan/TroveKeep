@@ -48,9 +48,10 @@ public class RoomRepository : IRoomRepository
         doc.CreatedAt = existing.CreatedAt;
         doc.UpdatedAt = DateTime.UtcNow;
         doc.Version = existing.Version + 1;
-        // Preserve existing layout and aggregate selections
+        // Preserve existing layout, aggregate selections and baseplate layouts
         doc.Layout = existing.Layout;
         doc.AggregateSelections = existing.AggregateSelections;
+        doc.AggregateBpLayouts = existing.AggregateBpLayouts;
 
         var result = await _rooms.ReplaceOneAsync(
             x => x.Id == room.Id && x.Version == room.Version, doc);
@@ -100,6 +101,40 @@ public class RoomRepository : IRoomRepository
         return ToModel(result);
     }
 
+    public async Task<Room?> SaveAggregateBpLayoutAsync(Guid id, string representativeId, IEnumerable<PlacedBaseplate> placedBaseplates)
+    {
+        var existing = await _rooms.Find(x => x.Id == id).FirstOrDefaultAsync();
+        if (existing is null) return null;
+
+        var layouts = existing.AggregateBpLayouts
+            .Where(l => l.RepresentativeId != representativeId)
+            .ToList();
+
+        layouts.Add(new AggregateBpLayoutDocument
+        {
+            RepresentativeId = representativeId,
+            PlacedBaseplates = placedBaseplates.Select(p => new PlacedBaseplateDocument
+            {
+                InstanceId = p.InstanceId,
+                BaseplateId = p.BaseplateId,
+                XMm = p.XMm,
+                YMm = p.YMm,
+                Rotation = p.Rotation,
+            }).ToList(),
+        });
+
+        var update = Builders<RoomDocument>.Update
+            .Set(r => r.AggregateBpLayouts, layouts)
+            .Set(r => r.UpdatedAt, DateTime.UtcNow);
+
+        var result = await _rooms.FindOneAndUpdateAsync(
+            x => x.Id == id,
+            update,
+            new FindOneAndUpdateOptions<RoomDocument> { ReturnDocument = ReturnDocument.After });
+
+        return result is null ? null : ToModel(result);
+    }
+
     public async Task<bool> DeleteAsync(Guid id)
     {
         var result = await _rooms.DeleteOneAsync(x => x.Id == id);
@@ -124,6 +159,18 @@ public class RoomRepository : IRoomRepository
             RepresentativeId = s.RepresentativeId,
             BpKey = s.BpKey,
         }).ToList(),
+        AggregateBpLayouts = doc.AggregateBpLayouts.Select(l => new AggregateBpLayout
+        {
+            RepresentativeId = l.RepresentativeId,
+            PlacedBaseplates = l.PlacedBaseplates.Select(p => new PlacedBaseplate
+            {
+                InstanceId = p.InstanceId,
+                BaseplateId = p.BaseplateId,
+                XMm = p.XMm,
+                YMm = p.YMm,
+                Rotation = p.Rotation,
+            }).ToList(),
+        }).ToList(),
         CreatedAt = new DateTimeOffset(DateTime.SpecifyKind(doc.CreatedAt, DateTimeKind.Utc)),
         UpdatedAt = new DateTimeOffset(DateTime.SpecifyKind(doc.UpdatedAt, DateTimeKind.Utc)),
         Version = doc.Version,
@@ -146,6 +193,18 @@ public class RoomRepository : IRoomRepository
         {
             RepresentativeId = s.RepresentativeId,
             BpKey = s.BpKey,
+        }).ToList(),
+        AggregateBpLayouts = model.AggregateBpLayouts.Select(l => new AggregateBpLayoutDocument
+        {
+            RepresentativeId = l.RepresentativeId,
+            PlacedBaseplates = l.PlacedBaseplates.Select(p => new PlacedBaseplateDocument
+            {
+                InstanceId = p.InstanceId,
+                BaseplateId = p.BaseplateId,
+                XMm = p.XMm,
+                YMm = p.YMm,
+                Rotation = p.Rotation,
+            }).ToList(),
         }).ToList(),
         CreatedAt = model.CreatedAt.UtcDateTime,
         UpdatedAt = model.UpdatedAt.UtcDateTime,

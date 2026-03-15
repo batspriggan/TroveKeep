@@ -9,3 +9,7 @@ public record SaveRoomLayoutRequest(IEnumerable<PlacedTableRequest> Layout, IEnu
 public record PlacedTableRequest(Guid InstanceId, Guid TemplateId, int XCm, int YCm);
 
 public record AggregateSelectionRequest(string RepresentativeId, string BpKey);
+
+public record SaveAggregateBpLayoutRequest(IEnumerable<PlacedBaseplateRequest> PlacedBaseplates);
+
+public record PlacedBaseplateRequest(Guid InstanceId, Guid BaseplateId, int XMm, int YMm, int Rotation);

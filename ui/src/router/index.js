@@ -15,6 +15,8 @@ import ArchivesView from '../views/ArchivesView.vue'
 import SettingsView from '../views/SettingsView.vue'
 import TablePlannerView from '../views/TablePlannerView.vue'
 import RoomPlannerView from '../views/tableplanner/RoomPlannerView.vue'
+import AggregatePlannerListView from '../views/tableplanner/AggregatePlannerListView.vue'
+import AggregateBpPlannerView from '../views/tableplanner/AggregateBpPlannerView.vue'
 
 const routes = [
   { path: '/', redirect: '/sets' },
@@ -32,6 +34,8 @@ const routes = [
   { path: '/settings', component: SettingsView },
   { path: '/table-planner', component: TablePlannerView },
   { path: '/table-planner/rooms/:id', component: RoomPlannerView },
+  { path: '/table-planner/baseplates', component: AggregatePlannerListView },
+  { path: '/table-planner/baseplates/:roomId/:repId', component: AggregateBpPlannerView },
 ]
 
 const router = createRouter({

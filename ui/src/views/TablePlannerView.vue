@@ -64,6 +64,10 @@ onMounted(() => loadRooms())
 <template>
   <div class="hub-page">
     <h1>Table Planner</h1>
+    <div class="tab-bar">
+      <button class="tab active">Rooms</button>
+      <button class="tab" @click="router.push('/table-planner/baseplates')">Baseplate Planner</button>
+    </div>
 
     <!-- ── Rooms ── -->
     <section class="section">
@@ -118,7 +122,32 @@ onMounted(() => loadRooms())
   max-width: 900px;
 }
 
-h1 { margin: 0 0 1.25rem; }
+h1 { margin: 0 0 1rem; }
+
+.tab-bar {
+  display: flex;
+  gap: 0;
+  border-bottom: 2px solid #ddd;
+  margin-bottom: 1.5rem;
+}
+
+.tab {
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  padding: 0.45rem 1.1rem;
+  font-size: 0.9rem;
+  cursor: pointer;
+  color: #555;
+  border-radius: 0;
+}
+.tab:hover { color: #222; }
+.tab.active {
+  color: #3a6ea5;
+  border-bottom-color: #3a6ea5;
+  font-weight: 600;
+}
 
 .section {
   margin-bottom: 2.5rem;
@@ -195,6 +224,8 @@ h1 { margin: 0 0 1.25rem; }
   background: #f5f5f5;
 }
 
+.data-table tr:hover td { background: #fafbfc; }
+
 .actions {
   display: flex;
   gap: 0.4rem;
@@ -227,7 +258,7 @@ button.danger {
 
 button.danger:hover { background: #a93226; }
 
-button:not(.primary):not(.danger) {
+button:not(.primary):not(.danger):not(.tab) {
   background: #f0f0f0;
   border: 1px solid #ccc;
   border-radius: 4px;
@@ -235,5 +266,5 @@ button:not(.primary):not(.danger) {
   cursor: pointer;
 }
 
-button:not(.primary):not(.danger):hover { background: #e0e0e0; }
+button:not(.primary):not(.danger):not(.tab):hover { background: #e0e0e0; }
 </style>
