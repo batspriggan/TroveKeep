@@ -5,6 +5,7 @@ namespace TroveKeep.Core.Interfaces.Services;
 public interface ILegoSetService
 {
     Task<IEnumerable<LegoSet>> GetAllAsync();
+    Task<(IEnumerable<LegoSet> Items, long Total)> GetPageAsync(int page, int pageSize, string? query = null);
     Task<LegoSet?> GetByIdAsync(Guid id);
     Task<LegoSet> CreateAsync(LegoSet legoSet);
     Task<LegoSet?> UpdateAsync(LegoSet legoSet);

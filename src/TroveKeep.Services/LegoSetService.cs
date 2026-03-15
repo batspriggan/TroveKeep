@@ -31,6 +31,20 @@ public class LegoSetService : ILegoSetService
         return sets;
     }
 
+    public async Task<(IEnumerable<LegoSet> Items, long Total)> GetPageAsync(int page, int pageSize, string? query = null)
+    {
+        var (items, total) = await _setRepo.GetPageAsync(page, pageSize, query);
+        var list = items.ToList();
+        if (list.Count > 0)
+        {
+            var allocs = await _allocationRepo.GetByItemsAsync(list.Select(x => x.Id));
+            var byItem = allocs.GroupBy(a => a.ItemId).ToDictionary(g => g.Key, g => g.ToList());
+            foreach (var item in list)
+                item.StorageAllocations = byItem.GetValueOrDefault(item.Id) ?? [];
+        }
+        return (list, total);
+    }
+
     public async Task<LegoSet?> GetByIdAsync(Guid id)
     {
         var set = await _setRepo.GetByIdAsync(id);

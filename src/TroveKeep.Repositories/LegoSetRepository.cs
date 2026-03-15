@@ -71,6 +71,22 @@ public class LegoSetRepository : ILegoSetRepository
         await _collection.UpdateOneAsync(x => x.Id == id, update);
     }
 
+    public async Task<(IEnumerable<LegoSet> Items, long Total)> GetPageAsync(int page, int pageSize, string? query = null)
+    {
+        var filter = string.IsNullOrWhiteSpace(query)
+            ? Builders<LegoSetDocument>.Filter.Empty
+            : Builders<LegoSetDocument>.Filter.Or(
+                Builders<LegoSetDocument>.Filter.Regex(d => d.SetNumber, new BsonRegularExpression(System.Text.RegularExpressions.Regex.Escape(query), "i")),
+                Builders<LegoSetDocument>.Filter.Regex(d => d.Description, new BsonRegularExpression(System.Text.RegularExpressions.Regex.Escape(query), "i")));
+
+        var total = await _collection.CountDocumentsAsync(filter);
+        var docs = await _collection.Find(filter)
+            .Skip((page - 1) * pageSize)
+            .Limit(pageSize)
+            .ToListAsync();
+        return (docs.Select(ToModel), total);
+    }
+
     public async Task<IEnumerable<LegoSet>> SearchAsync(string query)
     {
         var regex = new BsonRegularExpression(query, "i");

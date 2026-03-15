@@ -65,6 +65,22 @@ public class BulkPieceRepository : IBulkPieceRepository
         return result.DeletedCount > 0;
     }
 
+    public async Task<(IEnumerable<BulkPiece> Items, long Total)> GetPageAsync(int page, int pageSize, string? query = null)
+    {
+        var filter = string.IsNullOrWhiteSpace(query)
+            ? Builders<BulkPieceDocument>.Filter.Empty
+            : Builders<BulkPieceDocument>.Filter.Or(
+                Builders<BulkPieceDocument>.Filter.Regex(d => d.LegoId, new BsonRegularExpression(System.Text.RegularExpressions.Regex.Escape(query), "i")),
+                Builders<BulkPieceDocument>.Filter.Regex(d => d.Description, new BsonRegularExpression(System.Text.RegularExpressions.Regex.Escape(query), "i")));
+
+        var total = await _collection.CountDocumentsAsync(filter);
+        var docs = await _collection.Find(filter)
+            .Skip((page - 1) * pageSize)
+            .Limit(pageSize)
+            .ToListAsync();
+        return (docs.Select(ToModel), total);
+    }
+
     public async Task<IEnumerable<BulkPiece>> SearchAsync(string query)
     {
         var regex = new BsonRegularExpression(query, "i");

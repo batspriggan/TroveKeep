@@ -22,12 +22,18 @@ public class SetsController : ControllerBase
     }
 
     [HttpGet]
-    [ProducesResponseType(typeof(IEnumerable<LegoSetResponse>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetAll()
+    [ProducesResponseType(typeof(PagedResponse<LegoSetResponse>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetAll(
+        [FromQuery] int page = 1,
+        [FromQuery] int size = 50,
+        [FromQuery] string? q = null)
     {
-        var sets = (await _service.GetAllAsync()).ToList();
-        var photoCounts = await _photoService.GetCountsBySetIdsAsync(sets.Select(s => s.Id));
-        return Ok(sets.Select(s => MapToResponse(s, photoCounts.GetValueOrDefault(s.Id))));
+        var (sets, total) = await _service.GetPageAsync(page, size, q);
+        var list = sets.ToList();
+        var photoCounts = await _photoService.GetCountsBySetIdsAsync(list.Select(s => s.Id));
+        var items = list.Select(s => MapToResponse(s, photoCounts.GetValueOrDefault(s.Id)));
+        var totalPages = (int)Math.Ceiling((double)total / size);
+        return Ok(new PagedResponse<LegoSetResponse>(items, total, page, size, totalPages));
     }
 
     [HttpGet("{id:guid}")]

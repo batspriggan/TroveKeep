@@ -34,7 +34,8 @@
 
     <template v-else>
       <div class="filter-bar">
-        <input v-model="filterText" type="search" placeholder="Filter by ID or description…" class="filter-input" />
+        <input :value="query" @input="onQueryInput" type="search" placeholder="Filter by ID or description…" class="filter-input" />
+        <span class="total-count">{{ total }} piece{{ total !== 1 ? 's' : '' }}</span>
       </div>
 
       <!-- Desktop table -->
@@ -51,7 +52,7 @@
           </tr>
         </thead>
         <tbody>
-          <tr v-for="p in filteredPieces" :key="p.id">
+          <tr v-for="p in pieces" :key="p.id">
             <td class="td-thumb">
               <img v-if="p.imageCached" :src="`/api/bulkpieces/${p.id}/image`" class="list-thumb" alt="" />
               <div v-else class="thumb-placeholder"></div>
@@ -73,18 +74,21 @@
           <tr v-if="pieces.length === 0">
             <td colspan="7" class="empty-cell">No bulk pieces yet.</td>
           </tr>
-          <tr v-else-if="filteredPieces.length === 0">
-            <td colspan="7" class="empty-cell">No results match your filter.</td>
-          </tr>
         </tbody>
       </table>
+
+      <!-- Pagination -->
+      <div v-if="totalPages > 1" class="pagination">
+        <button class="page-btn" :disabled="page === 1" @click="page--; load()">Prev</button>
+        <span class="page-info">Page {{ page }} of {{ totalPages }}</span>
+        <button class="page-btn" :disabled="page >= totalPages" @click="page++; load()">Next</button>
+      </div>
 
       <!-- Mobile card stack -->
       <div class="piece-cards">
         <p v-if="pieces.length === 0" class="empty-msg">No bulk pieces yet.</p>
-        <p v-else-if="filteredPieces.length === 0" class="empty-msg">No results match your filter.</p>
         <RouterLink
-          v-for="p in filteredPieces"
+          v-for="p in pieces"
           :key="p.id"
           :to="`/bulkpieces/${p.id}`"
           class="piece-card"
@@ -113,6 +117,11 @@
             aria-label="Delete piece"
           >✕</button>
         </RouterLink>
+        <div v-if="totalPages > 1" class="pagination pagination-mobile">
+          <button class="page-btn" :disabled="page === 1" @click="page--; load()">Prev</button>
+          <span class="page-info">Page {{ page }} of {{ totalPages }}</span>
+          <button class="page-btn" :disabled="page >= totalPages" @click="page++; load()">Next</button>
+        </div>
       </div>
     </template>
 
@@ -126,36 +135,51 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, onMounted } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { getAllBulkPieces, createBulkPiece, deleteBulkPiece } from '../../api/bulkpieces.js'
 import { getColorsList } from '../../api/archives.js'
 import ConfirmDialog from '../../components/ConfirmDialog.vue'
 import ColorSelect from '../../components/ColorSelect.vue'
 import PartArchiveTypeahead from '../../components/PartArchiveTypeahead.vue'
 
+const route = useRoute()
+const router = useRouter()
+
 const pieces = ref([])
 const colors = ref([])
-const filterText = ref('')
-const filteredPieces = computed(() => {
-  const q = filterText.value.trim().toLowerCase()
-  if (!q) return pieces.value
-  return pieces.value.filter(p =>
-    p.legoId.toLowerCase().includes(q) ||
-    p.description.toLowerCase().includes(q)
-  )
-})
+const total = ref(0)
+const page = ref(Number(route.query.page) || 1)
+const totalPages = ref(1)
+const query = ref(route.query.q ?? '')
 const loading = ref(true)
 const error = ref('')
 const deleteTarget = ref(null)
 const form = ref({ legoId: '', legoColorUid: '', description: '', quantity: 1 })
 
+let debounceTimer = null
+function onQueryInput(e) {
+  query.value = e.target.value
+  clearTimeout(debounceTimer)
+  debounceTimer = setTimeout(() => {
+    page.value = 1
+    load()
+  }, 300)
+}
+
 async function load() {
   loading.value = true
   error.value = ''
+  router.replace({ query: { ...(query.value ? { q: query.value } : {}), ...(page.value !== 1 ? { page: page.value } : {}) } })
   try {
-    const [allPieces, allColors] = await Promise.all([getAllBulkPieces(), getColorsList()])
-    pieces.value = allPieces
-    colors.value = allColors
+    const [data, allColors] = await Promise.all([
+      getAllBulkPieces(page.value, 50, query.value),
+      colors.value.length ? Promise.resolve(colors.value) : getColorsList()
+    ])
+    pieces.value = data.items
+    total.value = data.total
+    totalPages.value = data.totalPages
+    if (Array.isArray(allColors)) colors.value = allColors
   } catch (e) {
     error.value = e.message
   } finally {
@@ -277,15 +301,60 @@ onMounted(load)
 
 /* ── Filter ── */
 .filter-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
   margin-bottom: var(--space-3);
 }
 
 .filter-input {
-  width: 100%;
+  flex: 1;
   max-width: 360px;
   font-size: var(--text-sm);
   border-color: var(--color-border);
   background: var(--color-surface);
+}
+
+.total-count {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+
+.pagination {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+  justify-content: center;
+}
+
+.pagination-mobile {
+  display: none;
+}
+
+.page-btn {
+  padding: 0.3rem var(--space-3);
+  font-size: var(--text-sm);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--color-text-secondary);
+  transition: background var(--transition-fast);
+}
+
+.page-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.page-btn:not(:disabled):hover {
+  background: var(--color-surface-alt);
+}
+
+.page-info {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
 }
 
 /* ── Desktop table ── */
@@ -420,6 +489,8 @@ onMounted(load)
   .pieces-table {
     display: none;
   }
+  .pagination:not(.pagination-mobile) { display: none; }
+  .pagination-mobile { display: flex; padding: var(--space-3); background: var(--color-surface); }
 
   .filter-input {
     max-width: 100%;

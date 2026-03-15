@@ -25,12 +25,17 @@ public class BulkPiecesController : ControllerBase
     }
 
     [HttpGet]
-    [ProducesResponseType(typeof(IEnumerable<BulkPieceResponse>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetAll()
+    [ProducesResponseType(typeof(PagedResponse<BulkPieceResponse>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetAll(
+        [FromQuery] int page = 1,
+        [FromQuery] int size = 50,
+        [FromQuery] string? q = null)
     {
-        var pieces = await _service.GetAllAsync();
+        var (pieces, total) = await _service.GetPageAsync(page, size, q);
         var colors = await BuildColorLookupAsync();
-        return Ok(pieces.Select(p => MapToResponse(p, colors)));
+        var items = pieces.Select(p => MapToResponse(p, colors));
+        var totalPages = (int)Math.Ceiling((double)total / size);
+        return Ok(new PagedResponse<BulkPieceResponse>(items, total, page, size, totalPages));
     }
 
     [HttpGet("{id:guid}")]
