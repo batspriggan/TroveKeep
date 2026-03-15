@@ -844,7 +844,8 @@ onMounted(async () => {
   if (partCategoriesStatus.value.count > 0) await loadPartCategories()
   if (settings.tablePlannerEnabled) {
     baseplates.value = await getAllBaseplates()
-    allSets.value = await getAllSets().catch(() => [])
+    const setsPage = await getAllSets(1, 1000).catch(() => ({ items: [] }))
+    allSets.value = setsPage.items ?? setsPage ?? []
     await loadTemplates()
   }
 })
