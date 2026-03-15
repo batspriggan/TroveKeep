@@ -51,6 +51,11 @@ public class BaseplateRepository : IBaseplateRepository
         await _baseplates.DeleteOneAsync(d => d.Id == id);
     }
 
+    public async Task DeleteByLinkedSetIdAsync(Guid setId)
+    {
+        await _baseplates.DeleteManyAsync(d => d.LinkedSetId == setId);
+    }
+
     private static Baseplate ToModel(BaseplateDocument doc) => new()
     {
         Id = doc.Id,

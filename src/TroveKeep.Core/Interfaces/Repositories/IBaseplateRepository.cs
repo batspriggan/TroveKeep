@@ -9,4 +9,5 @@ public interface IBaseplateRepository
     Task<Baseplate> CreateAsync(Baseplate baseplate);
     Task UpdateImageCachedAsync(Guid id);
     Task DeleteAsync(Guid id);
+    Task DeleteByLinkedSetIdAsync(Guid setId);
 }
