@@ -50,6 +50,46 @@ const baseplateMap = computed(() => {
   return m
 })
 
+// ── Side-panel category grouping ─────────────────────────────────────────────
+const CATEGORY_ORDER = ['Standard', 'Road', 'Custom']
+
+const baseplatesByCategory = computed(() => {
+  const groups = {}
+  for (const bp of baseplates.value) {
+    const cat = bp.type ?? 'Standard'
+    ;(groups[cat] ??= []).push(bp)
+  }
+  // Return in a stable order
+  return CATEGORY_ORDER
+    .filter(c => groups[c])
+    .map(c => ({ category: c, items: groups[c] }))
+})
+
+// Track which categories are collapsed (by name)
+const collapsedCategories = ref(new Set())
+
+// ── Hover tooltip ─────────────────────────────────────────────────────────────
+const hoveredBp   = ref(null)
+const tooltipTop  = ref(0)
+const tooltipLeft = ref(0)
+let _tooltipTimer = null
+
+function showTooltip(e, bp) {
+  const rect = e.currentTarget.getBoundingClientRect()
+  const top  = Math.min(rect.top, window.innerHeight - 270)
+  const left = rect.right + 10
+  clearTimeout(_tooltipTimer)
+  _tooltipTimer = setTimeout(() => {
+    tooltipTop.value  = top
+    tooltipLeft.value = left
+    hoveredBp.value   = bp
+  }, 1000)
+}
+function hideTooltip() {
+  clearTimeout(_tooltipTimer)
+  hoveredBp.value = null
+}
+
 // ── BFS aggregate detection (same as RoomPlannerView) ─────────────────────────
 function rangeOverlaps(a1, a2, b1, b2) { return Math.min(a2, b2) - Math.max(a1, b1) > 0 }
 
@@ -171,6 +211,7 @@ onUnmounted(() => {
   window.removeEventListener('mousemove', onMove)
   window.removeEventListener('mouseup', onUp)
   canvasWrapEl.value?.removeEventListener('wheel', onWheelZoom)
+  clearTimeout(_tooltipTimer)
 })
 
 // ── Add from palette ──────────────────────────────────────────────────────────
@@ -406,29 +447,66 @@ async function save() {
     </template>
 
     <template v-else>
-      <!-- Palette -->
-      <div class="palette">
-        <span class="palette-label">Baseplates:</span>
-        <button
-          v-for="bp in baseplates"
-          :key="bp.id"
-          class="chip"
-          :title="`${bp.widthStuds}×${bp.depthStuds} studs · ${bpNaturalW(bp)}×${bpNaturalH(bp)} mm`"
-          @click="addBaseplate(bp)"
-        >{{ bp.name || `${bp.widthStuds}×${bp.depthStuds}` }}</button>
-        <span v-if="baseplates.length === 0" class="empty-palette">No baseplates — add some in Table Planner.</span>
-        <span class="palette-hint">R = rotate selected · Del = remove · Ctrl+scroll = zoom</span>
-      </div>
+      <div class="planner-body">
 
-      <!-- Selected plate toolbar -->
-      <div v-if="selectedId" class="toolbar">
-        <button class="tool-btn" @click="rotateSelected">↺ Rotate 90°</button>
-        <button class="tool-btn danger" @click="removePlate(selectedId)">✕ Remove</button>
-      </div>
-      <div v-else class="toolbar toolbar--placeholder">&nbsp;</div>
+        <!-- ── Side panel ──────────────────────────────────────────────── -->
+        <div class="side-panel">
+          <div class="side-panel-heading">Baseplates</div>
+          <p v-if="baseplates.length === 0" class="side-empty">No baseplates — add some in Table Planner.</p>
 
-      <!-- Canvas -->
-      <div class="canvas-wrap" ref="canvasWrapEl">
+          <template v-for="group in baseplatesByCategory" :key="group.category">
+            <!-- Category header -->
+            <button
+              class="cat-header"
+              @click="collapsedCategories.has(group.category)
+                ? collapsedCategories.delete(group.category)
+                : collapsedCategories.add(group.category)"
+            >
+              <span class="cat-chevron">{{ collapsedCategories.has(group.category) ? '▶' : '▼' }}</span>
+              <span class="cat-name">{{ group.category }}</span>
+              <span class="cat-count">{{ group.items.length }}</span>
+            </button>
+
+            <!-- Category items -->
+            <template v-if="!collapsedCategories.has(group.category)">
+              <button
+                v-for="bp in group.items"
+                :key="bp.id"
+                class="bp-card"
+                @click="addBaseplate(bp)"
+                @mouseenter="showTooltip($event, bp)"
+                @mouseleave="hideTooltip"
+              >
+                <div class="bp-thumb">
+                  <img v-if="bp.imageCached" :src="getBaseplateImageUrl(bp.id)" class="bp-thumb-img" draggable="false" />
+                  <div v-else class="bp-thumb-swatch" :style="{ background: bp.legoColorRgb ? '#' + bp.legoColorRgb : '#9ac' }"></div>
+                </div>
+                <div class="bp-info">
+                  <span class="bp-size">{{ bp.widthStuds }}×{{ bp.depthStuds }}</span>
+                  <span class="bp-name">{{ bp.name || 'Baseplate' }}</span>
+                </div>
+              </button>
+            </template>
+          </template>
+          <div class="side-hints">
+            <span>R — rotate</span>
+            <span>Del — remove</span>
+            <span>Ctrl+scroll — zoom</span>
+          </div>
+        </div>
+
+        <!-- ── Canvas area ─────────────────────────────────────────────── -->
+        <div class="canvas-area">
+          <!-- Selected plate toolbar -->
+          <div class="toolbar">
+            <template v-if="selectedId">
+              <button class="tool-btn" @click="rotateSelected">↺ Rotate 90°</button>
+              <button class="tool-btn danger" @click="removePlate(selectedId)">✕ Remove</button>
+            </template>
+          </div>
+
+          <!-- Canvas -->
+          <div class="canvas-wrap" ref="canvasWrapEl">
         <div class="canvas-zoom-container" :style="{ width: canvasWidth * zoom + 'px', height: canvasHeight * zoom + 'px' }">
           <div
             class="canvas"
@@ -490,8 +568,51 @@ async function save() {
             </div>
           </div>
         </div>
-      </div>
+          </div><!-- /canvas-wrap -->
+        </div><!-- /canvas-area -->
+      </div><!-- /planner-body -->
     </template>
+
+    <!-- ── Hover tooltip card ───────────────────────────────────────────── -->
+    <div
+      v-if="hoveredBp"
+      class="bp-tooltip"
+      :style="{ top: tooltipTop + 'px', left: tooltipLeft + 'px' }"
+    >
+      <div class="bp-tooltip-thumb">
+        <img
+          v-if="hoveredBp.imageCached"
+          :src="getBaseplateImageUrl(hoveredBp.id)"
+          class="bp-tooltip-img"
+          draggable="false"
+        />
+        <div
+          v-else
+          class="bp-tooltip-swatch"
+          :style="{ background: hoveredBp.legoColorRgb ? '#' + hoveredBp.legoColorRgb : '#9ac' }"
+        ></div>
+      </div>
+      <div class="bp-tooltip-body">
+        <div class="bp-tooltip-name">{{ hoveredBp.name || 'Baseplate' }}</div>
+        <dl class="bp-tooltip-dl">
+          <dt>Size</dt>
+          <dd>{{ hoveredBp.widthStuds }}×{{ hoveredBp.depthStuds }} studs<br>{{ bpNaturalW(hoveredBp) }}×{{ bpNaturalH(hoveredBp) }} mm</dd>
+          <dt>Type</dt>
+          <dd>{{ hoveredBp.type }}</dd>
+          <dt>Color</dt>
+          <dd>
+            <span
+              v-if="hoveredBp.legoColorRgb"
+              class="bp-tooltip-color-dot"
+              :style="{ background: '#' + hoveredBp.legoColorRgb }"
+            ></span>
+            {{ hoveredBp.legoColorName ?? ('#' + hoveredBp.legoColorId) }}
+          </dd>
+          <dt>Part #</dt>
+          <dd>{{ hoveredBp.partNum }}</dd>
+        </dl>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -552,30 +673,144 @@ async function save() {
 }
 .zoom-reset:hover { background: #e8e8e8; }
 
-/* ── Palette ─────────────────────────────────────────────────────────────── */
-.palette {
-  display: flex; align-items: center; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 0.4rem;
+/* ── Body layout ─────────────────────────────────────────────────────────── */
+.planner-body {
+  display: flex;
+  flex: 1;
+  gap: 0;
+  overflow: hidden;
 }
 
-.palette-label { font-size: 0.85rem; color: #555; font-weight: 600; }
+/* ── Side panel ──────────────────────────────────────────────────────────── */
+.side-panel {
+  width: 172px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  border-right: 1px solid #d0d5db;
+  background: #f4f6f8;
+  padding: 0.5rem 0.5rem 0.75rem;
+  gap: 0.3rem;
+}
 
-.chip {
-  background: #6a8dae; border: 2px solid rgba(0,0,0,0.2); border-radius: 5px;
-  padding: 0.25rem 0.55rem; font-size: 0.78rem; font-weight: 600; color: #fff;
-  text-shadow: 0 1px 2px rgba(0,0,0,0.4); cursor: pointer; user-select: none;
+.side-panel-heading {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #667;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 0.1rem 0.2rem 0.3rem;
+  border-bottom: 1px solid #dde;
+  margin-bottom: 0.1rem;
+}
+
+.side-empty { font-size: 0.78rem; color: #999; padding: 0.3rem 0.2rem; }
+
+/* ── Category header ─────────────────────────────────────────────────────── */
+.cat-header {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  width: 100%;
+  background: none;
+  border: none;
+  border-radius: 3px;
+  padding: 0.25rem 0.3rem;
+  cursor: pointer;
+  text-align: left;
+  color: #445;
+}
+.cat-header:hover { background: #eaecf0; }
+
+.cat-chevron { font-size: 0.6rem; color: #889; flex-shrink: 0; }
+.cat-name { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; flex: 1; }
+.cat-count { font-size: 0.68rem; color: #99a; background: #e0e4ea; border-radius: 8px; padding: 0 0.35rem; }
+
+.bp-card {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  width: 100%;
+  background: #fff;
+  border: 1px solid #dde;
+  border-radius: 5px;
+  padding: 0.35rem 0.4rem;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.12s, box-shadow 0.12s;
+}
+.bp-card:hover {
+  border-color: #3a6ea5;
+  box-shadow: 0 0 0 2px rgba(58,110,165,0.15);
+}
+
+.bp-thumb {
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  border-radius: 3px;
+  overflow: hidden;
+  background: #e8ecf0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.bp-thumb-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+.bp-thumb-swatch { width: 100%; height: 100%; }
+
+.bp-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+.bp-size {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #334;
   white-space: nowrap;
 }
-.chip:hover { filter: brightness(1.12); }
+.bp-name {
+  font-size: 0.72rem;
+  color: #667;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
-.empty-palette { font-size: 0.8rem; color: #999; }
+.side-hints {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  margin-top: auto;
+  padding-top: 0.6rem;
+  border-top: 1px solid #dde;
+}
+.side-hints span { font-size: 0.68rem; color: #aab; }
 
-.palette-hint { font-size: 0.72rem; color: #aaa; margin-left: auto; white-space: nowrap; }
+/* ── Canvas area ─────────────────────────────────────────────────────────── */
+.canvas-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding-left: 0.75rem;
+}
 
 /* ── Toolbar ─────────────────────────────────────────────────────────────── */
 .toolbar {
-  display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.4rem; min-height: 30px;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 32px;
+  margin-bottom: 0.35rem;
 }
-.toolbar--placeholder { pointer-events: none; }
 
 .tool-btn {
   background: #f0f0f0; border: 1px solid #ccc; border-radius: 4px;
@@ -654,5 +889,78 @@ async function save() {
   text-shadow: 0 1px 2px rgba(0,0,0,0.6);
   pointer-events: none;
   z-index: 1;
+}
+
+/* ── Hover tooltip card ───────────────────────────────────────────────────── */
+.bp-tooltip {
+  position: fixed;
+  z-index: 200;
+  width: 220px;
+  background: #fff;
+  border: 1px solid #d0d5db;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.18);
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.bp-tooltip-thumb {
+  width: 100%;
+  height: 130px;
+  background: #e8ecf0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+.bp-tooltip-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+.bp-tooltip-swatch {
+  width: 100%;
+  height: 100%;
+}
+
+.bp-tooltip-body {
+  padding: 0.6rem 0.7rem 0.65rem;
+}
+
+.bp-tooltip-name {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #223;
+  margin-bottom: 0.45rem;
+  line-height: 1.3;
+}
+
+.bp-tooltip-dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.18rem 0.5rem;
+  margin: 0;
+  font-size: 0.75rem;
+}
+.bp-tooltip-dl dt {
+  color: #889;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.bp-tooltip-dl dd {
+  margin: 0;
+  color: #334;
+  line-height: 1.35;
+}
+
+.bp-tooltip-color-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 1px solid rgba(0,0,0,0.2);
+  vertical-align: middle;
+  margin-right: 3px;
 }
 </style>
