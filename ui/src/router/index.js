@@ -33,9 +33,9 @@ const routes = [
   { path: '/archives', component: ArchivesView },
   { path: '/settings', component: SettingsView },
   { path: '/table-planner', component: TablePlannerView },
-  { path: '/table-planner/rooms/:id', component: RoomPlannerView },
+  { path: '/table-planner/rooms/:id', component: RoomPlannerView, meta: { fullscreen: true } },
   { path: '/table-planner/baseplates', component: AggregatePlannerListView },
-  { path: '/table-planner/baseplates/:roomId/:repId', component: AggregateBpPlannerView },
+  { path: '/table-planner/baseplates/:roomId/:repId', component: AggregateBpPlannerView, meta: { fullscreen: true } },
 ]
 
 const router = createRouter({

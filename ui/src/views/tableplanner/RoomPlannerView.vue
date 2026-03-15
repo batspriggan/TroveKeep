@@ -610,9 +610,10 @@ async function saveLayout() {
 .planner-page {
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 52px);
+  flex: 1;
   padding: 0.75rem 1.25rem 0;
   box-sizing: border-box;
+  overflow: hidden;
 }
 
 .planner-header {

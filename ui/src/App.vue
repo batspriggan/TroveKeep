@@ -1,14 +1,17 @@
 <template>
   <AppNav />
-  <main>
+  <main :class="{ fullscreen: route.meta.fullscreen }">
     <RouterView />
   </main>
   <BottomNav />
 </template>
 
 <script setup>
+import { useRoute } from 'vue-router'
 import AppNav from './components/AppNav.vue'
 import BottomNav from './components/BottomNav.vue'
+
+const route = useRoute()
 </script>
 
 <style>
@@ -72,6 +75,15 @@ main {
   max-width: 1100px;
   margin: 0 auto;
   padding: 1.5rem 1rem;
+}
+
+main.fullscreen {
+  max-width: 100%;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 52px);
 }
 
 h1 { font-size: 1.6rem; margin-bottom: 1rem; }
