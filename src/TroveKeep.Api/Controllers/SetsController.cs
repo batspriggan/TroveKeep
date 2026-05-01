@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using TroveKeep.Api.DTOs.Requests;
 using TroveKeep.Api.DTOs.Responses;
+using TroveKeep.Core.Exceptions;
 using TroveKeep.Core.Interfaces.Services;
 using TroveKeep.Core.Models;
 
@@ -129,20 +130,29 @@ public class SetsController : ControllerBase
     [ProducesResponseType(typeof(LegoSetResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<IActionResult> Update(Guid id, [FromBody] UpdateLegoSetRequest request)
     {
-        var model = new LegoSet
+        try
         {
-            Id = id,
-            SetNumber = request.SetNumber ?? string.Empty,
-            Description = request.Description,
-            Quantity = request.Quantity,
-            IsMoc = request.IsMoc,
-        };
-        var updated = await _service.UpdateAsync(model);
-        if (updated is null) return NotFound();
-        var photos = await _photoService.GetBySetIdAsync(id);
-        return Ok(MapToResponse(updated, photos.Count()));
+            var model = new LegoSet
+            {
+                Id = id,
+                SetNumber = request.SetNumber ?? string.Empty,
+                Description = request.Description,
+                Quantity = request.Quantity,
+                IsMoc = request.IsMoc,
+                Version = request.Version,
+            };
+            var updated = await _service.UpdateAsync(model);
+            if (updated is null) return NotFound();
+            var photos = await _photoService.GetBySetIdAsync(id);
+            return Ok(MapToResponse(updated, photos.Count()));
+        }
+        catch (ConcurrencyException ex)
+        {
+            return Conflict(new { error = ex.Message });
+        }
     }
 
     [HttpDelete("{id:guid}")]
@@ -200,5 +210,5 @@ public class SetsController : ControllerBase
     private static LegoSetResponse MapToResponse(LegoSet s, int photoCount) =>
         new(s.Id, s.SetNumber, s.Description, s.Quantity, s.IsMoc, s.ImageCached, photoCount,
             s.StorageAllocations.Select(a => new StorageAllocationResponse(a.StorageId, a.StoragePosition, a.StorageType.ToString(), a.Quantity)),
-            s.CreatedAt, s.UpdatedAt);
+            s.CreatedAt, s.UpdatedAt, s.Version);
 }

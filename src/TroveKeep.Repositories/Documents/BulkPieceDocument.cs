@@ -17,4 +17,5 @@ public class BulkPieceDocument
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
     public bool ImageCached { get; set; }
+    public int Version { get; set; }
 }

@@ -9,8 +9,10 @@ const roomId = route.params.id
 
 // Scale: 100 px = 1 m → 1 px = 1 cm
 const SCALE = 1         // 1 px per cm
-const SNAP = 1          // 1 cm snap
+const SNAP = 0.8        // 0.8 cm = 1 stud (8 mm)
 const BORDER_SNAP = 20  // cm — magnetism threshold for edge-to-edge snap
+const MIN_ZOOM = 0.25
+const MAX_ZOOM = 4
 
 const room = ref(null)
 const templates = ref([])
@@ -20,6 +22,8 @@ const savedAggSelectionsJson = ref('[]')
 const saveSuccess = ref(false)
 const loading = ref(true)
 const showGrid = ref(true)
+const zoom = ref(1)
+const canvasWrapEl = ref(null)
 
 const selectedAggregateId = ref(null)   // integer index into aggregates.value, or null
 const baseplates = ref([])
@@ -208,6 +212,7 @@ onMounted(async () => {
   restoreAggSelections(r.aggregateSelections ?? [])
   savedAggSelectionsJson.value = JSON.stringify(buildAggSelectionsForSave())
   loading.value = false
+  canvasWrapEl.value?.addEventListener('wheel', onWheelZoom, { passive: false })
 })
 
 // ── Add from palette ──────────────────────────────────────────────────────────
@@ -306,10 +311,10 @@ function onMoveSingle(e) {
   const cd = tpl.depthCm
 
   // Step 1+2: raw position → 1 cm snap → room-bounds clamp
-  const rawX = _drag.startX + (e.clientX - _drag.startMouseX) / SCALE
-  const rawY = _drag.startY + (e.clientY - _drag.startMouseY) / SCALE
-  let cx = Math.max(0, Math.min(room.value.widthCm - cw, Math.round(rawX / SNAP) * SNAP))
-  let cy = Math.max(0, Math.min(room.value.depthCm - cd, Math.round(rawY / SNAP) * SNAP))
+  const rawX = _drag.startX + (e.clientX - _drag.startMouseX) / (SCALE * zoom.value)
+  const rawY = _drag.startY + (e.clientY - _drag.startMouseY) / (SCALE * zoom.value)
+  let cx = parseFloat((Math.max(0, Math.min(room.value.widthCm - cw, Math.round(rawX / SNAP) * SNAP))).toFixed(2))
+  let cy = parseFloat((Math.max(0, Math.min(room.value.depthCm - cd, Math.round(rawY / SNAP) * SNAP))).toFixed(2))
 
   // Step 3: border-to-border snap (per axis, independently)
   const others = placedTables.value.filter(t => t.instanceId !== _drag.instanceId)
@@ -378,10 +383,10 @@ function onMoveGroup(e) {
   const groupIds = new Set(_drag.groupInstanceIds)
   const nonGroup = placedTables.value.filter(t => !groupIds.has(t.instanceId))
 
-  const rawDx = (e.clientX - _drag.startMouseX) / SCALE
-  const rawDy = (e.clientY - _drag.startMouseY) / SCALE
-  const snapDx = Math.round(rawDx / SNAP) * SNAP
-  const snapDy = Math.round(rawDy / SNAP) * SNAP
+  const rawDx = (e.clientX - _drag.startMouseX) / (SCALE * zoom.value)
+  const rawDy = (e.clientY - _drag.startMouseY) / (SCALE * zoom.value)
+  const snapDx = parseFloat((Math.round(rawDx / SNAP) * SNAP).toFixed(2))
+  const snapDy = parseFloat((Math.round(rawDy / SNAP) * SNAP).toFixed(2))
 
   const proposed = gsp.map(sp => ({
     instanceId: sp.instanceId,
@@ -450,9 +455,22 @@ function onCanvasClick(e) {
   if (e.target === e.currentTarget) selectedAggregateId.value = null
 }
 
+// ── Zoom ──────────────────────────────────────────────────────────────────────
+function zoomIn()    { zoom.value = Math.min(MAX_ZOOM, +(zoom.value * 1.25).toFixed(4)) }
+function zoomOut()   { zoom.value = Math.max(MIN_ZOOM, +(zoom.value / 1.25).toFixed(4)) }
+function resetZoom() { zoom.value = 1 }
+
+function onWheelZoom(e) {
+  if (!e.ctrlKey && !e.metaKey) return
+  e.preventDefault()
+  const factor = e.deltaY > 0 ? 1 / 1.1 : 1.1
+  zoom.value = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, +(zoom.value * factor).toFixed(4)))
+}
+
 onUnmounted(() => {
   window.removeEventListener('mousemove', onMove)
   window.removeEventListener('mouseup', onUp)
+  canvasWrapEl.value?.removeEventListener('wheel', onWheelZoom)
 })
 
 // ── Save ──────────────────────────────────────────────────────────────────────
@@ -473,6 +491,11 @@ async function saveLayout() {
       <h1 v-if="room">{{ room.name }}</h1>
       <div class="header-right">
         <button class="toggle-btn" :class="{ active: showGrid }" @click="showGrid = !showGrid" title="Toggle grid">Grid</button>
+        <div class="zoom-controls">
+          <button class="zoom-btn" @click="zoomOut" :disabled="zoom <= MIN_ZOOM" title="Zoom out">−</button>
+          <button class="zoom-reset" @click="resetZoom" title="Reset zoom">{{ Math.round(zoom * 100) }}%</button>
+          <button class="zoom-btn" @click="zoomIn" :disabled="zoom >= MAX_ZOOM" title="Zoom in">+</button>
+        </div>
         <span v-if="saveSuccess" class="save-ok">Layout saved!</span>
         <button
           class="primary save-btn"
@@ -539,11 +562,12 @@ async function saveLayout() {
       </div>
 
       <!-- Canvas -->
-      <div class="canvas-wrap">
+      <div class="canvas-wrap" ref="canvasWrapEl">
+        <div class="canvas-zoom-container" :style="{ width: canvasWidth * zoom + 'px', height: canvasHeight * zoom + 'px' }">
         <div
           class="canvas"
           :class="{ 'canvas--grid': showGrid }"
-          :style="{ width: canvasWidth + 'px', height: canvasHeight + 'px' }"
+          :style="{ width: canvasWidth + 'px', height: canvasHeight + 'px', transform: `scale(${zoom})`, transformOrigin: 'top left' }"
           @click="onCanvasClick"
         >
           <div
@@ -576,6 +600,7 @@ async function saveLayout() {
             <span>1 m</span>
           </div>
         </div>
+        </div>
       </div>
     </template>
   </div>
@@ -585,9 +610,10 @@ async function saveLayout() {
 .planner-page {
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 52px);
+  flex: 1;
   padding: 0.75rem 1.25rem 0;
   box-sizing: border-box;
+  overflow: hidden;
 }
 
 .planner-header {
@@ -662,6 +688,45 @@ async function saveLayout() {
 
 .toggle-btn:hover { background: #e0e0e0; }
 .toggle-btn.active:hover { background: #ccdaf0; }
+
+.zoom-controls {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.zoom-btn {
+  background: #f0f0f0;
+  border: none;
+  padding: 0.3rem 0.6rem;
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+  color: #333;
+  font-weight: 600;
+  min-width: 28px;
+}
+
+.zoom-btn:hover:not(:disabled) { background: #e0e0e0; }
+.zoom-btn:disabled { color: #bbb; cursor: default; }
+
+.zoom-reset {
+  background: #f8f8f8;
+  border: none;
+  border-left: 1px solid #ccc;
+  border-right: 1px solid #ccc;
+  padding: 0.3rem 0.5rem;
+  font-size: 0.78rem;
+  cursor: pointer;
+  color: #555;
+  min-width: 46px;
+  text-align: center;
+}
+
+.zoom-reset:hover { background: #e8e8e8; }
 
 .loading {
   color: #888;
@@ -744,18 +809,23 @@ async function saveLayout() {
   margin-bottom: 1rem;
 }
 
+.canvas-zoom-container {
+  position: relative;
+}
+
 .canvas {
   position: relative;
   background-color: #fff;
 }
 
 .canvas--grid {
+  /* major lines every 32 studs = 25.6 cm = 25.6 px; minor every 8 studs = 6.4 px */
   background-image:
     linear-gradient(to right,  #9aa8bb 1px, transparent 1px),
     linear-gradient(to bottom, #9aa8bb 1px, transparent 1px),
     linear-gradient(to right,  #dde4ef 1px, transparent 1px),
     linear-gradient(to bottom, #dde4ef 1px, transparent 1px);
-  background-size: 100px 100px, 100px 100px, 20px 20px, 20px 20px;
+  background-size: 25.6px 25.6px, 25.6px 25.6px, 6.4px 6.4px, 6.4px 6.4px;
 }
 
 /* ── Table item ───────────────────────────────────────────────────────────── */

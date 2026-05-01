@@ -9,12 +9,14 @@ public class LegoSetService : ILegoSetService
     private readonly ILegoSetRepository _setRepo;
     private readonly IBoxRepository _boxRepo;
     private readonly IAllocationRepository _allocationRepo;
+    private readonly IBaseplateRepository _baseplateRepo;
 
-    public LegoSetService(ILegoSetRepository setRepo, IBoxRepository boxRepo, IAllocationRepository allocationRepo)
+    public LegoSetService(ILegoSetRepository setRepo, IBoxRepository boxRepo, IAllocationRepository allocationRepo, IBaseplateRepository baseplateRepo)
     {
         _setRepo = setRepo;
         _boxRepo = boxRepo;
         _allocationRepo = allocationRepo;
+        _baseplateRepo = baseplateRepo;
     }
 
     public async Task<IEnumerable<LegoSet>> GetAllAsync()
@@ -66,6 +68,7 @@ public class LegoSetService : ILegoSetService
     public async Task<bool> DeleteAsync(Guid id)
     {
         await _allocationRepo.RemoveAllByItemAsync(id);
+        await _baseplateRepo.DeleteByLinkedSetIdAsync(id);
         return await _setRepo.DeleteAsync(id);
     }
 

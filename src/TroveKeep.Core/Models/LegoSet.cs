@@ -11,4 +11,5 @@ public class LegoSet
     public List<StorageAllocation> StorageAllocations { get; set; } = [];
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
+    public int Version { get; set; }
 }

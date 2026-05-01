@@ -81,7 +81,7 @@ public class DrawersController : ControllerBase
                     p.LegoColorId, color.Name, color.Rgb,
                     p.Description, p.Quantity, p.ImageCached,
                     p.StorageAllocations.Select(a => new StorageAllocationResponse(a.StorageId, a.StoragePosition, a.StorageType.ToString(), a.Quantity)),
-                    p.CreatedAt, p.UpdatedAt);
+                    p.CreatedAt, p.UpdatedAt, p.Version);
             }),
             d.CreatedAt, d.UpdatedAt);
 }

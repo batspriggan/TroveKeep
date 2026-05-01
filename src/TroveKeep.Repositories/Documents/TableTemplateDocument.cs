@@ -3,6 +3,7 @@ using MongoDB.Bson.Serialization.Attributes;
 
 namespace TroveKeep.Repositories.Documents;
 
+[BsonIgnoreExtraElements]
 public class TableTemplateDocument
 {
     [BsonId]
@@ -15,4 +16,5 @@ public class TableTemplateDocument
     public string Color { get; set; } = "#8b6340";
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
+    public int Version { get; set; }
 }

@@ -1,5 +1,6 @@
 using MongoDB.Bson;
 using MongoDB.Driver;
+using TroveKeep.Core.Exceptions;
 using TroveKeep.Core.Interfaces.Repositories;
 using TroveKeep.Core.Models;
 using TroveKeep.Repositories.Documents;
@@ -42,6 +43,7 @@ public class LegoSetRepository : ILegoSetRepository
         var now = DateTime.UtcNow;
         doc.CreatedAt = now;
         doc.UpdatedAt = now;
+        doc.Version = 0;
         await _collection.InsertOneAsync(doc);
         return ToModel(doc);
     }
@@ -55,7 +57,14 @@ public class LegoSetRepository : ILegoSetRepository
         doc.ImageCached = existing.ImageCached;
         doc.CreatedAt = existing.CreatedAt;
         doc.UpdatedAt = DateTime.UtcNow;
-        await _collection.ReplaceOneAsync(x => x.Id == legoSet.Id, doc);
+        doc.Version = existing.Version + 1;
+
+        var result = await _collection.ReplaceOneAsync(
+            x => x.Id == legoSet.Id && x.Version == legoSet.Version, doc);
+
+        if (result.ModifiedCount == 0)
+            throw new ConcurrencyException($"Set {legoSet.Id} was modified by someone else. Please refresh and try again.");
+
         return ToModel(doc);
     }
 
@@ -107,6 +116,7 @@ public class LegoSetRepository : ILegoSetRepository
         ImageCached = doc.ImageCached,
         CreatedAt = new DateTimeOffset(DateTime.SpecifyKind(doc.CreatedAt, DateTimeKind.Utc)),
         UpdatedAt = new DateTimeOffset(DateTime.SpecifyKind(doc.UpdatedAt, DateTimeKind.Utc)),
+        Version = doc.Version,
     };
 
     private static LegoSetDocument ToDocument(LegoSet model) => new()
@@ -119,5 +129,6 @@ public class LegoSetRepository : ILegoSetRepository
         ImageCached = model.ImageCached,
         CreatedAt = model.CreatedAt.UtcDateTime,
         UpdatedAt = model.UpdatedAt.UtcDateTime,
+        Version = model.Version,
     };
 }

@@ -1,4 +1,5 @@
 using MongoDB.Driver;
+using TroveKeep.Core.Exceptions;
 using TroveKeep.Core.Interfaces.Repositories;
 using TroveKeep.Core.Models;
 using TroveKeep.Repositories.Documents;
@@ -33,6 +34,7 @@ public class TableTemplateRepository : ITableTemplateRepository
         var now = DateTime.UtcNow;
         doc.CreatedAt = now;
         doc.UpdatedAt = now;
+        doc.Version = 0;
         await _templates.InsertOneAsync(doc);
         return ToModel(doc);
     }
@@ -45,7 +47,14 @@ public class TableTemplateRepository : ITableTemplateRepository
         var doc = ToDocument(template);
         doc.CreatedAt = existing.CreatedAt;
         doc.UpdatedAt = DateTime.UtcNow;
-        await _templates.ReplaceOneAsync(x => x.Id == template.Id, doc);
+        doc.Version = existing.Version + 1;
+
+        var result = await _templates.ReplaceOneAsync(
+            x => x.Id == template.Id && x.Version == template.Version, doc);
+
+        if (result.ModifiedCount == 0)
+            throw new ConcurrencyException($"Template {template.Id} was modified by someone else. Please refresh and try again.");
+
         return ToModel(doc);
     }
 
@@ -64,6 +73,7 @@ public class TableTemplateRepository : ITableTemplateRepository
         Color = doc.Color,
         CreatedAt = new DateTimeOffset(DateTime.SpecifyKind(doc.CreatedAt, DateTimeKind.Utc)),
         UpdatedAt = new DateTimeOffset(DateTime.SpecifyKind(doc.UpdatedAt, DateTimeKind.Utc)),
+        Version = doc.Version,
     };
 
     private static TableTemplateDocument ToDocument(TableTemplate model) => new()
@@ -75,5 +85,6 @@ public class TableTemplateRepository : ITableTemplateRepository
         Color = model.Color,
         CreatedAt = model.CreatedAt.UtcDateTime,
         UpdatedAt = model.UpdatedAt.UtcDateTime,
+        Version = model.Version,
     };
 }

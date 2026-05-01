@@ -14,5 +14,6 @@ public enum ImageReferenceType
     Set,
     Part,
     Box,
-    DrawerContainer
+    DrawerContainer,
+    Baseplate
 }

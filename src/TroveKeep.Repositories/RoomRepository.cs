@@ -1,4 +1,5 @@
 using MongoDB.Driver;
+using TroveKeep.Core.Exceptions;
 using TroveKeep.Core.Interfaces.Repositories;
 using TroveKeep.Core.Models;
 using TroveKeep.Repositories.Documents;
@@ -33,6 +34,7 @@ public class RoomRepository : IRoomRepository
         var now = DateTime.UtcNow;
         doc.CreatedAt = now;
         doc.UpdatedAt = now;
+        doc.Version = 0;
         await _rooms.InsertOneAsync(doc);
         return ToModel(doc);
     }
@@ -45,14 +47,22 @@ public class RoomRepository : IRoomRepository
         var doc = ToDocument(room);
         doc.CreatedAt = existing.CreatedAt;
         doc.UpdatedAt = DateTime.UtcNow;
-        // Preserve existing layout and aggregate selections
+        doc.Version = existing.Version + 1;
+        // Preserve existing layout, aggregate selections and baseplate layouts
         doc.Layout = existing.Layout;
         doc.AggregateSelections = existing.AggregateSelections;
-        await _rooms.ReplaceOneAsync(x => x.Id == room.Id, doc);
+        doc.AggregateBpLayouts = existing.AggregateBpLayouts;
+
+        var result = await _rooms.ReplaceOneAsync(
+            x => x.Id == room.Id && x.Version == room.Version, doc);
+
+        if (result.ModifiedCount == 0)
+            throw new ConcurrencyException($"Room {room.Id} was modified by someone else. Please refresh and try again.");
+
         return ToModel(doc);
     }
 
-    public async Task<Room?> SaveLayoutAsync(Guid id, IEnumerable<PlacedTable> layout, IEnumerable<AggregateSelection> aggregateSelections)
+    public async Task<Room?> SaveLayoutAsync(Guid id, IEnumerable<PlacedTable> layout, IEnumerable<AggregateSelection> aggregateSelections, int expectedVersion)
     {
         var layoutDocs = layout.Select(p => new PlacedTableDocument
         {
@@ -71,6 +81,50 @@ public class RoomRepository : IRoomRepository
         var update = Builders<RoomDocument>.Update
             .Set(r => r.Layout, layoutDocs)
             .Set(r => r.AggregateSelections, selectionDocs)
+            .Set(r => r.UpdatedAt, DateTime.UtcNow)
+            .Inc(r => r.Version, 1);
+
+        var result = await _rooms.FindOneAndUpdateAsync(
+            x => x.Id == id && x.Version == expectedVersion,
+            update,
+            new FindOneAndUpdateOptions<RoomDocument> { ReturnDocument = ReturnDocument.After });
+
+        if (result is null)
+        {
+            // Check if room exists at all; if yes it's a concurrency conflict
+            var exists = await _rooms.Find(x => x.Id == id).AnyAsync();
+            if (exists)
+                throw new ConcurrencyException($"Room {id} layout was saved by someone else. Please refresh and try again.");
+            return null;
+        }
+
+        return ToModel(result);
+    }
+
+    public async Task<Room?> SaveAggregateBpLayoutAsync(Guid id, string representativeId, IEnumerable<PlacedBaseplate> placedBaseplates)
+    {
+        var existing = await _rooms.Find(x => x.Id == id).FirstOrDefaultAsync();
+        if (existing is null) return null;
+
+        var layouts = existing.AggregateBpLayouts
+            .Where(l => l.RepresentativeId != representativeId)
+            .ToList();
+
+        layouts.Add(new AggregateBpLayoutDocument
+        {
+            RepresentativeId = representativeId,
+            PlacedBaseplates = placedBaseplates.Select(p => new PlacedBaseplateDocument
+            {
+                InstanceId = p.InstanceId,
+                BaseplateId = p.BaseplateId,
+                XMm = p.XMm,
+                YMm = p.YMm,
+                Rotation = p.Rotation,
+            }).ToList(),
+        });
+
+        var update = Builders<RoomDocument>.Update
+            .Set(r => r.AggregateBpLayouts, layouts)
             .Set(r => r.UpdatedAt, DateTime.UtcNow);
 
         var result = await _rooms.FindOneAndUpdateAsync(
@@ -105,8 +159,21 @@ public class RoomRepository : IRoomRepository
             RepresentativeId = s.RepresentativeId,
             BpKey = s.BpKey,
         }).ToList(),
+        AggregateBpLayouts = doc.AggregateBpLayouts.Select(l => new AggregateBpLayout
+        {
+            RepresentativeId = l.RepresentativeId,
+            PlacedBaseplates = l.PlacedBaseplates.Select(p => new PlacedBaseplate
+            {
+                InstanceId = p.InstanceId,
+                BaseplateId = p.BaseplateId,
+                XMm = p.XMm,
+                YMm = p.YMm,
+                Rotation = p.Rotation,
+            }).ToList(),
+        }).ToList(),
         CreatedAt = new DateTimeOffset(DateTime.SpecifyKind(doc.CreatedAt, DateTimeKind.Utc)),
         UpdatedAt = new DateTimeOffset(DateTime.SpecifyKind(doc.UpdatedAt, DateTimeKind.Utc)),
+        Version = doc.Version,
     };
 
     private static RoomDocument ToDocument(Room model) => new()
@@ -127,7 +194,20 @@ public class RoomRepository : IRoomRepository
             RepresentativeId = s.RepresentativeId,
             BpKey = s.BpKey,
         }).ToList(),
+        AggregateBpLayouts = model.AggregateBpLayouts.Select(l => new AggregateBpLayoutDocument
+        {
+            RepresentativeId = l.RepresentativeId,
+            PlacedBaseplates = l.PlacedBaseplates.Select(p => new PlacedBaseplateDocument
+            {
+                InstanceId = p.InstanceId,
+                BaseplateId = p.BaseplateId,
+                XMm = p.XMm,
+                YMm = p.YMm,
+                Rotation = p.Rotation,
+            }).ToList(),
+        }).ToList(),
         CreatedAt = model.CreatedAt.UtcDateTime,
         UpdatedAt = model.UpdatedAt.UtcDateTime,
+        Version = model.Version,
     };
 }

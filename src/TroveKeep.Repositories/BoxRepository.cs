@@ -1,4 +1,5 @@
 using MongoDB.Driver;
+using TroveKeep.Core.Exceptions;
 using TroveKeep.Core.Interfaces.Repositories;
 using TroveKeep.Core.Models;
 using TroveKeep.Repositories.Documents;
@@ -38,6 +39,7 @@ public class BoxRepository : IBoxRepository
         var now = DateTime.UtcNow;
         doc.CreatedAt = now;
         doc.UpdatedAt = now;
+        doc.Version = 0;
         await _boxes.InsertOneAsync(doc);
         return ToModel(doc);
     }
@@ -51,7 +53,14 @@ public class BoxRepository : IBoxRepository
         doc.CreatedAt = existing.CreatedAt;
         doc.ImageCached = existing.ImageCached;
         doc.UpdatedAt = DateTime.UtcNow;
-        await _boxes.ReplaceOneAsync(x => x.Id == box.Id, doc);
+        doc.Version = existing.Version + 1;
+
+        var result = await _boxes.ReplaceOneAsync(
+            x => x.Id == box.Id && x.Version == box.Version, doc);
+
+        if (result.ModifiedCount == 0)
+            throw new ConcurrencyException($"Box {box.Id} was modified by someone else. Please refresh and try again.");
+
         return ToModel(doc);
     }
 
@@ -82,6 +91,7 @@ public class BoxRepository : IBoxRepository
         ImageCached = doc.ImageCached,
         CreatedAt = new DateTimeOffset(DateTime.SpecifyKind(doc.CreatedAt, DateTimeKind.Utc)),
         UpdatedAt = new DateTimeOffset(DateTime.SpecifyKind(doc.UpdatedAt, DateTimeKind.Utc)),
+        Version = doc.Version,
     };
 
     private static BoxDocument ToDocument(Box model) => new()
@@ -91,5 +101,6 @@ public class BoxRepository : IBoxRepository
         ImageCached = model.ImageCached,
         CreatedAt = model.CreatedAt.UtcDateTime,
         UpdatedAt = model.UpdatedAt.UtcDateTime,
+        Version = model.Version,
     };
 }

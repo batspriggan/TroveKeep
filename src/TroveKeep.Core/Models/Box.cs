@@ -9,4 +9,5 @@ public class Box
     public ICollection<BulkPiece> BulkPieces { get; set; } = new List<BulkPiece>();
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
+    public int Version { get; set; }
 }

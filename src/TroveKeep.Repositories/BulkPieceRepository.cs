@@ -1,5 +1,6 @@
 using MongoDB.Bson;
 using MongoDB.Driver;
+using TroveKeep.Core.Exceptions;
 using TroveKeep.Core.Interfaces.Repositories;
 using TroveKeep.Core.Models;
 using TroveKeep.Repositories.Documents;
@@ -42,6 +43,7 @@ public class BulkPieceRepository : IBulkPieceRepository
         var now = DateTime.UtcNow;
         doc.CreatedAt = now;
         doc.UpdatedAt = now;
+        doc.Version = 0;
         await _collection.InsertOneAsync(doc);
         return ToModel(doc);
     }
@@ -55,7 +57,14 @@ public class BulkPieceRepository : IBulkPieceRepository
         doc.ImageCached = existing.ImageCached;
         doc.CreatedAt = existing.CreatedAt;
         doc.UpdatedAt = DateTime.UtcNow;
-        await _collection.ReplaceOneAsync(x => x.Id == bulkPiece.Id, doc);
+        doc.Version = existing.Version + 1;
+
+        var result = await _collection.ReplaceOneAsync(
+            x => x.Id == bulkPiece.Id && x.Version == bulkPiece.Version, doc);
+
+        if (result.ModifiedCount == 0)
+            throw new ConcurrencyException($"Piece {bulkPiece.Id} was modified by someone else. Please refresh and try again.");
+
         return ToModel(doc);
     }
 
@@ -108,6 +117,7 @@ public class BulkPieceRepository : IBulkPieceRepository
         CreatedAt = new DateTimeOffset(DateTime.SpecifyKind(doc.CreatedAt, DateTimeKind.Utc)),
         UpdatedAt = new DateTimeOffset(DateTime.SpecifyKind(doc.UpdatedAt, DateTimeKind.Utc)),
         ImageCached = doc.ImageCached,
+        Version = doc.Version,
     };
 
     private static BulkPieceDocument ToDocument(BulkPiece model) => new()
@@ -120,5 +130,6 @@ public class BulkPieceRepository : IBulkPieceRepository
         CreatedAt = model.CreatedAt.UtcDateTime,
         UpdatedAt = model.UpdatedAt.UtcDateTime,
         ImageCached = model.ImageCached,
+        Version = model.Version,
     };
 }

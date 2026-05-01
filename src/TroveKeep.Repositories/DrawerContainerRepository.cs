@@ -1,4 +1,5 @@
 using MongoDB.Driver;
+using TroveKeep.Core.Exceptions;
 using TroveKeep.Core.Interfaces.Repositories;
 using TroveKeep.Core.Models;
 using TroveKeep.Repositories.Documents;
@@ -48,6 +49,7 @@ public class DrawerContainerRepository : IDrawerContainerRepository
             }).ToList(),
             CreatedAt = now,
             UpdatedAt = now,
+            Version = 0,
         };
         await _containers.InsertOneAsync(doc);
         return ToModel(doc);
@@ -67,8 +69,15 @@ public class DrawerContainerRepository : IDrawerContainerRepository
             Drawers = existing.Drawers,
             CreatedAt = existing.CreatedAt,
             UpdatedAt = DateTime.UtcNow,
+            Version = existing.Version + 1,
         };
-        await _containers.ReplaceOneAsync(x => x.Id == drawerContainer.Id, doc);
+
+        var result = await _containers.ReplaceOneAsync(
+            x => x.Id == drawerContainer.Id && x.Version == drawerContainer.Version, doc);
+
+        if (result.ModifiedCount == 0)
+            throw new ConcurrencyException($"Container {drawerContainer.Id} was modified by someone else. Please refresh and try again.");
+
         return ToModel(doc);
     }
 
@@ -100,6 +109,7 @@ public class DrawerContainerRepository : IDrawerContainerRepository
         ImageCached = doc.ImageCached,
         CreatedAt = new DateTimeOffset(DateTime.SpecifyKind(doc.CreatedAt, DateTimeKind.Utc)),
         UpdatedAt = new DateTimeOffset(DateTime.SpecifyKind(doc.UpdatedAt, DateTimeKind.Utc)),
+        Version = doc.Version,
         Drawers = doc.Drawers.Select(d => new Drawer
         {
             Position = d.Position,

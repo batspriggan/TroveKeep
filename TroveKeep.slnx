@@ -2,6 +2,7 @@
   <Folder Name="/src/">
     <Project Path="src/TroveKeep.Api/TroveKeep.Api.csproj" />
     <Project Path="src/TroveKeep.Core/TroveKeep.Core.csproj" />
+    <Project Path="src/TroveKeep.Migrations/TroveKeep.Migrations.csproj" />
     <Project Path="src/TroveKeep.Repositories/TroveKeep.Repositories.csproj" />
     <Project Path="src/TroveKeep.Services/TroveKeep.Services.csproj" />
   </Folder>

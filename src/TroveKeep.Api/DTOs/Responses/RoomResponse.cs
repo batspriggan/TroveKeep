@@ -4,6 +4,10 @@ public record PlacedTableResponse(Guid InstanceId, Guid TemplateId, int XCm, int
 
 public record AggregateSelectionResponse(string RepresentativeId, string BpKey);
 
+public record PlacedBaseplateResponse(Guid InstanceId, Guid BaseplateId, int XMm, int YMm, int Rotation);
+
+public record AggregateBpLayoutResponse(string RepresentativeId, IEnumerable<PlacedBaseplateResponse> PlacedBaseplates);
+
 public record RoomResponse(
     Guid Id,
     string Name,
@@ -11,5 +15,7 @@ public record RoomResponse(
     int DepthCm,
     IEnumerable<PlacedTableResponse> Layout,
     IEnumerable<AggregateSelectionResponse> AggregateSelections,
+    IEnumerable<AggregateBpLayoutResponse> AggregateBpLayouts,
     DateTimeOffset CreatedAt,
-    DateTimeOffset UpdatedAt);
+    DateTimeOffset UpdatedAt,
+    int Version);

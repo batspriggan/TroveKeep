@@ -9,4 +9,5 @@ public class DrawerContainer
     public ICollection<Drawer> Drawers { get; set; } = new List<Drawer>();
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
+    public int Version { get; set; }
 }

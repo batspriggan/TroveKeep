@@ -3,6 +3,7 @@ using MongoDB.Bson.Serialization.Attributes;
 
 namespace TroveKeep.Repositories.Documents;
 
+[BsonIgnoreExtraElements]
 public class RoomDocument
 {
     [BsonId]
@@ -14,12 +15,31 @@ public class RoomDocument
     public int DepthCm { get; set; }
     public List<PlacedTableDocument> Layout { get; set; } = [];
     public List<AggregateSelectionDocument> AggregateSelections { get; set; } = [];
+    public List<AggregateBpLayoutDocument> AggregateBpLayouts { get; set; } = [];
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
+    public int Version { get; set; }
 }
 
 public class AggregateSelectionDocument
 {
     public string RepresentativeId { get; set; } = string.Empty;
     public string BpKey { get; set; } = string.Empty;
+}
+
+public class AggregateBpLayoutDocument
+{
+    public string RepresentativeId { get; set; } = string.Empty;
+    public List<PlacedBaseplateDocument> PlacedBaseplates { get; set; } = [];
+}
+
+public class PlacedBaseplateDocument
+{
+    [BsonGuidRepresentation(GuidRepresentation.Standard)]
+    public Guid InstanceId { get; set; }
+    [BsonGuidRepresentation(GuidRepresentation.Standard)]
+    public Guid BaseplateId { get; set; }
+    public int XMm { get; set; }
+    public int YMm { get; set; }
+    public int Rotation { get; set; }
 }
