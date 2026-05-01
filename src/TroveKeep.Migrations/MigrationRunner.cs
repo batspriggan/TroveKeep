@@ -30,6 +30,7 @@ public class MigrationRunner
 
         foreach (var migration in pending)
         {
+            Console.WriteLine($"Running migration from version {migration.VersionFrom} to {migration.VersionTo}...");
             await migration.RunAsync(_db);
             await meta.ReplaceOneAsync(
                 Builders<BsonDocument>.Filter.Eq("_id", "schema_version"),

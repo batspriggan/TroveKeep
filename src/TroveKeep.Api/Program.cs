@@ -59,10 +59,11 @@ builder.Services.AddHttpClient("SetImages");
 
 var app = builder.Build();
 
-// Run pending migrations before accepting requests
+Console.WriteLine("Running database migrations...");
 await new MigrationRunner(
     app.Services.GetRequiredService<IMongoDatabase>()
 ).RunAsync();
+Console.WriteLine("Database migrations completed.");
 
 if (app.Environment.IsDevelopment())
 {

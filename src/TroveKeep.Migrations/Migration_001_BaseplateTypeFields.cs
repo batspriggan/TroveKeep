@@ -3,14 +3,11 @@ using MongoDB.Driver;
 
 namespace TroveKeep.Migrations;
 
-/// <summary>
-/// Backfills Type=0 (Standard), ImageCached=false, LinkedSetId=null on existing
-/// baseplate documents that pre-date the typed baseplate system.
-/// </summary>
 public class Migration_001_BaseplateTypeFields : IMigration
 {
     public int VersionFrom => 0;
     public int VersionTo => 1;
+    public string Description => "Backfill Type, ImageCached, and LinkedSetId fields on existing baseplates documents that pre-date the typed baseplate system.";
 
     public async Task RunAsync(IMongoDatabase database)
     {
