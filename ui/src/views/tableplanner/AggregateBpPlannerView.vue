@@ -564,6 +564,7 @@ async function save() {
               <span class="plate-label">
                 {{ baseplateMap[p.baseplateId]?.widthStuds }}×{{ baseplateMap[p.baseplateId]?.depthStuds }}
                 <template v-if="p.rotation"> · {{ p.rotation }}°</template>
+                <template v-if="baseplateMap[p.baseplateId]?.name"><br>{{ baseplateMap[p.baseplateId].name }}</template>
               </span>
             </div>
           </div>
