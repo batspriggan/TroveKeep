@@ -6,7 +6,7 @@ public record UpdateRoomRequest(string Name, int WidthCm, int DepthCm, int Versi
 
 public record SaveRoomLayoutRequest(IEnumerable<PlacedTableRequest> Layout, IEnumerable<AggregateSelectionRequest> AggregateSelections, int Version = 0);
 
-public record PlacedTableRequest(Guid InstanceId, Guid TemplateId, int XCm, int YCm);
+public record PlacedTableRequest(Guid InstanceId, Guid TemplateId, double XCm, double YCm);
 
 public record AggregateSelectionRequest(string RepresentativeId, string BpKey);
 

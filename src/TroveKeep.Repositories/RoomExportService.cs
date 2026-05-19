@@ -157,6 +157,6 @@ public class RoomExportService : IRoomExportService
     }
 
     private record RoomData(string Name, int WidthCm, int DepthCm, List<PlacedData> Layout);
-    private record PlacedData(Guid InstanceId, Guid TemplateId, int XCm, int YCm);
+    private record PlacedData(Guid InstanceId, Guid TemplateId, double XCm, double YCm);
     private record TemplateData(Guid Id, string Description, int WidthCm, int DepthCm, string Color);
 }

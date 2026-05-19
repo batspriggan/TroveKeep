@@ -4,6 +4,6 @@ public class PlacedTable
 {
     public Guid InstanceId { get; set; }
     public Guid TemplateId { get; set; }
-    public int XCm { get; set; }
-    public int YCm { get; set; }
+    public double XCm { get; set; }
+    public double YCm { get; set; }
 }
