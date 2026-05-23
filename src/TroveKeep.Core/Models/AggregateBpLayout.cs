@@ -4,4 +4,5 @@ public class AggregateBpLayout
 {
     public string RepresentativeId { get; set; } = string.Empty;
     public List<PlacedBaseplate> PlacedBaseplates { get; set; } = [];
+    public int LayoutVersion { get; set; }
 }

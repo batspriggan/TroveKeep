@@ -114,6 +114,7 @@ public class RoomRepository : IRoomRepository
         layouts.Add(new AggregateBpLayoutDocument
         {
             RepresentativeId = representativeId,
+            LayoutVersion = 1,
             PlacedBaseplates = placedBaseplates.Select(p => new PlacedBaseplateDocument
             {
                 InstanceId = p.InstanceId,
@@ -164,6 +165,7 @@ public class RoomRepository : IRoomRepository
         AggregateBpLayouts = doc.AggregateBpLayouts.Select(l => new AggregateBpLayout
         {
             RepresentativeId = l.RepresentativeId,
+            LayoutVersion = l.LayoutVersion,
             PlacedBaseplates = l.PlacedBaseplates.Select(p => new PlacedBaseplate
             {
                 InstanceId = p.InstanceId,
@@ -200,6 +202,7 @@ public class RoomRepository : IRoomRepository
         AggregateBpLayouts = model.AggregateBpLayouts.Select(l => new AggregateBpLayoutDocument
         {
             RepresentativeId = l.RepresentativeId,
+            LayoutVersion = l.LayoutVersion,
             PlacedBaseplates = l.PlacedBaseplates.Select(p => new PlacedBaseplateDocument
             {
                 InstanceId = p.InstanceId,

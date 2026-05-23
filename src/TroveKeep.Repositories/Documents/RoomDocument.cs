@@ -31,6 +31,7 @@ public class AggregateBpLayoutDocument
 {
     public string RepresentativeId { get; set; } = string.Empty;
     public List<PlacedBaseplateDocument> PlacedBaseplates { get; set; } = [];
+    public int LayoutVersion { get; set; }
 }
 
 public class PlacedBaseplateDocument

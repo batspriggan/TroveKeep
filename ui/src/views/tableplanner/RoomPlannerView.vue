@@ -166,10 +166,17 @@ const distinctBaseplates = computed(() => {
     const w = Math.min(bp.widthStuds, bp.depthStuds)
     const d = Math.max(bp.widthStuds, bp.depthStuds)
     const key = `${w}x${d}`
-    if (!seen.has(key)) seen.set(key, { key, widthStuds: w, depthStuds: d })
+    if (!seen.has(key)) seen.set(key, { key, widthStuds: w, depthStuds: d, type: bp.type })
   }
   return [...seen.values()]
 })
+
+// Standard/Road plates and Custom plates with stud counts that are multiples of 8:
+// studs×8 − 0.2 mm (0.1 mm clearance each side, per LEGO spec).
+// Custom plates with non-standard stud counts: studs×8 − 2 mm.
+function isStdGeom(bp) { return bp.type !== 'Custom' || (bp.widthStuds % 8 === 0 && bp.depthStuds % 8 === 0) }
+function bpMmW(bp) { return bp ? bp.widthStuds * 8 - (isStdGeom(bp) ? 0.2 : 2) : '' }
+function bpMmH(bp) { return bp ? bp.depthStuds * 8 - (isStdGeom(bp) ? 0.2 : 2) : '' }
 
 // ── Plate count per aggregate ──────────────────────────────────────────────────
 function calcPlateCount(aggIdx, bpKey) {
@@ -192,8 +199,8 @@ function calcPlateCount(aggIdx, bpKey) {
   const maxX = Math.max(...rects.map(r => r.x2))
   const maxY = Math.max(...rects.map(r => r.y2))
 
-  const pw = bp.widthStuds * 8 - 2
-  const pd = bp.depthStuds * 8 - 2
+  const pw = bpMmW(bp)
+  const pd = bpMmH(bp)
   if (pw <= 0 || pd <= 0) return 0
 
   const nX = Math.ceil((maxX - minX) / pw)
@@ -762,9 +769,9 @@ async function saveLayout() {
                 <template v-if="aggSelections[idx]">
                   <strong class="calc-result">{{ calcPlateCount(idx, aggSelections[idx]) }}</strong>
                   <span class="calc-plate-info">
-                    ({{ distinctBaseplates.find(b => b.key === aggSelections[idx])?.widthStuds * 8 - 2 }} mm
+                    ({{ bpMmW(distinctBaseplates.find(b => b.key === aggSelections[idx])) }} mm
                     &times;
-                    {{ distinctBaseplates.find(b => b.key === aggSelections[idx])?.depthStuds * 8 - 2 }} mm each)
+                    {{ bpMmH(distinctBaseplates.find(b => b.key === aggSelections[idx])) }} mm each)
                   </span>
                 </template>
                 <span v-else class="calc-hint">—</span>

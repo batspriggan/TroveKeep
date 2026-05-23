@@ -6,7 +6,7 @@ public record AggregateSelectionResponse(string RepresentativeId, string BpKey);
 
 public record PlacedBaseplateResponse(Guid InstanceId, Guid BaseplateId, int XMm, int YMm, int Rotation);
 
-public record AggregateBpLayoutResponse(string RepresentativeId, IEnumerable<PlacedBaseplateResponse> PlacedBaseplates);
+public record AggregateBpLayoutResponse(string RepresentativeId, IEnumerable<PlacedBaseplateResponse> PlacedBaseplates, int LayoutVersion = 0);
 
 public record RoomResponse(
     Guid Id,

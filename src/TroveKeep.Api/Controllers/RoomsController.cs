@@ -171,6 +171,7 @@ public class RoomsController : ControllerBase
             r.Layout.Select(p => new PlacedTableResponse(p.InstanceId, p.TemplateId, p.XCm, p.YCm, p.Rotation)),
             r.AggregateSelections.Select(s => new AggregateSelectionResponse(s.RepresentativeId, s.BpKey)),
             r.AggregateBpLayouts.Select(l => new AggregateBpLayoutResponse(l.RepresentativeId,
-                l.PlacedBaseplates.Select(p => new PlacedBaseplateResponse(p.InstanceId, p.BaseplateId, p.XMm, p.YMm, p.Rotation)))),
+                l.PlacedBaseplates.Select(p => new PlacedBaseplateResponse(p.InstanceId, p.BaseplateId, p.XMm, p.YMm, p.Rotation)),
+                l.LayoutVersion)),
             r.CreatedAt, r.UpdatedAt, r.Version);
 }

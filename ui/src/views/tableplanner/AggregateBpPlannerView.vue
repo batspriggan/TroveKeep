@@ -8,7 +8,7 @@ const router = useRouter()
 const roomId = route.params.roomId
 const repId  = route.params.repId
 
-// px per mm at zoom=1  (1 stud=8mm; 32×32 plate = 256mm = 128px)
+// px per mm at zoom=1  (1 stud=8mm; 32×32 Standard plate = 255.8mm ≈ 128px)
 const SCALE = 0.5
 const PADDING_MM = 80     // canvas padding around the aggregate bounding box
 const SNAP_MM = 12        // edge-to-edge snap threshold in mm
@@ -25,10 +25,12 @@ const canvasWrapEl = ref(null)
 
 // Placed baseplates: { instanceId, baseplateId, xMm, yMm, rotation }
 // xMm/yMm are relative to aggregate bounding-box origin (top-left)
-const placedPlates = ref([])
-const savedJson    = ref('[]')
+const placedPlates   = ref([])
+const savedJson      = ref('[]')
+const layoutVersion  = ref(0)
 
-const isDirty = computed(() => JSON.stringify(serialisePlates()) !== savedJson.value)
+const isDirty  = computed(() => JSON.stringify(serialisePlates()) !== savedJson.value)
+const needsFix = computed(() => layoutVersion.value === 0 && placedPlates.value.length > 0)
 
 function serialisePlates() {
   return placedPlates.value.map(p => ({
@@ -166,9 +168,14 @@ function tableCanvasX(t) { return t.xCm * 10 - aggBounds.value.minXmm + PADDING_
 function tableCanvasY(t) { return t.yCm * 10 - aggBounds.value.minYmm + PADDING_MM }
 
 // ── Baseplate dimensions ───────────────────────────────────────────────────────
-// Physical baseplate size: studs*8 - 2 mm (1mm border on each side, no studs there)
-function bpNaturalW(bp) { return bp.widthStuds  * 8 - 2 }
-function bpNaturalH(bp) { return bp.depthStuds  * 8 - 2 }
+// Standard/Road plates and Custom plates with stud counts that are multiples of 8:
+// studs×8 − 0.2 mm (0.1 mm clearance each side, per LEGO spec).
+// Custom plates with non-standard stud counts: studs×8 − 2 mm.
+function isStandardGeometry(bp) {
+  return bp.type !== 'Custom' || (bp.widthStuds % 8 === 0 && bp.depthStuds % 8 === 0)
+}
+function bpNaturalW(bp) { return bp.widthStuds  * 8 - (isStandardGeometry(bp) ? 0.2 : 2) }
+function bpNaturalH(bp) { return bp.depthStuds  * 8 - (isStandardGeometry(bp) ? 0.2 : 2) }
 
 function effectiveW(bp, rotation) {
   return (rotation === 0 || rotation === 180) ? bpNaturalW(bp) : bpNaturalH(bp)
@@ -201,6 +208,7 @@ onMounted(async () => {
   // Restore saved layout for this aggregate
   const saved = r.aggregateBpLayouts?.find(l => l.representativeId === repId)
   placedPlates.value = (saved?.placedBaseplates ?? []).map(p => ({ ...p }))
+  layoutVersion.value = saved?.layoutVersion ?? 0
   savedJson.value = JSON.stringify(serialisePlates())
   loading.value = false
 
@@ -429,12 +437,34 @@ function onWheelZoom(e) {
   zoom.value = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, +(zoom.value * factor).toFixed(4)))
 }
 
-// ── Save ──────────────────────────────────────────────────────────────────────
+// ── Save / Fix ────────────────────────────────────────────────────────────────
 async function save() {
-  await saveAggregateBpLayout(roomId, repId, serialisePlates())
+  const result = await saveAggregateBpLayout(roomId, repId, serialisePlates())
+  const saved = result?.aggregateBpLayouts?.find(l => l.representativeId === repId)
+  if (saved) layoutVersion.value = saved.layoutVersion ?? layoutVersion.value
   savedJson.value = JSON.stringify(serialisePlates())
   saveSuccess.value = true
   setTimeout(() => { saveSuccess.value = false }, 2500)
+}
+
+async function fixLayout() {
+  // Old edge-snapping placed each plate at k×(studs×8−2), accumulating 2k mm of error.
+  // Math.ceil(pos/8)*8 only corrects up to 3 plates; at k=4 the error is 8 mm (a full
+  // stud multiple) so ceil leaves the position unchanged and plates overlap.
+  //
+  // Correct approach: infer k = round(pos / old_slot), then set pos = k × new_slot.
+  // This works for any k in realistic layouts (fails only beyond ~60 plates in a row).
+  for (const p of placedPlates.value) {
+    const bp = baseplateMap.value[p.baseplateId]
+    if (!bp) continue
+    const studW = (p.rotation === 0 || p.rotation === 180) ? bp.widthStuds : bp.depthStuds
+    const studH = (p.rotation === 0 || p.rotation === 180) ? bp.depthStuds : bp.widthStuds
+    const oldSlotW = studW * 8 - 2
+    const oldSlotH = studH * 8 - 2
+    if (oldSlotW > 0) p.xMm = Math.round(p.xMm / oldSlotW) * (studW * 8)
+    if (oldSlotH > 0) p.yMm = Math.round(p.yMm / oldSlotH) * (studH * 8)
+  }
+  await save()
 }
 </script>
 
@@ -452,6 +482,11 @@ async function save() {
         <span v-if="saveSuccess" class="save-ok">Saved!</span>
         <button class="save-btn" :class="{ dirty: isDirty }" :disabled="!isDirty" @click="save">Save</button>
       </div>
+    </div>
+
+    <div v-if="needsFix" class="fix-banner">
+      <span>This layout was saved with an older plate-size formula. Positions may be off by up to 2 mm.</span>
+      <button class="fix-btn" @click="fixLayout">Fix Plate Positions</button>
     </div>
 
     <div v-if="loading" class="loading">Loading…</div>
@@ -666,6 +701,19 @@ async function save() {
 .header-right { display: flex; align-items: center; gap: 0.75rem; }
 
 .save-ok { color: #2a7a2a; font-size: 0.85rem; font-weight: 600; }
+
+.fix-banner {
+  display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;
+  background: #fff3cd; border: 1px solid #ffc107; border-radius: 6px;
+  padding: 0.5rem 1rem; margin: 0 0 0.5rem;
+  font-size: 0.85rem; color: #664d03;
+}
+.fix-banner span { flex: 1; }
+.fix-btn {
+  background: #ffc107; color: #000; border: none; border-radius: 4px;
+  padding: 0.3rem 0.8rem; cursor: pointer; font-weight: 600; white-space: nowrap;
+}
+.fix-btn:hover { background: #e0a800; }
 
 .save-btn {
   background: #888; color: #fff; border: none; border-radius: 4px;
