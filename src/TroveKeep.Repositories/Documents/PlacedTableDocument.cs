@@ -13,4 +13,5 @@ public class PlacedTableDocument
 
     public double XCm { get; set; }
     public double YCm { get; set; }
+    public int Rotation { get; set; }
 }

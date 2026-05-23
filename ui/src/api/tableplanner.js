@@ -28,7 +28,7 @@ export const getAllRooms = () => get(ROOMS)
 export const getRoom = (id) => get(`${ROOMS}/${id}`)
 export const createRoom = (body) => post(ROOMS, body)
 export const updateRoom = (id, body) => put(`${ROOMS}/${id}`, body)
-export const saveRoomLayout = (id, layout, aggregateSelections) => put(`${ROOMS}/${id}/layout`, { layout, aggregateSelections })
+export const saveRoomLayout = (id, layout, aggregateSelections, version = 0) => put(`${ROOMS}/${id}/layout`, { layout, aggregateSelections, version })
 export const saveAggregateBpLayout = (roomId, representativeId, placedBaseplates) =>
   put(`${ROOMS}/${roomId}/aggregate-bp-layouts/${representativeId}`, { placedBaseplates })
 export const deleteRoom = (id) => del(`${ROOMS}/${id}`)

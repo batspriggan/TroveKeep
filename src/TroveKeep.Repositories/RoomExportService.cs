@@ -40,7 +40,7 @@ public class RoomExportService : IRoomExportService
             room.Name,
             room.WidthCm,
             room.DepthCm,
-            room.Layout.Select(p => new PlacedData(p.InstanceId, p.TemplateId, p.XCm, p.YCm)).ToList()
+            room.Layout.Select(p => new PlacedData(p.InstanceId, p.TemplateId, p.XCm, p.YCm, p.Rotation)).ToList()
         );
 
         var templateData = allTemplates.Select(t =>
@@ -131,6 +131,7 @@ public class RoomExportService : IRoomExportService
                 TemplateId = p.TemplateId,
                 XCm = p.XCm,
                 YCm = p.YCm,
+                Rotation = p.Rotation,
             }).ToList(),
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow,
@@ -150,6 +151,7 @@ public class RoomExportService : IRoomExportService
                 TemplateId = p.TemplateId,
                 XCm = p.XCm,
                 YCm = p.YCm,
+                Rotation = p.Rotation,
             }).ToList(),
             CreatedAt = newRoom.CreatedAt,
             UpdatedAt = newRoom.UpdatedAt,
@@ -157,6 +159,6 @@ public class RoomExportService : IRoomExportService
     }
 
     private record RoomData(string Name, int WidthCm, int DepthCm, List<PlacedData> Layout);
-    private record PlacedData(Guid InstanceId, Guid TemplateId, double XCm, double YCm);
+    private record PlacedData(Guid InstanceId, Guid TemplateId, double XCm, double YCm, int Rotation = 0);
     private record TemplateData(Guid Id, string Description, int WidthCm, int DepthCm, string Color);
 }

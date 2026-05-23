@@ -1,7 +1,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { getRoom, getAllTemplates, saveRoomLayout, getAllBaseplates } from '../../api/tableplanner.js'
+import { getRoom, getAllTemplates, saveRoomLayout, updateRoom, getAllBaseplates } from '../../api/tableplanner.js'
 
 const route = useRoute()
 const router = useRouter()
@@ -21,6 +21,10 @@ const savedLayoutJson = ref('')
 const savedAggSelectionsJson = ref('[]')
 const saveSuccess = ref(false)
 const loading = ref(true)
+const renameMode = ref(false)
+const renameInput = ref('')
+const renameError = ref('')
+
 const showGrid = ref(true)
 const zoom = ref(1)
 const canvasWrapEl = ref(null)
@@ -36,6 +40,18 @@ const templateMap = computed(() => {
   return m
 })
 
+function effW(p) {
+  const tpl = templateMap.value[p.templateId]
+  if (!tpl) return 0
+  return p.rotation % 180 === 0 ? tpl.widthCm : tpl.depthCm
+}
+
+function effH(p) {
+  const tpl = templateMap.value[p.templateId]
+  if (!tpl) return 0
+  return p.rotation % 180 === 0 ? tpl.depthCm : tpl.widthCm
+}
+
 const canvasWidth = computed(() => room.value ? room.value.widthCm * SCALE : 0)
 const canvasHeight = computed(() => room.value ? room.value.depthCm * SCALE : 0)
 
@@ -45,7 +61,7 @@ const isDirty = computed(() =>
 )
 
 function serialise(p) {
-  return { instanceId: p.instanceId, templateId: p.templateId, xCm: p.xCm, yCm: p.yCm }
+  return { instanceId: p.instanceId, templateId: p.templateId, xCm: p.xCm, yCm: p.yCm, rotation: p.rotation ?? 0 }
 }
 
 // Stable aggregate identity: lexicographically smallest instanceId in the group
@@ -74,16 +90,16 @@ function rangeOverlaps(a1, a2, b1, b2) {
   return Math.min(a2, b2) - Math.max(a1, b1) > 0
 }
 
-function areAdjacent(a, tplA, b, tplB) {
+function areAdjacent(a, wA, hA, b, wB, hB) {
   const T = 0.5  // cm tolerance
   const xAdj =
-    (Math.abs((a.xCm + tplA.widthCm) - b.xCm) < T ||
-     Math.abs((b.xCm + tplB.widthCm) - a.xCm) < T) &&
-    rangeOverlaps(a.yCm, a.yCm + tplA.depthCm, b.yCm, b.yCm + tplB.depthCm)
+    (Math.abs((a.xCm + wA) - b.xCm) < T ||
+     Math.abs((b.xCm + wB) - a.xCm) < T) &&
+    rangeOverlaps(a.yCm, a.yCm + hA, b.yCm, b.yCm + hB)
   const yAdj =
-    (Math.abs((a.yCm + tplA.depthCm) - b.yCm) < T ||
-     Math.abs((b.yCm + tplB.depthCm) - a.yCm) < T) &&
-    rangeOverlaps(a.xCm, a.xCm + tplA.widthCm, b.xCm, b.xCm + tplB.widthCm)
+    (Math.abs((a.yCm + hA) - b.yCm) < T ||
+     Math.abs((b.yCm + hB) - a.yCm) < T) &&
+    rangeOverlaps(a.xCm, a.xCm + wA, b.xCm, b.xCm + wB)
   return xAdj || yAdj
 }
 
@@ -104,11 +120,15 @@ const aggregates = computed(() => {
       group.push(tables[cur].instanceId)
       const a = tables[cur], tplA = tMap[a.templateId]
       if (!tplA) continue
+      const wA = a.rotation % 180 === 0 ? tplA.widthCm : tplA.depthCm
+      const hA = a.rotation % 180 === 0 ? tplA.depthCm : tplA.widthCm
       for (let j = 0; j < n; j++) {
         if (visited[j]) continue
         const b = tables[j], tplB = tMap[b.templateId]
         if (!tplB) continue
-        if (areAdjacent(a, tplA, b, tplB)) { visited[j] = true; queue.push(j) }
+        const wB = b.rotation % 180 === 0 ? tplB.widthCm : tplB.depthCm
+        const hB = b.rotation % 180 === 0 ? tplB.depthCm : tplB.widthCm
+        if (areAdjacent(a, wA, hA, b, wB, hB)) { visited[j] = true; queue.push(j) }
       }
     }
     result.push(group)
@@ -121,6 +141,22 @@ const aggregateMap = computed(() => {
   const map = {}
   aggregates.value.forEach((g, i) => { for (const id of g) map[id] = i })
   return map
+})
+
+// Bounding box of the currently selected aggregate (canvas coordinates, cm)
+const selectedAggregateBBox = computed(() => {
+  if (selectedAggregateId.value === null) return null
+  const group = aggregates.value[selectedAggregateId.value]
+  if (!group?.length) return null
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+  for (const id of group) {
+    const t = placedTables.value.find(p => p.instanceId === id)
+    if (!t) continue
+    const w = effW(t), h = effH(t)
+    minX = Math.min(minX, t.xCm);      minY = Math.min(minY, t.yCm)
+    maxX = Math.max(maxX, t.xCm + w);  maxY = Math.max(maxY, t.yCm + h)
+  }
+  return { minX, minY, maxX, maxY }
 })
 
 // ── Distinct baseplates by canonical dimension ─────────────────────────────────
@@ -147,7 +183,9 @@ function calcPlateCount(aggIdx, bpKey) {
   const rects = group.map(id => {
     const t = placedTables.value.find(p => p.instanceId === id)
     const tpl = tMap[t.templateId]
-    return { x1: t.xCm*10, y1: t.yCm*10, x2: (t.xCm+tpl.widthCm)*10, y2: (t.yCm+tpl.depthCm)*10 }
+    const w = t.rotation % 180 === 0 ? tpl.widthCm : tpl.depthCm
+    const h = t.rotation % 180 === 0 ? tpl.depthCm : tpl.widthCm
+    return { x1: t.xCm*10, y1: t.yCm*10, x2: (t.xCm+w)*10, y2: (t.yCm+h)*10 }
   })
   const minX = Math.min(...rects.map(r => r.x1))
   const minY = Math.min(...rects.map(r => r.y1))
@@ -186,10 +224,12 @@ function aggregateLabel(idx) {
     const t = placedTables.value.find(p => p.instanceId === id)
     const tpl = tMap[t?.templateId]
     if (!t || !tpl) continue
+    const w = t.rotation % 180 === 0 ? tpl.widthCm : tpl.depthCm
+    const h = t.rotation % 180 === 0 ? tpl.depthCm : tpl.widthCm
     if (t.xCm < minX) minX = t.xCm
     if (t.yCm < minY) minY = t.yCm
-    if (t.xCm+tpl.widthCm > maxX) maxX = t.xCm+tpl.widthCm
-    if (t.yCm+tpl.depthCm > maxY) maxY = t.yCm+tpl.depthCm
+    if (t.xCm+w > maxX) maxX = t.xCm+w
+    if (t.yCm+h > maxY) maxY = t.yCm+h
   }
   const w = Math.round(maxX - minX), d = Math.round(maxY - minY)
   return `Group ${idx+1} — ${group.length} table(s) · ${w}×${d} cm`
@@ -206,6 +246,7 @@ onMounted(async () => {
     templateId: p.templateId,
     xCm: p.xCm,
     yCm: p.yCm,
+    rotation: p.rotation ?? 0,
     overlapping: false,
   }))
   savedLayoutJson.value = JSON.stringify(placedTables.value.map(serialise))
@@ -225,17 +266,15 @@ function findFreePosition(tw, td) {
     let x = 0
     while (x <= roomW - tw) {
       const blocker = placedTables.value.find(other => {
-        const otpl = templateMap.value[other.templateId]
-        if (!otpl) return false
-        return x < other.xCm + otpl.widthCm &&
+        if (!templateMap.value[other.templateId]) return false
+        const ow = effW(other), oh = effH(other)
+        return x < other.xCm + ow &&
                x + tw > other.xCm &&
-               y < other.yCm + otpl.depthCm &&
+               y < other.yCm + oh &&
                y + td > other.yCm
       })
       if (!blocker) return { xCm: x, yCm: y }
-      // Jump x past the right edge of the blocker
-      const otpl = templateMap.value[blocker.templateId]
-      x = blocker.xCm + otpl.widthCm
+      x = blocker.xCm + effW(blocker)
     }
   }
   return { xCm: 0, yCm: 0 } // fallback: no free space found
@@ -258,6 +297,7 @@ function addFromTemplate(tpl) {
     templateId: tpl.id,
     xCm,
     yCm,
+    rotation: 0,
     overlapping: false,
   })
 }
@@ -265,6 +305,65 @@ function addFromTemplate(tpl) {
 // ── Remove ────────────────────────────────────────────────────────────────────
 function removeTable(instanceId) {
   placedTables.value = placedTables.value.filter(p => p.instanceId !== instanceId)
+}
+
+function rotateTable(p) {
+  const tpl = templateMap.value[p.templateId]
+  if (!tpl || !room.value) return
+  p.rotation = (p.rotation + 90) % 360
+  const nw = p.rotation % 180 === 0 ? tpl.widthCm : tpl.depthCm
+  const nh = p.rotation % 180 === 0 ? tpl.depthCm : tpl.widthCm
+  p.xCm = Math.max(0, Math.min(room.value.widthCm - nw, p.xCm))
+  p.yCm = Math.max(0, Math.min(room.value.depthCm - nh, p.yCm))
+}
+
+function rotateAggregate(aggIdx) {
+  if (!room.value) return
+  const group = aggregates.value[aggIdx]
+  if (!group?.length) return
+
+  const tables = group.map(id => placedTables.value.find(p => p.instanceId === id)).filter(Boolean)
+
+  // Bounding box of the group
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+  for (const t of tables) {
+    const w = effW(t), h = effH(t)
+    minX = Math.min(minX, t.xCm);      minY = Math.min(minY, t.yCm)
+    maxX = Math.max(maxX, t.xCm + w);  maxY = Math.max(maxY, t.yCm + h)
+  }
+  const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2
+
+  // Compute new position and rotation for each table (90° CW around group center)
+  const updates = tables.map(t => {
+    const w = effW(t), h = effH(t)
+    const ocx = t.xCm + w / 2, ocy = t.yCm + h / 2
+    // 90° CW: new center = (cx + (ocy - cy), cy - (ocx - cx))
+    const ncx = cx + (ocy - cy)
+    const ncy = cy - (ocx - cx)
+    const newRot = (t.rotation + 90) % 360
+    const tpl = templateMap.value[t.templateId]
+    const nw = newRot % 180 === 0 ? tpl.widthCm : tpl.depthCm
+    const nh = newRot % 180 === 0 ? tpl.depthCm : tpl.widthCm
+    return { t, newX: ncx - nw / 2, newY: ncy - nh / 2, newRot, nw, nh }
+  })
+
+  // New bounding box after rotation
+  let nMinX = Infinity, nMinY = Infinity, nMaxX = -Infinity, nMaxY = -Infinity
+  for (const u of updates) {
+    nMinX = Math.min(nMinX, u.newX);       nMinY = Math.min(nMinY, u.newY)
+    nMaxX = Math.max(nMaxX, u.newX + u.nw); nMaxY = Math.max(nMaxY, u.newY + u.nh)
+  }
+
+  // Translate to keep group within room bounds
+  const anchorX = Math.max(0, Math.min(room.value.widthCm - (nMaxX - nMinX), nMinX))
+  const anchorY = Math.max(0, Math.min(room.value.depthCm - (nMaxY - nMinY), nMinY))
+  const shiftX = anchorX - nMinX, shiftY = anchorY - nMinY
+
+  for (const u of updates) {
+    u.t.rotation = u.newRot
+    u.t.xCm = parseFloat((u.newX + shiftX).toFixed(2))
+    u.t.yCm = parseFloat((u.newY + shiftY).toFixed(2))
+  }
 }
 
 // ── Drag ─────────────────────────────────────────────────────────────────────
@@ -369,8 +468,8 @@ function onMoveSingle(e) {
   const tpl = templateMap.value[p.templateId]
   if (!tpl) return
 
-  const cw = tpl.widthCm
-  const cd = tpl.depthCm
+  const cw = p.rotation % 180 === 0 ? tpl.widthCm : tpl.depthCm
+  const cd = p.rotation % 180 === 0 ? tpl.depthCm : tpl.widthCm
 
   // Step 1+2: raw position → 1 cm snap → room-bounds clamp
   const { clientX, clientY } = getEventCoords(e)
@@ -387,9 +486,8 @@ function onMoveSingle(e) {
   let snapY = cy
 
   for (const other of others) {
-    const otpl = templateMap.value[other.templateId]
-    if (!otpl) continue
-    const nx = other.xCm, ny = other.yCm, nw = otpl.widthCm, nd = otpl.depthCm
+    if (!templateMap.value[other.templateId]) continue
+    const nx = other.xCm, ny = other.yCm, nw = effW(other), nd = effH(other)
 
     for (const xc of [nx - cw, nx + nw, nx, nx + nw - cw]) {
       const d = Math.abs(cx - xc)
@@ -420,11 +518,10 @@ function onMoveSingle(e) {
 
   // Step 4: AABB overlap check
   const hasOverlap = others.some(other => {
-    const otpl = templateMap.value[other.templateId]
-    if (!otpl) return false
-    return cx < other.xCm + otpl.widthCm &&
+    if (!templateMap.value[other.templateId]) return false
+    return cx < other.xCm + effW(other) &&
            cx + cw > other.xCm &&
-           cy < other.yCm + otpl.depthCm &&
+           cy < other.yCm + effH(other) &&
            cy + cd > other.yCm
   })
 
@@ -462,27 +559,26 @@ function onMoveGroup(e) {
   let clampDx = 0, clampDy = 0
   for (const pr of proposed) {
     const t = placedTables.value.find(p => p.instanceId === pr.instanceId)
-    const tpl = templateMap.value[t.templateId]
-    if (!tpl) continue
+    if (!templateMap.value[t.templateId]) continue
+    const tw = effW(t), th = effH(t)
     if (pr.newX < 0) clampDx = Math.max(clampDx, -pr.newX)
-    if (pr.newX + tpl.widthCm > room.value.widthCm)
-      clampDx = Math.min(clampDx, room.value.widthCm - pr.newX - tpl.widthCm)
+    if (pr.newX + tw > room.value.widthCm)
+      clampDx = Math.min(clampDx, room.value.widthCm - pr.newX - tw)
     if (pr.newY < 0) clampDy = Math.max(clampDy, -pr.newY)
-    if (pr.newY + tpl.depthCm > room.value.depthCm)
-      clampDy = Math.min(clampDy, room.value.depthCm - pr.newY - tpl.depthCm)
+    if (pr.newY + th > room.value.depthCm)
+      clampDy = Math.min(clampDy, room.value.depthCm - pr.newY - th)
   }
   for (const pr of proposed) { pr.newX += clampDx; pr.newY += clampDy }
 
   // Overlap check vs non-group tables
   const hasOverlap = proposed.some(pr => {
     const t = placedTables.value.find(p => p.instanceId === pr.instanceId)
-    const tpl = templateMap.value[t.templateId]
-    if (!tpl) return false
+    if (!templateMap.value[t.templateId]) return false
+    const tw = effW(t), th = effH(t)
     return nonGroup.some(other => {
-      const otpl = templateMap.value[other.templateId]
-      if (!otpl) return false
-      return pr.newX < other.xCm + otpl.widthCm && pr.newX + tpl.widthCm > other.xCm &&
-             pr.newY < other.yCm + otpl.depthCm && pr.newY + tpl.depthCm > other.yCm
+      if (!templateMap.value[other.templateId]) return false
+      return pr.newX < other.xCm + effW(other) && pr.newX + tw > other.xCm &&
+             pr.newY < other.yCm + effH(other) && pr.newY + th > other.yCm
     })
   })
 
@@ -548,12 +644,43 @@ onUnmounted(() => {
   canvasWrapEl.value?.removeEventListener('wheel', onWheelZoom)
 })
 
+// ── Rename ────────────────────────────────────────────────────────────────────
+function startRename() {
+  renameInput.value = room.value.name
+  renameError.value = ''
+  renameMode.value = true
+}
+
+function cancelRename() {
+  renameMode.value = false
+  renameError.value = ''
+}
+
+async function saveRename() {
+  renameError.value = ''
+  if (!renameInput.value.trim()) { renameError.value = 'Name is required.'; return }
+  try {
+    const updated = await updateRoom(roomId, {
+      name: renameInput.value.trim(),
+      widthCm: room.value.widthCm,
+      depthCm: room.value.depthCm,
+      version: room.value.version,
+    })
+    room.value.name = updated.name
+    room.value.version = updated.version
+    renameMode.value = false
+  } catch (err) {
+    renameError.value = err.message
+  }
+}
+
 // ── Save ──────────────────────────────────────────────────────────────────────
 async function saveLayout() {
   const aggSels = buildAggSelectionsForSave()
-  await saveRoomLayout(roomId, placedTables.value.map(serialise), aggSels)
+  const updated = await saveRoomLayout(roomId, placedTables.value.map(serialise), aggSels, room.value.version)
   savedLayoutJson.value = JSON.stringify(placedTables.value.map(serialise))
   savedAggSelectionsJson.value = JSON.stringify(aggSels)
+  if (updated) room.value.version = updated.version
   saveSuccess.value = true
   setTimeout(() => { saveSuccess.value = false }, 2500)
 }
@@ -563,7 +690,18 @@ async function saveLayout() {
   <div class="planner-page">
     <div class="planner-header">
       <button class="back-btn" @click="router.push('/table-planner')">&larr; Table Planner</button>
-      <h1 v-if="room">{{ room.name }}</h1>
+      <template v-if="room">
+        <template v-if="renameMode">
+          <input class="rename-input" v-model="renameInput" @keyup.enter="saveRename" @keyup.esc="cancelRename" />
+          <button class="small-btn" @click="saveRename">Save</button>
+          <button class="small-btn" @click="cancelRename">Cancel</button>
+          <span v-if="renameError" class="rename-error">{{ renameError }}</span>
+        </template>
+        <template v-else>
+          <h1>{{ room.name }}</h1>
+          <button class="rename-btn" @click="startRename" title="Rename room">✎</button>
+        </template>
+      </template>
       <div class="header-right">
         <button class="toggle-btn" :class="{ active: showGrid }" @click="showGrid = !showGrid" title="Toggle grid">Grid</button>
         <div class="zoom-controls">
@@ -593,7 +731,7 @@ async function saveLayout() {
           class="chip"
           :style="{ background: t.color }"
           @click="addFromTemplate(t)"
-          :title="`${t.widthCm} cm × ${t.depthCm} cm`"
+          :title="`${t.widthCm}x${t.depthCm} cm`"
         >{{ t.description }}</button>
         <span v-if="templates.length === 0" class="empty-palette">No templates — create some in Table Planner.</span>
         <span class="palette-hint">Alt+drag (or long press on touch) to detach a table from its group</span>
@@ -658,18 +796,38 @@ async function saveLayout() {
             :style="{
               left: p.xCm * SCALE + 'px',
               top: p.yCm * SCALE + 'px',
-              width: (templateMap[p.templateId]?.widthCm ?? 200) * SCALE + 'px',
-              height: (templateMap[p.templateId]?.depthCm ?? 80) * SCALE + 'px',
+              width: effW(p) * SCALE + 'px',
+              height: effH(p) * SCALE + 'px',
               background: templateMap[p.templateId]?.color ?? '#8b6340',
             }"
             @mousedown="startDrag($event, p)"
             @touchstart.prevent="onTouchStart($event, p)"
           >
             <button class="remove-btn" @mousedown.stop @click="removeTable(p.instanceId)" title="Remove">✕</button>
+            <button class="rotate-btn" @mousedown.stop @click="rotateTable(p)" title="Rotate 90°">⟳</button>
             <span class="table-label">{{ templateMap[p.templateId]?.description ?? '?' }}</span>
             <span class="table-dims" v-if="templateMap[p.templateId]">
-              {{ templateMap[p.templateId].widthCm }} cm &times; {{ templateMap[p.templateId].depthCm }} cm
+              {{ effW(p) }}x{{ effH(p) }} cm
             </span>
+          </div>
+
+          <!-- Aggregate bounding-box overlay -->
+          <div
+            v-if="selectedAggregateId !== null && selectedAggregateBBox"
+            class="agg-bbox"
+            :style="{
+              left:   selectedAggregateBBox.minX * SCALE + 'px',
+              top:    selectedAggregateBBox.minY * SCALE + 'px',
+              width:  (selectedAggregateBBox.maxX - selectedAggregateBBox.minX) * SCALE + 'px',
+              height: (selectedAggregateBBox.maxY - selectedAggregateBBox.minY) * SCALE + 'px',
+            }"
+          >
+            <button
+              class="agg-rotate-handle"
+              @mousedown.stop
+              @click.stop="rotateAggregate(selectedAggregateId)"
+              title="Rotate group 90°"
+            >⟳</button>
           </div>
 
           <div class="scale-bar">
@@ -1010,5 +1168,101 @@ async function saveLayout() {
   background: #555;
   border-left: 2px solid #555;
   border-right: 2px solid #555;
+}
+
+/* ── Rotate button ────────────────────────────────────────────────────────── */
+.rotate-btn {
+  position: absolute;
+  top: 3px;
+  left: 4px;
+  background: rgba(0,0,0,0.2);
+  border: none;
+  border-radius: 3px;
+  color: #fff;
+  font-size: 0.65rem;
+  width: 15px;
+  height: 15px;
+  padding: 0;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.rotate-btn:hover { background: rgba(30,90,200,0.65); }
+
+/* ── Rename ───────────────────────────────────────────────────────────────── */
+.rename-input {
+  padding: 0.25rem 0.5rem;
+  border: 1px solid #3a6ea5;
+  border-radius: 4px;
+  font-size: 1rem;
+  font-weight: 600;
+  min-width: 160px;
+}
+
+.rename-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 1rem;
+  color: #aaa;
+  padding: 0 2px;
+  line-height: 1;
+}
+
+.rename-btn:hover { color: #3a6ea5; }
+
+.rename-error {
+  color: #c00;
+  font-size: 0.82rem;
+}
+
+.small-btn {
+  background: #f0f0f0;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  padding: 0.2rem 0.5rem;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+
+.small-btn:hover { background: #e0e0e0; }
+
+/* ── Aggregate bounding-box overlay ──────────────────────────────────────── */
+.agg-bbox {
+  position: absolute;
+  border: 2px dashed #1a90d0;
+  border-radius: 3px;
+  pointer-events: none;
+  z-index: 8;
+}
+
+.agg-rotate-handle {
+  position: absolute;
+  top: 0;
+  right: 0;
+  transform: translate(50%, -50%);
+  width: 22px;
+  height: 22px;
+  background: #1a90d0;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  color: #fff;
+  font-size: 0.9rem;
+  line-height: 1;
+  cursor: pointer;
+  pointer-events: all;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.35);
+  transition: background 0.1s, transform 0.1s;
+}
+
+.agg-rotate-handle:hover {
+  background: #0d6ea0;
+  transform: translate(50%, -50%) scale(1.15);
 }
 </style>

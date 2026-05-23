@@ -6,4 +6,5 @@ public class PlacedTable
     public Guid TemplateId { get; set; }
     public double XCm { get; set; }
     public double YCm { get; set; }
+    public int Rotation { get; set; }
 }

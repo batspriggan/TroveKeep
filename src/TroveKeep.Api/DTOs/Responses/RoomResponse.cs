@@ -1,6 +1,6 @@
 namespace TroveKeep.Api.DTOs.Responses;
 
-public record PlacedTableResponse(Guid InstanceId, Guid TemplateId, double XCm, double YCm);
+public record PlacedTableResponse(Guid InstanceId, Guid TemplateId, double XCm, double YCm, int Rotation);
 
 public record AggregateSelectionResponse(string RepresentativeId, string BpKey);
 

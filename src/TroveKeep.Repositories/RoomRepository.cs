@@ -70,6 +70,7 @@ public class RoomRepository : IRoomRepository
             TemplateId = p.TemplateId,
             XCm = p.XCm,
             YCm = p.YCm,
+            Rotation = p.Rotation,
         }).ToList();
 
         var selectionDocs = aggregateSelections.Select(s => new AggregateSelectionDocument
@@ -153,6 +154,7 @@ public class RoomRepository : IRoomRepository
             TemplateId = p.TemplateId,
             XCm = p.XCm,
             YCm = p.YCm,
+            Rotation = p.Rotation,
         }).ToList(),
         AggregateSelections = doc.AggregateSelections.Select(s => new AggregateSelection
         {
@@ -188,6 +190,7 @@ public class RoomRepository : IRoomRepository
             TemplateId = p.TemplateId,
             XCm = p.XCm,
             YCm = p.YCm,
+            Rotation = p.Rotation,
         }).ToList(),
         AggregateSelections = model.AggregateSelections.Select(s => new AggregateSelectionDocument
         {

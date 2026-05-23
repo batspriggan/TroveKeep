@@ -93,6 +93,7 @@ public class RoomsController : ControllerBase
                 TemplateId = p.TemplateId,
                 XCm = p.XCm,
                 YCm = p.YCm,
+                Rotation = p.Rotation,
             });
             var selections = request.AggregateSelections.Select(s => new AggregateSelection
             {
@@ -167,7 +168,7 @@ public class RoomsController : ControllerBase
 
     private static RoomResponse MapToResponse(Room r) =>
         new(r.Id, r.Name, r.WidthCm, r.DepthCm,
-            r.Layout.Select(p => new PlacedTableResponse(p.InstanceId, p.TemplateId, p.XCm, p.YCm)),
+            r.Layout.Select(p => new PlacedTableResponse(p.InstanceId, p.TemplateId, p.XCm, p.YCm, p.Rotation)),
             r.AggregateSelections.Select(s => new AggregateSelectionResponse(s.RepresentativeId, s.BpKey)),
             r.AggregateBpLayouts.Select(l => new AggregateBpLayoutResponse(l.RepresentativeId,
                 l.PlacedBaseplates.Select(p => new PlacedBaseplateResponse(p.InstanceId, p.BaseplateId, p.XMm, p.YMm, p.Rotation)))),
