@@ -27,7 +27,7 @@ const canvasWrapEl = ref(null)
 // xMm/yMm are relative to aggregate bounding-box origin (top-left)
 const placedPlates   = ref([])
 const savedJson      = ref('[]')
-const layoutVersion  = ref(0)
+const layoutVersion  = ref(null)   // null = never saved; 0 = legacy; 1+ = current
 
 const isDirty  = computed(() => JSON.stringify(serialisePlates()) !== savedJson.value)
 const needsFix = computed(() => layoutVersion.value === 0 && placedPlates.value.length > 0)
@@ -208,7 +208,7 @@ onMounted(async () => {
   // Restore saved layout for this aggregate
   const saved = r.aggregateBpLayouts?.find(l => l.representativeId === repId)
   placedPlates.value = (saved?.placedBaseplates ?? []).map(p => ({ ...p }))
-  layoutVersion.value = saved?.layoutVersion ?? 0
+  layoutVersion.value = saved ? (saved.layoutVersion ?? 0) : null
   savedJson.value = JSON.stringify(serialisePlates())
   loading.value = false
 
