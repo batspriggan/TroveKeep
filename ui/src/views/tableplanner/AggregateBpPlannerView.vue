@@ -210,6 +210,8 @@ onMounted(async () => {
 onUnmounted(() => {
   window.removeEventListener('mousemove', onMove)
   window.removeEventListener('mouseup', onUp)
+  window.removeEventListener('touchmove', onMove)
+  window.removeEventListener('touchend', onUp)
   canvasWrapEl.value?.removeEventListener('wheel', onWheelZoom)
   clearTimeout(_tooltipTimer)
 })
@@ -297,18 +299,27 @@ function onKeyDown(e) {
 const draggingId = ref(null)
 let _drag = null
 
+function getEventCoords(e) {
+  if (e.touches?.length) return { clientX: e.touches[0].clientX, clientY: e.touches[0].clientY }
+  if (e.changedTouches?.length) return { clientX: e.changedTouches[0].clientX, clientY: e.changedTouches[0].clientY }
+  return { clientX: e.clientX, clientY: e.clientY }
+}
+
 function startDrag(e, plate) {
-  if (e.button !== 0) return
+  if (e.type !== 'touchstart' && e.button !== 0) return
   e.preventDefault()
   selectedId.value = plate.instanceId
   draggingId.value = plate.instanceId
+  const { clientX, clientY } = getEventCoords(e)
   _drag = {
     instanceId: plate.instanceId,
-    startMouseX: e.clientX, startMouseY: e.clientY,
+    startMouseX: clientX, startMouseY: clientY,
     startX: plate.xMm, startY: plate.yMm,
   }
   window.addEventListener('mousemove', onMove)
   window.addEventListener('mouseup', onUp)
+  window.addEventListener('touchmove', onMove, { passive: false })
+  window.addEventListener('touchend', onUp)
 }
 
 function onMove(e) {
@@ -322,8 +333,9 @@ function onMove(e) {
   const eh = effectiveH(bp, p.rotation)
 
   // Raw new position in mm (canvas mm = xMm + PADDING_MM)
-  const rawCanvasX = (_drag.startX + PADDING_MM) + (e.clientX - _drag.startMouseX) / (SCALE * zoom.value)
-  const rawCanvasY = (_drag.startY + PADDING_MM) + (e.clientY - _drag.startMouseY) / (SCALE * zoom.value)
+  const { clientX, clientY } = getEventCoords(e)
+  const rawCanvasX = (_drag.startX + PADDING_MM) + (clientX - _drag.startMouseX) / (SCALE * zoom.value)
+  const rawCanvasY = (_drag.startY + PADDING_MM) + (clientY - _drag.startMouseY) / (SCALE * zoom.value)
 
   // Snap to other plates' edges
   const { x: snappedX, y: snappedY, xSnapped, ySnapped } = snapPlate(rawCanvasX, rawCanvasY, ew, eh, p.instanceId)
@@ -401,6 +413,8 @@ function onUp() {
   draggingId.value = null
   window.removeEventListener('mousemove', onMove)
   window.removeEventListener('mouseup', onUp)
+  window.removeEventListener('touchmove', onMove)
+  window.removeEventListener('touchend', onUp)
 }
 
 // ── Zoom ──────────────────────────────────────────────────────────────────────
@@ -547,6 +561,7 @@ async function save() {
                   : '#9ac',
               }"
               @mousedown="startDrag($event, p)"
+              @touchstart.prevent="startDrag($event, p)"
               @click.stop="selectPlate($event, p)"
             >
               <!-- Baseplate image -->
@@ -859,6 +874,7 @@ async function save() {
   border-radius: 2px;
   cursor: grab;
   user-select: none;
+  touch-action: none;
   overflow: hidden;
   display: flex; align-items: center; justify-content: center;
   box-shadow: 0 2px 6px rgba(0,0,0,0.18);

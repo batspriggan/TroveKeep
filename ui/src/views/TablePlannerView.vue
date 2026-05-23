@@ -10,7 +10,7 @@ const router = useRouter()
 
 // ── Rooms ────────────────────────────────────────────────────────────────────
 const rooms = ref([])
-const roomForm = ref({ name: '', widthCm: 1000, depthCm: 800 })
+const roomForm = ref({ name: '', widthM: 10, depthM: 8 })
 const roomError = ref('')
 const importError = ref('')
 const importSuccess = ref('')
@@ -23,8 +23,8 @@ async function loadRooms() {
 async function submitRoom() {
   roomError.value = ''
   if (!roomForm.value.name.trim()) { roomError.value = 'Name is required.'; return }
-  await createRoom({ name: roomForm.value.name.trim(), widthCm: Number(roomForm.value.widthCm), depthCm: Number(roomForm.value.depthCm) })
-  roomForm.value = { name: '', widthCm: 1000, depthCm: 800 }
+  await createRoom({ name: roomForm.value.name.trim(), widthCm: Math.round(roomForm.value.widthM * 100), depthCm: Math.round(roomForm.value.depthM * 100) })
+  roomForm.value = { name: '', widthM: 10, depthM: 8 }
   await loadRooms()
 }
 
@@ -75,8 +75,8 @@ onMounted(() => loadRooms())
 
       <form class="inline-form" @submit.prevent="submitRoom">
         <input v-model="roomForm.name" placeholder="Room name" />
-        <label>W (cm) <input v-model.number="roomForm.widthCm" type="number" min="100" max="10000" style="width:80px" /></label>
-        <label>D (cm) <input v-model.number="roomForm.depthCm" type="number" min="100" max="10000" style="width:80px" /></label>
+        <label>W (m) <input v-model.number="roomForm.widthM" type="number" min="1" max="100" step="0.1" style="width:80px" /></label>
+        <label>D (m) <input v-model.number="roomForm.depthM" type="number" min="1" max="100" step="0.1" style="width:80px" /></label>
         <button class="primary" type="submit">+ Add Room</button>
         <button type="button" @click="triggerImport">Import Room</button>
         <input type="file" ref="importFileRef" accept=".zip" style="display:none" @change="handleImportFile" />
@@ -91,8 +91,8 @@ onMounted(() => loadRooms())
         <thead>
           <tr>
             <th>Name</th>
-            <th>Width (cm)</th>
-            <th>Depth (cm)</th>
+            <th>Width (m)</th>
+            <th>Depth (m)</th>
             <th>Tables in layout</th>
             <th></th>
           </tr>
@@ -100,8 +100,8 @@ onMounted(() => loadRooms())
         <tbody>
           <tr v-for="r in rooms" :key="r.id">
             <td>{{ r.name }}</td>
-            <td>{{ r.widthCm }}</td>
-            <td>{{ r.depthCm }}</td>
+            <td>{{ r.widthCm / 100 }}</td>
+            <td>{{ r.depthCm / 100 }}</td>
             <td>{{ r.layout.length }}</td>
             <td class="actions">
               <button class="primary small" @click="openRoom(r.id)">Open</button>

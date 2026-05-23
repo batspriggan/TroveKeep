@@ -1,6 +1,6 @@
 <template>
   <nav :class="{ open }">
-    <span class="brand">TroveKeep</span>
+    <span class="brand">TroveKeep <span class="version">{{ version }}</span></span>
     <button class="hamburger" @click="open = !open" aria-label="Toggle menu">☰</button>
     <div class="nav-links" :class="{ open }">
       <RouterLink to="/sets" class="mobile-hide">Sets</RouterLink>
@@ -23,6 +23,7 @@ import { useSettings } from '../composables/useSettings.js'
 const open = ref(false)
 const route = useRoute()
 const settings = useSettings()
+const version = import.meta.env.VITE_APP_VERSION
 
 watch(route, () => { open.value = false })
 </script>
@@ -44,6 +45,13 @@ nav {
   font-size: 1.1rem;
   color: #f8fafc;
   margin-right: 1rem;
+}
+
+.version {
+  font-size: 0.65rem;
+  font-weight: 400;
+  color: #64748b;
+  vertical-align: middle;
 }
 
 .hamburger {

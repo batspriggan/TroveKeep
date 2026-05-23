@@ -191,7 +191,7 @@ function aggregateLabel(idx) {
     if (t.xCm+tpl.widthCm > maxX) maxX = t.xCm+tpl.widthCm
     if (t.yCm+tpl.depthCm > maxY) maxY = t.yCm+tpl.depthCm
   }
-  const w = maxX-minX, d = maxY-minY
+  const w = Math.round(maxX - minX), d = Math.round(maxY - minY)
   return `Group ${idx+1} — ${group.length} table(s) · ${w}×${d} cm`
 }
 
@@ -271,16 +271,20 @@ function removeTable(instanceId) {
 const draggingId = ref(null)
 let _drag = null
 
-function startDrag(e, placed) {
-  if (e.button !== 0) return
-  e.preventDefault()
-  draggingId.value = placed.instanceId
+function getEventCoords(e) {
+  if (e.touches?.length) return { clientX: e.touches[0].clientX, clientY: e.touches[0].clientY }
+  if (e.changedTouches?.length) return { clientX: e.changedTouches[0].clientX, clientY: e.changedTouches[0].clientY }
+  return { clientX: e.clientX, clientY: e.clientY }
+}
+
+function beginDrag(placed, startClientX, startClientY, forceDetach) {
   const aggIdx = aggregateMap.value[placed.instanceId]
   const aggGroup = (aggIdx != null) ? aggregates.value[aggIdx] : [placed.instanceId]
-  const isGroup = aggGroup.length > 1 && !e.altKey
+  const isGroup = aggGroup.length > 1 && !forceDetach
+  draggingId.value = placed.instanceId
   _drag = {
     instanceId: placed.instanceId,
-    startMouseX: e.clientX, startMouseY: e.clientY,
+    startMouseX: startClientX, startMouseY: startClientY,
     startX: placed.xCm, startY: placed.yCm,
     lastValidX: placed.xCm, lastValidY: placed.yCm,
     isGroup,
@@ -292,8 +296,66 @@ function startDrag(e, placed) {
       : null,
     groupInstanceIds: isGroup ? aggGroup : null,
   }
+}
+
+// Mouse drag
+function startDrag(e, placed) {
+  if (e.button !== 0) return
+  e.preventDefault()
+  beginDrag(placed, e.clientX, e.clientY, e.altKey)
   window.addEventListener('mousemove', onMove)
   window.addEventListener('mouseup', onUp)
+}
+
+// Touch drag — long press (500 ms) arms detach mode before the drag commits
+const longPressArmedId = ref(null)
+let _longPressTimer = null
+let _touchPending = null
+
+function onTouchStart(e, placed) {
+  if (e.touches.length !== 1) return
+  const touch = e.touches[0]
+  _touchPending = { placed, clientX: touch.clientX, clientY: touch.clientY }
+  longPressArmedId.value = null
+  _longPressTimer = setTimeout(() => {
+    longPressArmedId.value = placed.instanceId
+    navigator.vibrate?.(30)
+  }, 500)
+  window.addEventListener('touchmove', onTouchMovePending, { passive: false })
+  window.addEventListener('touchend', onTouchEndPending)
+}
+
+function onTouchMovePending(e) {
+  if (!_touchPending) return
+  const touch = e.touches[0]
+  const dx = touch.clientX - _touchPending.clientX
+  const dy = touch.clientY - _touchPending.clientY
+  if (!longPressArmedId.value && Math.hypot(dx, dy) < 5) return
+
+  e.preventDefault()
+  clearTimeout(_longPressTimer)
+  _longPressTimer = null
+  window.removeEventListener('touchmove', onTouchMovePending)
+  window.removeEventListener('touchend', onTouchEndPending)
+
+  const forceDetach = !!longPressArmedId.value
+  longPressArmedId.value = null
+  const { placed, clientX, clientY } = _touchPending
+  _touchPending = null
+
+  beginDrag(placed, clientX, clientY, forceDetach)
+  window.addEventListener('touchmove', onMove, { passive: false })
+  window.addEventListener('touchend', onUp)
+  onMove(e)
+}
+
+function onTouchEndPending() {
+  clearTimeout(_longPressTimer)
+  _longPressTimer = null
+  longPressArmedId.value = null
+  _touchPending = null
+  window.removeEventListener('touchmove', onTouchMovePending)
+  window.removeEventListener('touchend', onTouchEndPending)
 }
 
 function onMove(e) {
@@ -311,8 +373,9 @@ function onMoveSingle(e) {
   const cd = tpl.depthCm
 
   // Step 1+2: raw position → 1 cm snap → room-bounds clamp
-  const rawX = _drag.startX + (e.clientX - _drag.startMouseX) / (SCALE * zoom.value)
-  const rawY = _drag.startY + (e.clientY - _drag.startMouseY) / (SCALE * zoom.value)
+  const { clientX, clientY } = getEventCoords(e)
+  const rawX = _drag.startX + (clientX - _drag.startMouseX) / (SCALE * zoom.value)
+  const rawY = _drag.startY + (clientY - _drag.startMouseY) / (SCALE * zoom.value)
   let cx = parseFloat((Math.max(0, Math.min(room.value.widthCm - cw, Math.round(rawX / SNAP) * SNAP))).toFixed(2))
   let cy = parseFloat((Math.max(0, Math.min(room.value.depthCm - cd, Math.round(rawY / SNAP) * SNAP))).toFixed(2))
 
@@ -383,8 +446,9 @@ function onMoveGroup(e) {
   const groupIds = new Set(_drag.groupInstanceIds)
   const nonGroup = placedTables.value.filter(t => !groupIds.has(t.instanceId))
 
-  const rawDx = (e.clientX - _drag.startMouseX) / (SCALE * zoom.value)
-  const rawDy = (e.clientY - _drag.startMouseY) / (SCALE * zoom.value)
+  const { clientX: mx, clientY: my } = getEventCoords(e)
+  const rawDx = (mx - _drag.startMouseX) / (SCALE * zoom.value)
+  const rawDy = (my - _drag.startMouseY) / (SCALE * zoom.value)
   const snapDx = parseFloat((Math.round(rawDx / SNAP) * SNAP).toFixed(2))
   const snapDy = parseFloat((Math.round(rawDy / SNAP) * SNAP).toFixed(2))
 
@@ -425,7 +489,10 @@ function onMoveGroup(e) {
   if (!hasOverlap) {
     for (const pr of proposed) {
       const t = placedTables.value.find(p => p.instanceId === pr.instanceId)
-      if (t) { t.xCm = pr.newX; t.yCm = pr.newY }
+      if (t) {
+        t.xCm = parseFloat(pr.newX.toFixed(2))
+        t.yCm = parseFloat(pr.newY.toFixed(2))
+      }
     }
     const main = proposed.find(p => p.instanceId === _drag.instanceId)
     if (main) { _drag.lastValidX = main.newX; _drag.lastValidY = main.newY }
@@ -439,7 +506,8 @@ function onUp(e) {
       const t = placedTables.value.find(p => p.instanceId === id)
       if (t) t.overlapping = false
     }
-    const moved = Math.abs(e.clientX - _drag.startMouseX) + Math.abs(e.clientY - _drag.startMouseY)
+    const { clientX, clientY } = getEventCoords(e)
+    const moved = Math.abs(clientX - _drag.startMouseX) + Math.abs(clientY - _drag.startMouseY)
     if (moved < 5) {
       const idx = aggregateMap.value[_drag.instanceId]
       selectedAggregateId.value = idx ?? null
@@ -449,6 +517,8 @@ function onUp(e) {
   draggingId.value = null
   window.removeEventListener('mousemove', onMove)
   window.removeEventListener('mouseup', onUp)
+  window.removeEventListener('touchmove', onMove)
+  window.removeEventListener('touchend', onUp)
 }
 
 function onCanvasClick(e) {
@@ -470,6 +540,11 @@ function onWheelZoom(e) {
 onUnmounted(() => {
   window.removeEventListener('mousemove', onMove)
   window.removeEventListener('mouseup', onUp)
+  window.removeEventListener('touchmove', onMove)
+  window.removeEventListener('touchend', onUp)
+  window.removeEventListener('touchmove', onTouchMovePending)
+  window.removeEventListener('touchend', onTouchEndPending)
+  clearTimeout(_longPressTimer)
   canvasWrapEl.value?.removeEventListener('wheel', onWheelZoom)
 })
 
@@ -521,7 +596,7 @@ async function saveLayout() {
           :title="`${t.widthCm} cm × ${t.depthCm} cm`"
         >{{ t.description }}</button>
         <span v-if="templates.length === 0" class="empty-palette">No templates — create some in Table Planner.</span>
-        <span class="palette-hint">Alt+drag to detach a table from its group</span>
+        <span class="palette-hint">Alt+drag (or long press on touch) to detach a table from its group</span>
       </div>
 
       <!-- Plate Calculator -->
@@ -578,6 +653,7 @@ async function saveLayout() {
               active: draggingId === p.instanceId,
               'table-item--overlap': p.overlapping,
               'table-item--selected': selectedAggregateId !== null && aggregateMap[p.instanceId] === selectedAggregateId,
+              'table-item--lp-armed': longPressArmedId === p.instanceId,
             }"
             :style="{
               left: p.xCm * SCALE + 'px',
@@ -587,6 +663,7 @@ async function saveLayout() {
               background: templateMap[p.templateId]?.color ?? '#8b6340',
             }"
             @mousedown="startDrag($event, p)"
+            @touchstart.prevent="onTouchStart($event, p)"
           >
             <button class="remove-btn" @mousedown.stop @click="removeTable(p.instanceId)" title="Remove">✕</button>
             <span class="table-label">{{ templateMap[p.templateId]?.description ?? '?' }}</span>
@@ -835,6 +912,7 @@ async function saveLayout() {
   border-radius: 4px;
   cursor: grab;
   user-select: none;
+  touch-action: none;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -853,6 +931,17 @@ async function saveLayout() {
 .table-item--overlap {
   border-color: rgba(200, 30, 30, 0.8);
   box-shadow: 0 0 0 2px rgba(200, 30, 30, 0.4);
+}
+
+@keyframes lp-armed-pulse {
+  0%   { box-shadow: 0 0 0 0   rgba(255, 160, 0, 0.9), 0 2px 8px rgba(0,0,0,0.2); }
+  60%  { box-shadow: 0 0 0 10px rgba(255, 160, 0, 0.4), 0 2px 8px rgba(0,0,0,0.2); }
+  100% { box-shadow: 0 0 0 14px rgba(255, 160, 0, 0),   0 2px 8px rgba(0,0,0,0.2); }
+}
+
+.table-item--lp-armed {
+  border-color: rgba(255, 160, 0, 0.9);
+  animation: lp-armed-pulse 0.4s ease-out forwards;
 }
 
 .table-item--selected {

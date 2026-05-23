@@ -4,6 +4,8 @@ WORKDIR /app/ui
 COPY ui/package*.json ./
 RUN npm ci
 COPY ui/ ./
+ARG VITE_APP_VERSION=dev
+ENV VITE_APP_VERSION=$VITE_APP_VERSION
 RUN npm run build
 
 # Stage 2: Build the .NET API
