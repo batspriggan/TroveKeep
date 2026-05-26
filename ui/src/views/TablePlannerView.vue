@@ -100,8 +100,8 @@ onMounted(() => loadRooms())
         <tbody>
           <tr v-for="r in rooms" :key="r.id">
             <td>{{ r.name }}</td>
-            <td>{{ r.widthCm / 100 }}</td>
-            <td>{{ r.depthCm / 100 }}</td>
+            <td>{{ (r.widthCm / 100).toFixed(2) }}</td>
+            <td>{{ (r.depthCm / 100).toFixed(2) }}</td>
             <td>{{ r.layout.length }}</td>
             <td class="actions">
               <button class="primary small" @click="openRoom(r.id)">Open</button>

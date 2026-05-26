@@ -97,16 +97,16 @@ function hideTooltip() {
 // ── BFS aggregate detection (same as RoomPlannerView) ─────────────────────────
 function rangeOverlaps(a1, a2, b1, b2) { return Math.min(a2, b2) - Math.max(a1, b1) > 0 }
 
-function areAdjacent(a, tplA, b, tplB) {
+function areAdjacent(a, wA, hA, b, wB, hB) {
   const T = 0.5
   const xAdj =
-    (Math.abs((a.xCm + tplA.widthCm) - b.xCm) < T ||
-     Math.abs((b.xCm + tplB.widthCm) - a.xCm) < T) &&
-    rangeOverlaps(a.yCm, a.yCm + tplA.depthCm, b.yCm, b.yCm + tplB.depthCm)
+    (Math.abs((a.xCm + wA) - b.xCm) < T ||
+     Math.abs((b.xCm + wB) - a.xCm) < T) &&
+    rangeOverlaps(a.yCm, a.yCm + hA, b.yCm, b.yCm + hB)
   const yAdj =
-    (Math.abs((a.yCm + tplA.depthCm) - b.yCm) < T ||
-     Math.abs((b.yCm + tplB.depthCm) - a.yCm) < T) &&
-    rangeOverlaps(a.xCm, a.xCm + tplA.widthCm, b.xCm, b.xCm + tplB.widthCm)
+    (Math.abs((a.yCm + hA) - b.yCm) < T ||
+     Math.abs((b.yCm + hB) - a.yCm) < T) &&
+    rangeOverlaps(a.xCm, a.xCm + wA, b.xCm, b.xCm + wB)
   return xAdj || yAdj
 }
 
@@ -117,6 +117,8 @@ function computeAggregates(layout, tMap) {
   const result = []
   for (let i = 0; i < n; i++) {
     if (visited[i]) continue
+    const a0 = layout[i]
+    if (!tMap[a0.templateId]) { visited[i] = true; continue }
     const group = [], queue = [i]
     visited[i] = true
     while (queue.length) {
@@ -124,11 +126,15 @@ function computeAggregates(layout, tMap) {
       group.push(layout[cur].instanceId)
       const a = layout[cur], tplA = tMap[a.templateId]
       if (!tplA) continue
+      const wA = a.rotation % 180 === 0 ? tplA.widthCm : tplA.depthCm
+      const hA = a.rotation % 180 === 0 ? tplA.depthCm : tplA.widthCm
       for (let j = 0; j < n; j++) {
         if (visited[j]) continue
         const b = layout[j], tplB = tMap[b.templateId]
         if (!tplB) continue
-        if (areAdjacent(a, tplA, b, tplB)) { visited[j] = true; queue.push(j) }
+        const wB = b.rotation % 180 === 0 ? tplB.widthCm : tplB.depthCm
+        const hB = b.rotation % 180 === 0 ? tplB.depthCm : tplB.widthCm
+        if (areAdjacent(a, wA, hA, b, wB, hB)) { visited[j] = true; queue.push(j) }
       }
     }
     result.push(group)
@@ -153,10 +159,12 @@ const aggBounds = computed(() => {
   for (const t of aggTables.value) {
     const tpl = tMap[t.templateId]
     if (!tpl) continue
+    const w = t.rotation % 180 === 0 ? tpl.widthCm : tpl.depthCm
+    const h = t.rotation % 180 === 0 ? tpl.depthCm : tpl.widthCm
     if (t.xCm < minX) minX = t.xCm
     if (t.yCm < minY) minY = t.yCm
-    if (t.xCm + tpl.widthCm > maxX) maxX = t.xCm + tpl.widthCm
-    if (t.yCm + tpl.depthCm > maxY) maxY = t.yCm + tpl.depthCm
+    if (t.xCm + w > maxX) maxX = t.xCm + w
+    if (t.yCm + h > maxY) maxY = t.yCm + h
   }
   if (!isFinite(minX)) return { minXmm: 0, minYmm: 0, widthMm: 0, heightMm: 0 }
   return { minXmm: minX * 10, minYmm: minY * 10, widthMm: (maxX - minX) * 10, heightMm: (maxY - minY) * 10 }
@@ -591,10 +599,10 @@ async function fixLayout() {
               :key="t.instanceId"
               class="table-silhouette"
               :style="{
-                left:   tableCanvasX(t)  * SCALE + 'px',
-                top:    tableCanvasY(t)  * SCALE + 'px',
-                width:  (templateMap[t.templateId]?.widthCm ?? 0) * 10 * SCALE + 'px',
-                height: (templateMap[t.templateId]?.depthCm  ?? 0) * 10 * SCALE + 'px',
+                left:   tableCanvasX(t) * SCALE + 'px',
+                top:    tableCanvasY(t) * SCALE + 'px',
+                width:  (t.rotation % 180 === 0 ? (templateMap[t.templateId]?.widthCm ?? 0) : (templateMap[t.templateId]?.depthCm ?? 0)) * 10 * SCALE + 'px',
+                height: (t.rotation % 180 === 0 ? (templateMap[t.templateId]?.depthCm  ?? 0) : (templateMap[t.templateId]?.widthCm ?? 0)) * 10 * SCALE + 'px',
               }"
             >
               <span class="silhouette-label">{{ templateMap[t.templateId]?.description ?? '' }}</span>
