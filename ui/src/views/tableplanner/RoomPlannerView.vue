@@ -2,6 +2,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getRoom, getAllTemplates, saveRoomLayout, updateRoom, getAllBaseplates } from '../../api/tableplanner.js'
+import { generateRoomPdf } from '../../utils/roomPdf.js'
 
 const route = useRoute()
 const router = useRouter()
@@ -20,6 +21,7 @@ const placedTables = ref([])
 const savedLayoutJson = ref('')
 const savedAggSelectionsJson = ref('[]')
 const saveSuccess = ref(false)
+const pdfExporting = ref(false)
 const loading = ref(true)
 const renameMode = ref(false)
 const renameInput = ref('')
@@ -681,6 +683,16 @@ async function saveRename() {
   }
 }
 
+// ── Export PDF ────────────────────────────────────────────────────────────────
+function exportPdf() {
+  pdfExporting.value = true
+  try {
+    generateRoomPdf(room.value, templates.value, placedTables.value, aggregates.value)
+  } finally {
+    pdfExporting.value = false
+  }
+}
+
 // ── Save ──────────────────────────────────────────────────────────────────────
 async function saveLayout() {
   const aggSels = buildAggSelectionsForSave()
@@ -717,6 +729,9 @@ async function saveLayout() {
           <button class="zoom-btn" @click="zoomIn" :disabled="zoom >= MAX_ZOOM" title="Zoom in">+</button>
         </div>
         <span v-if="saveSuccess" class="save-ok">Layout saved!</span>
+        <button class="pdf-btn" :disabled="pdfExporting" @click="exportPdf" title="Export layout as PDF">
+          {{ pdfExporting ? 'Exporting…' : 'Export PDF' }}
+        </button>
         <button
           class="primary save-btn"
           :class="{ dirty: isDirty }"
@@ -893,6 +908,20 @@ async function saveLayout() {
   font-size: 0.85rem;
   font-weight: 600;
 }
+
+.pdf-btn {
+  background: #f0f0f0;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  padding: 0.35rem 0.9rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+  color: #444;
+  transition: background 0.15s;
+}
+
+.pdf-btn:hover:not(:disabled) { background: #e0e0e0; }
+.pdf-btn:disabled { color: #aaa; cursor: default; }
 
 .save-btn {
   background: #888;

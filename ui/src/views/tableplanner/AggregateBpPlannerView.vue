@@ -2,6 +2,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getRoom, getAllTemplates, getAllBaseplates, getBaseplateImageUrl, saveAggregateBpLayout } from '../../api/tableplanner.js'
+import { generateAggregatePdf } from '../../utils/platePdf.js'
 
 const route = useRoute()
 const router = useRouter()
@@ -20,6 +21,7 @@ const templates = ref([])
 const baseplates = ref([])
 const loading   = ref(true)
 const saveSuccess = ref(false)
+const pdfExporting = ref(false)
 const zoom = ref(1)
 const canvasWrapEl = ref(null)
 
@@ -437,6 +439,24 @@ function onWheelZoom(e) {
   zoom.value = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, +(zoom.value * factor).toFixed(4)))
 }
 
+// ── Export PDF ────────────────────────────────────────────────────────────────
+function exportPdf() {
+  pdfExporting.value = true
+  try {
+    generateAggregatePdf(
+      room.value,
+      aggTables.value,
+      aggBounds.value,
+      templateMap.value,
+      placedPlates.value,
+      baseplateMap.value,
+      baseplates.value,
+    )
+  } finally {
+    pdfExporting.value = false
+  }
+}
+
 // ── Save / Fix ────────────────────────────────────────────────────────────────
 async function save() {
   const result = await saveAggregateBpLayout(roomId, repId, serialisePlates())
@@ -480,6 +500,9 @@ async function fixLayout() {
           <button class="zoom-btn" @click="zoomIn" :disabled="zoom >= MAX_ZOOM" title="Zoom in">+</button>
         </div>
         <span v-if="saveSuccess" class="save-ok">Saved!</span>
+        <button class="pdf-btn" :disabled="pdfExporting" @click="exportPdf" title="Export layout as PDF">
+          {{ pdfExporting ? 'Exporting…' : 'Export PDF' }}
+        </button>
         <button class="save-btn" :class="{ dirty: isDirty }" :disabled="!isDirty" @click="save">Save</button>
       </div>
     </div>
@@ -714,6 +737,14 @@ async function fixLayout() {
   padding: 0.3rem 0.8rem; cursor: pointer; font-weight: 600; white-space: nowrap;
 }
 .fix-btn:hover { background: #e0a800; }
+
+.pdf-btn {
+  background: #f0f0f0; border: 1px solid #ccc; border-radius: 4px;
+  padding: 0.35rem 0.9rem; font-size: 0.85rem; cursor: pointer; color: #444;
+  transition: background 0.15s;
+}
+.pdf-btn:hover:not(:disabled) { background: #e0e0e0; }
+.pdf-btn:disabled { color: #aaa; cursor: default; }
 
 .save-btn {
   background: #888; color: #fff; border: none; border-radius: 4px;
