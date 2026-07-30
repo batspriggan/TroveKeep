@@ -1,7 +1,7 @@
 on:
   push:
     tags:
-      - 'v*'
+      - 'lv*'
 
 jobs:
   build:
@@ -13,7 +13,7 @@ jobs:
 
       - run: |
           echo "Building TroveKeep Docker image..."
-          VERSION="${GITHUB_REF_NAME#v}"
+          VERSION="${GITHUB_REF_NAME#lv}"
           docker build \
             -t 192.168.10.21:3333/alex/trovekeep:latest \
             -t 192.168.10.21:3333/alex/trovekeep:$VERSION \
