@@ -22,7 +22,7 @@ jobs:
             -t 192.168.10.21:3333/alex/trovekeep:$VERSION \
             --build-arg VITE_APP_VERSION=$VERSION \
             .
-          echo "${{ secrets.REGISTRY_PASSWORD }}" | docker login 192.168.10.21:3333 -u ci-bot --password-stdin
+          echo "${{ secrets.REGISTRY_PASSWORD }}" | docker login 192.168.10.21:3333 -u alex --password-stdin
           docker push 192.168.10.21:3333/alex/trovekeep:latest
           docker push 192.168.10.21:3333/alex/trovekeep:$VERSION
 
