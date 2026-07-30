@@ -25,3 +25,4 @@ jobs:
           echo "${{ secrets.REGISTRY_PASSWORD }}" | docker login 192.168.10.21:3333 -u ci-bot --password-stdin
           docker push 192.168.10.21:3333/alex/trovekeep:latest
           docker push 192.168.10.21:3333/alex/trovekeep:$VERSION
+
