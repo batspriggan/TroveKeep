@@ -16,13 +16,15 @@ public class BulkPiecesController : ControllerBase
     private readonly IColorRepository _colorRepo;
     private readonly IImageService _imageService;
     private readonly IPartInventoryArchiveRepository _partInventoryRepo;
+    private readonly ILabelPrintService _labelPrintService;
 
-    public BulkPiecesController(IBulkPieceService service, IColorRepository colorRepo, IImageService imageService, IPartInventoryArchiveRepository partInventoryRepo)
+    public BulkPiecesController(IBulkPieceService service, IColorRepository colorRepo, IImageService imageService, IPartInventoryArchiveRepository partInventoryRepo, ILabelPrintService labelPrintService)
     {
         _service = service;
         _colorRepo = colorRepo;
         _imageService = imageService;
         _partInventoryRepo = partInventoryRepo;
+        _labelPrintService = labelPrintService;
     }
 
     [HttpGet]
@@ -196,6 +198,20 @@ public class BulkPiecesController : ControllerBase
         var image = await _imageService.GetImageAsync(piece.LegoId, ImageReferenceType.Part);
         if (image is null) return NotFound();
         return File(image.Data, image.ContentType);
+    }
+
+    [HttpGet("{id:guid}/label-file")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetLabelFile(Guid id, [FromQuery] int? copies = null, [FromQuery] string? size = null)
+    {
+        var piece = await _service.GetByIdAsync(id);
+        if (piece is null) return NotFound();
+
+        var json = _labelPrintService.BuildBulkPieceLabel(piece, copies, size);
+        var fileName = _labelPrintService.GetBulkPieceFileName(piece);
+
+        return File(System.Text.Encoding.UTF8.GetBytes(json), "application/json", fileName);
     }
 
     private async Task<Dictionary<int, (string Name, string Rgb)>> BuildColorLookupAsync()

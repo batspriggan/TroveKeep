@@ -28,6 +28,14 @@ public class BulkPieceRepository : IBulkPieceRepository
         return doc is null ? null : ToModel(doc);
     }
 
+    public async Task<BulkPiece?> GetByBusinessKeyAsync(string legoId, int legoColorId)
+    {
+        var doc = await _collection
+            .Find(x => x.LegoId == legoId && x.LegoColorId == legoColorId)
+            .FirstOrDefaultAsync();
+        return doc is null ? null : ToModel(doc);
+    }
+
     public async Task<IEnumerable<BulkPiece>> GetByIdsAsync(IEnumerable<Guid> ids)
     {
         var idList = ids.ToList();

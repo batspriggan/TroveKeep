@@ -8,6 +8,7 @@
       <RouterLink to="/boxes" class="mobile-hide">Boxes</RouterLink>
       <RouterLink v-if="settings.bulkPiecesEnabled" to="/drawercontainers" class="mobile-hide">Drawer Containers</RouterLink>
       <RouterLink to="/search" class="mobile-hide">Search</RouterLink>
+      <RouterLink to="/scanner" class="mobile-hide">Scanner</RouterLink>
       <RouterLink to="/archives">Archives</RouterLink>
       <RouterLink to="/settings">Settings</RouterLink>
       <RouterLink v-if="settings.tablePlannerEnabled" to="/table-planner" class="mobile-hide">Table Planner</RouterLink>

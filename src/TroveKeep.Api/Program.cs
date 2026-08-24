@@ -57,6 +57,12 @@ builder.Services.AddScoped<IRoomService, RoomService>();
 builder.Services.AddScoped<IBaseplateService, BaseplateService>();
 builder.Services.AddHttpClient("SetImages");
 
+// Label printing (label-tool subprocess) and scanner resolution
+var labelPrintSettings = builder.Configuration.GetSection("LabelTool").Get<LabelPrintSettings>() ?? new LabelPrintSettings();
+builder.Services.AddSingleton(labelPrintSettings);
+builder.Services.AddScoped<ILabelPrintService, LabelPrintService>();
+builder.Services.AddScoped<IScannerService, ScannerService>();
+
 var app = builder.Build();
 
 Console.WriteLine("Running database migrations...");

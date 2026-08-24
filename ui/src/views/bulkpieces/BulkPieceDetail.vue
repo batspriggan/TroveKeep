@@ -17,7 +17,14 @@
           <span v-if="piece.legoColorRgb" class="color-swatch" :style="{ background: '#' + piece.legoColorRgb }"></span>
           <span class="color-label">{{ piece.legoColorName ?? `Color #${piece.legoColorId}` }}</span>
         </div>
+        <div class="piece-actions">
+          <button class="secondary" :disabled="printLoading" @click="printLabel">
+            {{ printLoading ? 'Downloading…' : 'Download Label' }}
+          </button>
+        </div>
       </header>
+
+      <p v-if="printMessage" class="print-msg">{{ printMessage }}</p>
 
       <div class="detail-layout">
         <!-- Left column: image + edit -->
@@ -153,6 +160,7 @@ import { useRoute, useRouter } from 'vue-router'
 import {
   getBulkPiece, updateBulkPiece, deleteBulkPiece,
   allocatePieceToBox, allocatePieceToDrawer, deallocatePieceFromBox, deallocatePieceFromDrawer, clearPieceStorage,
+  downloadBulkPieceLabel,
 } from '../../api/bulkpieces.js'
 import { getAllBoxes } from '../../api/boxes.js'
 import { getAllDrawerContainers, getDrawerContainerDrawers } from '../../api/drawercontainers.js'
@@ -174,6 +182,8 @@ const error = ref('')
 const editError = ref('')
 const storageError = ref('')
 const showConfirm = ref(false)
+const printLoading = ref(false)
+const printMessage = ref('')
 const selectedBoxId = ref('')
 const selectedDrawer = ref(null)
 const boxAllocQty = ref(1)
@@ -293,6 +303,19 @@ async function doDelete() {
   }
 }
 
+async function printLabel() {
+  printLoading.value = true
+  printMessage.value = ''
+  try {
+    downloadBulkPieceLabel(id)
+    printMessage.value = 'Label file downloading — save it to the label-tool watch folder.'
+  } catch (e) {
+    printMessage.value = e.message
+  } finally {
+    printLoading.value = false
+  }
+}
+
 onMounted(load)
 </script>
 
@@ -361,6 +384,20 @@ onMounted(load)
 .color-label {
   font-size: var(--text-sm);
   color: var(--color-text-secondary);
+}
+
+/* ── Header actions ── */
+.piece-actions {
+  margin-left: auto;
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+.print-msg {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  margin: var(--space-2) 0 var(--space-4);
 }
 
 /* ── Two-column layout ── */

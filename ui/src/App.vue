@@ -123,6 +123,12 @@ button.primary {
   border-color: #2563eb;
 }
 
+button.secondary {
+  background: #fff;
+  color: #1a1917;
+  border-color: #cbd5e1;
+}
+
 button.danger {
   background: #dc2626;
   color: #fff;

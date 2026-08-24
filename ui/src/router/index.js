@@ -11,6 +11,7 @@ import DrawerContainerList from '../views/drawercontainers/DrawerContainerList.v
 import DrawerContainerDetail from '../views/drawercontainers/DrawerContainerDetail.vue'
 import DrawerDetail from '../views/drawers/DrawerDetail.vue'
 import SearchView from '../views/SearchView.vue'
+import ScannerView from '../views/ScannerView.vue'
 import ArchivesView from '../views/ArchivesView.vue'
 import SettingsView from '../views/SettingsView.vue'
 import TablePlannerView from '../views/TablePlannerView.vue'
@@ -30,6 +31,7 @@ const routes = [
   { path: '/drawercontainers/:id', component: DrawerContainerDetail },
   { path: '/drawers/:containerId/:position', component: DrawerDetail },
   { path: '/search', component: SearchView },
+  { path: '/scanner', component: ScannerView },
   { path: '/archives', component: ArchivesView },
   { path: '/settings', component: SettingsView },
   { path: '/table-planner', component: TablePlannerView },
