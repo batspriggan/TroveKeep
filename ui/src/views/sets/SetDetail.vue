@@ -11,7 +11,11 @@
         <span v-if="set.setNumber" class="set-number">{{ set.setNumber }}</span>
         <span v-if="set.isMoc" class="moc-badge">MOC</span>
         <span class="set-desc">{{ set.description }}</span>
+        <button class="secondary set-download" :disabled="downloadLoading" @click="downloadLabel">
+          {{ downloadLoading ? 'Downloading…' : 'Download Label' }}
+        </button>
       </header>
+      <p v-if="downloadMessage" class="download-msg">{{ downloadMessage }}</p>
 
       <div class="detail-layout">
         <!-- Image (top-left on desktop, first on mobile) -->
@@ -141,7 +145,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { getSet, updateSet, deleteSet, allocateSetToBox, deallocateSetStorage, clearSetStorage, getSetPhotos, uploadSetPhoto, deleteSetPhoto } from '../../api/sets.js'
+import { getSet, updateSet, deleteSet, allocateSetToBox, deallocateSetStorage, clearSetStorage, getSetPhotos, uploadSetPhoto, deleteSetPhoto, downloadSetLabel } from '../../api/sets.js'
 import { getAllBoxes } from '../../api/boxes.js'
 import ConfirmDialog from '../../components/ConfirmDialog.vue'
 
@@ -158,6 +162,8 @@ const editError = ref('')
 const storageError = ref('')
 const photoError = ref('')
 const showConfirm = ref(false)
+const downloadLoading = ref(false)
+const downloadMessage = ref('')
 const selectedBoxId = ref('')
 const allocQty = ref(1)
 const editForm = ref({ setNumber: '', description: '', quantity: 1, isMoc: false })
@@ -269,6 +275,19 @@ async function doDelete() {
   }
 }
 
+function downloadLabel() {
+  downloadLoading.value = true
+  downloadMessage.value = ''
+  try {
+    downloadSetLabel(id)
+    downloadMessage.value = 'Label file downloading — save it to the label-tool watch folder.'
+  } catch (e) {
+    downloadMessage.value = e.message
+  } finally {
+    downloadLoading.value = false
+  }
+}
+
 onMounted(load)
 </script>
 
@@ -315,6 +334,16 @@ onMounted(load)
 .set-desc {
   font-size: var(--text-lg);
   color: var(--color-text-secondary);
+}
+
+.set-download {
+  margin-left: auto;
+}
+
+.download-msg {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  margin: var(--space-2) 0 var(--space-4);
 }
 
 /* ── Layout ── */

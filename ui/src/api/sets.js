@@ -25,3 +25,17 @@ export const uploadSetPhoto = (id, file) => {
 }
 
 export const deleteSetPhoto = (id, photoId) => del(`${BASE}/${id}/photos/${photoId}`)
+
+// Triggers a browser download of the label JSON (saved to the label-tool watch folder).
+export function downloadSetLabel(id) {
+  triggerDownload(`${BASE}/${id}/label-file`)
+}
+
+function triggerDownload(href) {
+  const a = document.createElement('a')
+  a.href = href
+  a.download = ''
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+}

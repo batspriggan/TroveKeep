@@ -8,6 +8,15 @@
 
     <template v-else-if="box">
       <h1 class="box-title">{{ box.name }}</h1>
+      <div class="label-actions">
+        <button class="secondary" :disabled="downloadLoading" @click="downloadSummary">
+          {{ downloadLoading ? 'Downloading…' : 'Download Summary Label' }}
+        </button>
+        <button class="secondary" :disabled="downloadLoading" @click="downloadQr">
+          Download QR Label
+        </button>
+      </div>
+      <p v-if="downloadMessage" class="download-msg">{{ downloadMessage }}</p>
 
       <div class="detail-layout">
         <!-- Photo (top-left on desktop, first on mobile) -->
@@ -116,7 +125,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { getBoxContents, updateBox, deleteBox, uploadBoxImage, deleteBoxImage } from '../../api/boxes.js'
+import { getBoxContents, updateBox, deleteBox, uploadBoxImage, deleteBoxImage, downloadBoxSummary, downloadBoxQr } from '../../api/boxes.js'
 import ConfirmDialog from '../../components/ConfirmDialog.vue'
 import { useSettings } from '../../composables/useSettings.js'
 
@@ -136,6 +145,8 @@ const editForm = ref({ name: '' })
 const photoFile = ref(null)
 const imgTs = ref(Date.now())
 const cameraInput = ref(null)
+const downloadLoading = ref(false)
+const downloadMessage = ref('')
 
 async function load() {
   loading.value = true
@@ -209,6 +220,32 @@ async function doDelete() {
   }
 }
 
+function downloadSummary() {
+  downloadLoading.value = true
+  downloadMessage.value = ''
+  try {
+    downloadBoxSummary(id)
+    downloadMessage.value = 'Summary label downloading — save it to the label-tool watch folder.'
+  } catch (e) {
+    downloadMessage.value = e.message
+  } finally {
+    downloadLoading.value = false
+  }
+}
+
+function downloadQr() {
+  downloadLoading.value = true
+  downloadMessage.value = ''
+  try {
+    downloadBoxQr(id)
+    downloadMessage.value = 'QR label downloading — save it to the label-tool watch folder.'
+  } catch (e) {
+    downloadMessage.value = e.message
+  } finally {
+    downloadLoading.value = false
+  }
+}
+
 onMounted(load)
 </script>
 
@@ -224,7 +261,20 @@ onMounted(load)
 }
 
 .box-title {
+  margin-bottom: var(--space-2);
+}
+
+.label-actions {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
   margin-bottom: var(--space-4);
+}
+
+.download-msg {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  margin: var(--space-2) 0 var(--space-4);
 }
 
 /* ── Layout ── */

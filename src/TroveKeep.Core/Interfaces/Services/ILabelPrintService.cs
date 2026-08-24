@@ -3,14 +3,24 @@ using TroveKeep.Core.Models;
 namespace TroveKeep.Core.Interfaces.Services;
 
 /// <summary>
-/// Builds the JSON document for a bulk-piece label in the label-tool file format.
-/// The UI downloads it to a locally monitored folder; nothing is written here.
+/// Builds the JSON documents for labels in the label-tool file format.
+/// The UI downloads them to a locally monitored folder; nothing is written here.
 /// </summary>
 public interface ILabelPrintService
 {
-    /// <summary>Returns the label JSON text (serialized) for the given piece, or null if it cannot be built.</summary>
-    string? BuildBulkPieceLabel(BulkPiece piece, int? copies = null, string? size = null);
-
-    /// <summary>Suggested local file name for the downloaded label JSON (unique per piece).</summary>
+    // ---- Bulk piece ----
+    string BuildBulkPieceLabel(BulkPiece piece, int? copies = null, string? size = null);
     string GetBulkPieceFileName(BulkPiece piece);
+
+    // ---- Set ----
+    string BuildLegoSetLabel(LegoSet set, int? copies = null, string? size = null);
+    string GetLegoSetFileName(LegoSet set);
+
+    // ---- Box (summary = "large" with content overview) ----
+    string BuildBoxSummaryLabel(Box box, int? copies = null);
+    string GetBoxSummaryFileName(Box box);
+
+    // ---- Box (qr = "small" with the box code) ----
+    string BuildBoxQrLabel(Box box, int? copies = null);
+    string GetBoxQrFileName(Box box);
 }

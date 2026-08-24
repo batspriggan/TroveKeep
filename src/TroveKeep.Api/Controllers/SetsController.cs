@@ -14,12 +14,14 @@ public class SetsController : ControllerBase
     private readonly ILegoSetService _service;
     private readonly IImageService _imageService;
     private readonly ISetPhotoService _photoService;
+    private readonly ILabelPrintService _labelPrintService;
 
-    public SetsController(ILegoSetService service, IImageService imageService, ISetPhotoService photoService)
+    public SetsController(ILegoSetService service, IImageService imageService, ISetPhotoService photoService, ILabelPrintService labelPrintService)
     {
         _service = service;
         _imageService = imageService;
         _photoService = photoService;
+        _labelPrintService = labelPrintService;
     }
 
     [HttpGet]
@@ -76,6 +78,19 @@ public class SetsController : ControllerBase
         var image = await _imageService.GetImageAsync(set.SetNumber, ImageReferenceType.Set);
         if (image is null) return NotFound();
         return File(image.Data, image.ContentType);
+    }
+
+    [HttpGet("{id:guid}/label-file")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetLabelFile(Guid id, [FromQuery] int? copies = null, [FromQuery] string? size = null)
+    {
+        var set = await _service.GetByIdAsync(id);
+        if (set is null) return NotFound();
+
+        var json = _labelPrintService.BuildLegoSetLabel(set, copies, size);
+        var fileName = _labelPrintService.GetLegoSetFileName(set);
+        return File(System.Text.Encoding.UTF8.GetBytes(json), "application/json", fileName);
     }
 
     [HttpGet("{id:guid}/photos")]

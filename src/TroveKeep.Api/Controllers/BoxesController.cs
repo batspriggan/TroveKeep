@@ -15,12 +15,14 @@ public class BoxesController : ControllerBase
     private readonly IBoxService _service;
     private readonly IColorRepository _colorRepo;
     private readonly IImageService _imageService;
+    private readonly ILabelPrintService _labelPrintService;
 
-    public BoxesController(IBoxService service, IColorRepository colorRepo, IImageService imageService)
+    public BoxesController(IBoxService service, IColorRepository colorRepo, IImageService imageService, ILabelPrintService labelPrintService)
     {
         _service = service;
         _colorRepo = colorRepo;
         _imageService = imageService;
+        _labelPrintService = labelPrintService;
     }
 
     [HttpGet]
@@ -50,6 +52,32 @@ public class BoxesController : ControllerBase
         if (box is null) return NotFound();
         var colors = await BuildColorLookupAsync();
         return Ok(MapToDetailResponse(box, colors));
+    }
+
+    [HttpGet("{id:guid}/label-summary")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetLabelSummary(Guid id, [FromQuery] int? copies = null)
+    {
+        var box = await _service.GetByIdWithContentsAsync(id);
+        if (box is null) return NotFound();
+
+        var json = _labelPrintService.BuildBoxSummaryLabel(box, copies);
+        var fileName = _labelPrintService.GetBoxSummaryFileName(box);
+        return File(System.Text.Encoding.UTF8.GetBytes(json), "application/json", fileName);
+    }
+
+    [HttpGet("{id:guid}/label-qr")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetLabelQr(Guid id, [FromQuery] int? copies = null)
+    {
+        var box = await _service.GetByIdAsync(id);
+        if (box is null) return NotFound();
+
+        var json = _labelPrintService.BuildBoxQrLabel(box, copies);
+        var fileName = _labelPrintService.GetBoxQrFileName(box);
+        return File(System.Text.Encoding.UTF8.GetBytes(json), "application/json", fileName);
     }
 
     [HttpPost]
