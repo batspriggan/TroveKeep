@@ -1,12 +1,12 @@
 namespace TroveKeep.Api.DTOs.Responses;
 
 public record ScannerResolveResponse(
+    string Kind,
     Guid Id,
-    string LegoId,
-    int LegoColorId,
-    string? LegoColorName,
-    string? LegoColorRgb,
-    string Description,
+    string Title,
+    string? Subtitle,
+    string? ColorName,
+    string? ColorRgb,
     int Quantity,
     IEnumerable<ScannerAllocationResponse> Allocations);
 

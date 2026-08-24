@@ -25,22 +25,25 @@ public class ScannerController : ControllerBase
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Resolve([FromQuery] string? code)
     {
-        if (!LabelCodes.TryParsePieceCode(code, out var legoId, out var legoColorId))
+        var reference = LabelCodes.TryParse(code);
+        if (reference is null)
             return BadRequest(new { error = "Invalid or unsupported label code." });
 
-        var result = await _scannerService.ResolvePieceAsync(legoId, legoColorId);
+        var result = await _scannerService.ResolveAsync(reference);
         if (result is null) return NotFound();
 
         var colors = await _colorRepo.GetAllAsync();
-        var color = colors.FirstOrDefault(c => c.Id == result.LegoColorId);
+        var color = result.ColorId is { } cid
+            ? colors.FirstOrDefault(c => c.Id == cid)
+            : null;
 
         return Ok(new ScannerResolveResponse(
+            result.Kind.ToString(),
             result.Id,
-            result.LegoId,
-            result.LegoColorId,
+            result.Title,
+            result.Subtitle,
             color?.Name,
             color?.Rgb,
-            result.Description,
             result.Quantity,
             result.Allocations.Select(a => new ScannerAllocationResponse(
                 a.StorageType.ToString(),

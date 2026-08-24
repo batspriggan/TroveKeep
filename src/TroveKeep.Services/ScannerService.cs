@@ -7,29 +7,96 @@ namespace TroveKeep.Services;
 public class ScannerService : IScannerService
 {
     private readonly IBulkPieceRepository _pieceRepo;
-    private readonly IAllocationRepository _allocationRepo;
+    private readonly ILegoSetRepository _setRepo;
     private readonly IBoxRepository _boxRepo;
     private readonly IDrawerContainerRepository _containerRepo;
+    private readonly IAllocationRepository _allocationRepo;
 
     public ScannerService(
         IBulkPieceRepository pieceRepo,
-        IAllocationRepository allocationRepo,
+        ILegoSetRepository setRepo,
         IBoxRepository boxRepo,
-        IDrawerContainerRepository containerRepo)
+        IDrawerContainerRepository containerRepo,
+        IAllocationRepository allocationRepo)
     {
         _pieceRepo = pieceRepo;
-        _allocationRepo = allocationRepo;
+        _setRepo = setRepo;
         _boxRepo = boxRepo;
         _containerRepo = containerRepo;
+        _allocationRepo = allocationRepo;
     }
 
-    public async Task<ScannerResult?> ResolvePieceAsync(string legoId, int legoColorId)
+    public async Task<ScannerResult?> ResolveAsync(LabelRef reference) => reference.Kind switch
     {
-        var piece = await _pieceRepo.GetByBusinessKeyAsync(legoId, legoColorId);
+        LabelRefKind.Piece => await ResolvePieceAsync(reference),
+        LabelRefKind.Set => await ResolveSetAsync(reference),
+        LabelRefKind.Box => await ResolveBoxAsync(reference),
+        _ => null,
+    };
+
+    private async Task<ScannerResult?> ResolvePieceAsync(LabelRef reference)
+    {
+        if (string.IsNullOrWhiteSpace(reference.LegoId) || reference.ColorId is null)
+            return null;
+
+        var piece = await _pieceRepo.GetByBusinessKeyAsync(reference.LegoId, reference.ColorId.Value);
         if (piece is null) return null;
 
         var allocs = (await _allocationRepo.GetByItemAsync(piece.Id)).ToList();
 
+        return new ScannerResult
+        {
+            Kind = LabelRefKind.Piece,
+            Id = piece.Id,
+            Title = piece.LegoId,
+            Subtitle = piece.Description,
+            ColorId = piece.LegoColorId,
+            Quantity = piece.Quantity,
+            Allocations = await ResolveAllocationsAsync(allocs),
+        };
+    }
+
+    private async Task<ScannerResult?> ResolveSetAsync(LabelRef reference)
+    {
+        if (string.IsNullOrWhiteSpace(reference.SetNumber))
+            return null;
+
+        var (items, _) = await _setRepo.GetPageAsync(1, 1, reference.SetNumber);
+        var set = items.FirstOrDefault(s => string.Equals(s.SetNumber, reference.SetNumber, StringComparison.Ordinal));
+        if (set is null) return null;
+
+        var allocs = (await _allocationRepo.GetByItemAsync(set.Id)).ToList();
+
+        return new ScannerResult
+        {
+            Kind = LabelRefKind.Set,
+            Id = set.Id,
+            Title = set.SetNumber,
+            Subtitle = set.Description,
+            Quantity = set.Quantity,
+            Allocations = await ResolveAllocationsAsync(allocs),
+        };
+    }
+
+    private async Task<ScannerResult?> ResolveBoxAsync(LabelRef reference)
+    {
+        if (reference.BoxId is null) return null;
+
+        var box = await _boxRepo.GetByIdAsync(reference.BoxId.Value);
+        if (box is null) return null;
+
+        return new ScannerResult
+        {
+            Kind = LabelRefKind.Box,
+            Id = box.Id,
+            Title = box.Name,
+            Quantity = 0,
+            Allocations = [],
+        };
+    }
+
+    private async Task<List<ResolvedAllocation>> ResolveAllocationsAsync(IReadOnlyList<StorageAllocation> allocs)
+    {
         var boxIds = new HashSet<Guid>();
         var containerIds = new HashSet<Guid>();
         foreach (var alloc in allocs)
@@ -40,20 +107,12 @@ public class ScannerService : IScannerService
 
         var boxesTask = _boxRepo.GetByIdsAsync(boxIds);
         var containersTask = _containerRepo.GetByIdsAsync(containerIds);
-        await Task.WhenAll(boxesTask, containersTask);
 
-        var boxes = (await boxesTask).ToDictionary(b => b.Id);
-        var containers = (await containersTask).ToDictionary(c => c.Id);
+        // _containerRepo resolved from DI; both dictionaries built before mapping.
+        var boxes = boxIds.Count > 0 ? (await boxesTask).ToDictionary(b => b.Id) : new Dictionary<Guid, Box>();
+        var containers = containerIds.Count > 0 ? (await containersTask).ToDictionary(c => c.Id) : new Dictionary<Guid, DrawerContainer>();
 
-        return new ScannerResult
-        {
-            Id = piece.Id,
-            LegoId = piece.LegoId,
-            LegoColorId = piece.LegoColorId,
-            Description = piece.Description,
-            Quantity = piece.Quantity,
-            Allocations = allocs.Select(a => ResolveAllocation(a, boxes, containers)).ToList(),
-        };
+        return allocs.Select(a => ResolveAllocation(a, boxes, containers)).ToList();
     }
 
     private static ResolvedAllocation ResolveAllocation(

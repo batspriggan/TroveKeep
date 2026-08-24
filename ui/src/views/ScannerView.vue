@@ -32,33 +32,45 @@
 
     <div v-if="result" class="result card">
       <header class="result-header">
-        <span class="piece-id">{{ result.legoId }}</span>
-        <span v-if="result.legoColorName" class="color-badge">
-          <span v-if="result.legoColorRgb" class="swatch" :style="{ background: '#' + result.legoColorRgb }"></span>
-          {{ result.legoColorName }}
+        <span class="kind-badge">{{ result.kind }}</span>
+        <span class="piece-id">{{ result.title }}</span>
+        <span v-if="result.colorName" class="color-badge">
+          <span v-if="result.colorRgb" class="swatch" :style="{ background: '#' + result.colorRgb }"></span>
+          {{ result.colorName }}
         </span>
       </header>
-      <p class="piece-desc">{{ result.description }}</p>
+      <p v-if="result.subtitle" class="piece-desc">{{ result.subtitle }}</p>
 
-      <template v-if="result.allocations?.length">
-        <h2 class="alloc-title">Stored in</h2>
-        <ul class="alloc-list">
-          <li v-for="a in result.allocations" :key="`${a.storageType}-${a.storageId}-${a.drawerPosition ?? ''}`">
-            <RouterLink :to="locationLink(a)" class="alloc-link">
-              <strong>{{ a.storageName }}</strong>
-              <span class="alloc-type">{{ a.storageType }}</span>
-              <span class="alloc-qty">× {{ a.quantity }}</span>
-            </RouterLink>
-          </li>
-        </ul>
+      <!-- Box: direct navigation to the box itself -->
+      <template v-if="result.kind === 'Box'">
+        <RouterLink :to="`/boxes/${result.id}`" class="alloc-link root-link">
+          Open box
+        </RouterLink>
       </template>
-      <p v-else class="muted no-alloc">Not stored anywhere yet.</p>
+
+      <!-- Piece / Set: show storage allocations -->
+      <template v-else>
+        <template v-if="result.allocations?.length">
+          <h2 class="alloc-title">Stored in</h2>
+          <ul class="alloc-list">
+            <li v-for="a in result.allocations" :key="`${a.storageType}-${a.storageId}-${a.drawerPosition ?? ''}`">
+              <RouterLink :to="locationLink(a)" class="alloc-link">
+                <strong>{{ a.storageName }}</strong>
+                <span class="alloc-type">{{ a.storageType }}</span>
+                <span class="alloc-qty">× {{ a.quantity }}</span>
+              </RouterLink>
+            </li>
+          </ul>
+        </template>
+        <p v-else class="muted no-alloc">Not stored anywhere yet.</p>
+        <RouterLink :to="detailLink" class="open-detail">Open detail →</RouterLink>
+      </template>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { resolveCode } from '../api/scanner.js'
 
 const code = ref('')
@@ -66,6 +78,13 @@ const codeInput = ref(null)
 const loading = ref(false)
 const error = ref('')
 const result = ref(null)
+
+const detailLink = computed(() => {
+  if (!result.value) return '/'
+  if (result.value.kind === 'Box') return `/boxes/${result.value.id}`
+  if (result.value.kind === 'Set') return `/sets/${result.value.id}`
+  return `/bulkpieces/${result.value.id}`
+})
 
 const cameraActive = ref(false)
 const cameraError = ref('')
@@ -261,4 +280,28 @@ onUnmounted(() => { stopCamera() })
 }
 
 .no-alloc { margin-top: var(--space-3); }
+
+.kind-badge {
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-accent);
+  background: var(--color-accent-soft);
+  border: 1px solid var(--color-accent);
+  border-radius: 4px;
+  padding: 2px 6px;
+}
+
+.root-link {
+  display: inline-flex;
+  margin-top: var(--space-3);
+  font-weight: 600;
+}
+
+.open-detail {
+  display: inline-block;
+  margin-top: var(--space-3);
+  font-size: var(--text-sm);
+}
 </style>

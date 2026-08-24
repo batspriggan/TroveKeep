@@ -1,55 +1,69 @@
 namespace TroveKeep.Core.Models;
 
+public enum LabelRefKind
+{
+    Piece,
+    Set,
+    Box,
+}
+
+/// <summary>A parsed label code payload, identifying the entity it points to.</summary>
+public sealed record LabelRef(
+    LabelRefKind Kind,
+    string? LegoId = null,
+    int? ColorId = null,
+    string? SetNumber = null,
+    Guid? BoxId = null);
+
 /// <summary>
-/// Payload format for the QR code printed on bulk-piece labels.
-/// Format: <c>TK:BP:&lt;LegoId&gt;:&lt;LegoColorId&gt;</c>.
+/// Payload formats for the QR codes printed on labels:
+/// <list type="bullet">
+///   <item>Piece: <c>TK:BP:{LegoId}:{LegoColorId}</c></item>
+///   <item>Set:   <c>TK:SET:{SetNumber}</c></item>
+///   <item>Box:   <c>TK:BOX:{Guid:N}</c></item>
+/// </list>
 /// </summary>
 public static class LabelCodes
 {
-    public const string Prefix = "TK:BP:";
+    private const string PiecePrefix = "TK:BP:";
+    private const string SetPrefix = "TK:SET:";
+    private const string BoxPrefix = "TK:BOX:";
 
-    public static string ForPiece(string legoId, int legoColorId) => $"{Prefix}{legoId}:{legoColorId}";
-    public static string ForSet(string setNumber) => $"TK:SET:{setNumber}";
-    public static string ForBox(Guid boxId) => $"TK:BOX:{boxId:N}";
+    public static string ForPiece(string legoId, int legoColorId) => $"{PiecePrefix}{legoId}:{legoColorId}";
+    public static string ForSet(string setNumber) => $"{SetPrefix}{setNumber}";
+    public static string ForBox(Guid boxId) => $"{BoxPrefix}{boxId:N}";
 
-    /// <summary>
-    /// Parses a scanned code back into the piece business key.
-    /// The color id is always the last ':'-separated token, so a LegoId containing ':' still parses.
-    /// </summary>
-    public static bool TryParsePieceCode(string? code, out string legoId, out int legoColorId)
+    /// <summary>Parses a scanned code into a <see cref="LabelRef"/>. Returns null for unsupported codes.</summary>
+    public static LabelRef? TryParse(string? code)
     {
-        legoId = string.Empty;
-        legoColorId = 0;
+        if (string.IsNullOrWhiteSpace(code)) return null;
 
-        if (string.IsNullOrWhiteSpace(code) || !code.StartsWith(Prefix, StringComparison.Ordinal))
-            return false;
+        if (code.StartsWith(PiecePrefix, StringComparison.Ordinal))
+        {
+            var payload = code[PiecePrefix.Length..];
+            var sep = payload.LastIndexOf(':');
+            if (sep <= 0 || sep == payload.Length - 1) return null;
+            return int.TryParse(payload[(sep + 1)..], out var colorId)
+                ? new LabelRef(LabelRefKind.Piece, LegoId: payload[..sep], ColorId: colorId)
+                : null;
+        }
 
-        var payload = code[Prefix.Length..];
-        var sep = payload.LastIndexOf(':');
-        if (sep <= 0 || sep == payload.Length - 1)
-            return false;
+        if (code.StartsWith(SetPrefix, StringComparison.Ordinal))
+        {
+            var setNumber = code[SetPrefix.Length..];
+            return string.IsNullOrWhiteSpace(setNumber)
+                ? null
+                : new LabelRef(LabelRefKind.Set, SetNumber: setNumber);
+        }
 
-        legoId = payload[..sep];
-        return int.TryParse(payload[(sep + 1)..], out legoColorId);
-    }
+        if (code.StartsWith(BoxPrefix, StringComparison.Ordinal))
+        {
+            var value = code[BoxPrefix.Length..];
+            return value.Length == 32 && Guid.TryParseExact(value, "N", out var boxId)
+                ? new LabelRef(LabelRefKind.Box, BoxId: boxId)
+                : null;
+        }
 
-    /// <summary>Parses a <c>TK:SET:&lt;SetNumber&gt;</c> code. The set number is the whole payload.</summary>
-    public static bool TryParseSetCode(string? code, out string setNumber)
-    {
-        setNumber = string.Empty;
-        if (string.IsNullOrWhiteSpace(code) || !code.StartsWith("TK:SET:", StringComparison.Ordinal))
-            return false;
-        setNumber = code["TK:SET:".Length..];
-        return !string.IsNullOrWhiteSpace(setNumber);
-    }
-
-    /// <summary>Parses a <c>TK:BOX:&lt;Guid:N&gt;</c> code (32-hex compact guid).</summary>
-    public static bool TryParseBoxCode(string? code, out Guid boxId)
-    {
-        boxId = Guid.Empty;
-        if (string.IsNullOrWhiteSpace(code) || !code.StartsWith("TK:BOX:", StringComparison.Ordinal))
-            return false;
-        var value = code["TK:BOX:".Length..];
-        return value.Length == 32 && Guid.TryParseExact(value, "N", out boxId);
+        return null;
     }
 }

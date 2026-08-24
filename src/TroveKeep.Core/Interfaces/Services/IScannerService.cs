@@ -5,8 +5,8 @@ namespace TroveKeep.Core.Interfaces.Services;
 public interface IScannerService
 {
     /// <summary>
-    /// Resolves a scanned piece code (already parsed to business key) to the piece and
-    /// its storage allocations, or null when no piece matches.
+    /// Resolves a parsed label reference to the piece/set/box it points to (with storage
+    /// allocations where applicable), or null when the entity does not exist.
     /// </summary>
-    Task<ScannerResult?> ResolvePieceAsync(string legoId, int legoColorId);
+    Task<ScannerResult?> ResolveAsync(LabelRef reference);
 }

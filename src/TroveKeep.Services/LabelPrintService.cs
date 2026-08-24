@@ -69,24 +69,18 @@ public class LabelPrintService : ILabelPrintService
     public string BuildBoxSummaryLabel(Box box, int? copies = null)
     {
         var setCount = box.Sets.Count;
+        var totalSetQty = box.Sets.Sum(s => s.StorageAllocations.Sum(a => a.Quantity));
+        var pieceTypes = box.BulkPieces.Count;
         var totalPieces = box.BulkPieces.Sum(p => p.StorageAllocations.Sum(a => a.Quantity));
 
         var lines = new List<object>
         {
             box.Name,
-            $"{setCount} {Pluralize(setCount, "set", "sets")}",
-            $"{totalPieces} {Pluralize(totalPieces, "piece", "pieces")}",
+            $"{setCount} {Pluralize(setCount, "set", "sets")} " +
+                $"({totalSetQty} {Pluralize(totalSetQty, "pz", "pz")})",
+            $"{pieceTypes} {Pluralize(pieceTypes, "tipo", "tipi")} — " +
+                $"{totalPieces} {Pluralize(totalPieces, "pezzo", "pezzi")}",
         };
-
-        // Optionally note the contained sets when few fit in the remaining label space.
-        if (setCount > 0 && setCount <= 2)
-        {
-            foreach (var s in box.Sets.Take(2))
-            {
-                var qty = s.StorageAllocations.Sum(a => a.Quantity);
-                lines.Add($"{s.SetNumber}" + (qty > 1 ? $" ×{qty}" : ""));
-            }
-        }
 
         return Serialize(lines, copies, _settings.DefaultSize);
     }
