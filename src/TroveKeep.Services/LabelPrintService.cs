@@ -196,7 +196,14 @@ public class LabelPrintService : ILabelPrintService
     /// </summary>
     private static bool ShowColor(string? colorName) =>
         !string.IsNullOrWhiteSpace(colorName)
-        && !string.Equals(colorName, "unknown", StringComparison.OrdinalIgnoreCase);
+        && !IsUnknownColor(colorName);
+
+    /// <summary>True when the color name denotes the undefined/default Rebrickable color.</summary>
+    private static bool IsUnknownColor(string colorName)
+    {
+        var normalized = colorName.Trim().Trim('[', ']').Trim();
+        return string.Equals(normalized, "unknown", StringComparison.OrdinalIgnoreCase);
+    }
 
     private sealed record LabelCodeLine(
         [property: JsonPropertyName("code")] string Code,
