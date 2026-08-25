@@ -148,14 +148,23 @@ async function toggleCamera() {
     stopCamera().then(resolve)
   }
   const onDecodeError = () => { /* per-frame decode errors are ignorable */ }
-  const config = { fps: 10, qrbox: { width: 220, height: 220 } }
+  // Lower fps for sharper frames and a viewfinder-relative qrbox large enough for the QR
+  // (dense neutral UUID codes need more pixels than a tiny box gives).
+  const config = {
+    fps: 5,
+    aspectRatio: 1,
+    qrbox: (viewfinderWidth, viewfinderHeight) => {
+      const side = Math.max(220, Math.round(Math.min(viewfinderWidth, viewfinderHeight) * 0.6))
+      return { width: side, height: side }
+    },
+  }
 
   try {
     const { Html5Qrcode } = await import('html5-qrcode')
 
     // Ensure the target <div> is mounted before html5-qrcode attaches to it.
     await nextTick()
-    scanner = new Html5Qrcode('trovekeep-camera')
+    scanner = new Html5Qrcode('trovekeep-camera', { useBarCodeDetectorIfSupported: true })
 
     // Resolve the best camera via enumerateDevices (Html5Qrcode.getCameras) and pass its
     // deviceId (a string). Passing the deviceId is the most reliable form html5-qrcode
@@ -181,7 +190,7 @@ async function toggleCamera() {
         cameraError.value = `Camera attempt failed: ${err?.message ?? err}`
         try { scanner.clear() } catch { /* ignore */ }
         await nextTick()
-        scanner = new Html5Qrcode('trovekeep-camera')
+        scanner = new Html5Qrcode('trovekeep-camera', { useBarCodeDetectorIfSupported: true })
         await nextTick()
       }
     }
