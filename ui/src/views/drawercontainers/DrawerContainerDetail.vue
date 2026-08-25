@@ -62,6 +62,9 @@
                       >
                         <img v-if="p.imageCached" :src="`/api/bulkpieces/${p.id}/image`" class="drawer-thumb" :alt="p.legoId" />
                         <span v-else class="drawer-thumb ghost">{{ p.legoId }}</span>
+                        <span class="drawer-thumb-caption">
+                          {{ p.description || p.legoId }}
+                        </span>
                       </RouterLink>
                     </div>
                     <div v-else>—</div>
@@ -426,7 +429,7 @@ onMounted(load)
 .pos-link {
   font-family: var(--font-mono);
   font-weight: 600;
-  color: var(--color-accent);
+  color: var(--color-text-primary);
   text-decoration: none;
 }
 
@@ -437,17 +440,27 @@ onMounted(load)
 .drawer-tumbs {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
-  align-items: center;
+  gap: 8px;
+  align-items: flex-start;
 }
 
 .drawer-thumb-wrap {
   display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  max-width: 90px;
+  text-decoration: none;
+  color: var(--color-text-secondary);
+}
+
+.drawer-thumb-wrap:hover .drawer-thumb-caption {
+  color: var(--color-accent);
 }
 
 .drawer-thumb {
-  width: 30px;
-  height: 30px;
+  width: 34px;
+  height: 34px;
   object-fit: cover;
   border-radius: 4px;
   border: 1px solid #ddd;
@@ -466,9 +479,12 @@ onMounted(load)
   box-sizing: border-box;
 }
 
-.drawer-link {
-  color: var(--color-text-primary);
-  font-size: var(--text-sm);
+.drawer-thumb-caption {
+  font-size: 10px;
+  line-height: 1.1;
+  text-align: center;
+  color: var(--color-text-secondary);
+  overflow-wrap: anywhere;
 }
 
 .td-count {
