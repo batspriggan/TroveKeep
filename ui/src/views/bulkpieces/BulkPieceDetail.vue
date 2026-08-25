@@ -121,12 +121,18 @@
               <div class="alloc-form-group">
                 <p class="alloc-form-label">Assign to Drawer</p>
                 <form class="alloc-row" @submit.prevent="submitDrawerStorage">
-                  <select v-model="selectedDrawer" class="alloc-select">
-                    <option :value="null">— select drawer —</option>
-                    <option v-for="d in drawers" :key="`${d.drawerContainerId}-${d.position}`" :value="d">
-                      {{ d.label || `Position ${d.position}` }} ({{ containerNameMap[d.drawerContainerId] ?? d.drawerContainerId }})
-                    </option>
-                  </select>
+                  <div class="alloc-col">
+                    <select v-model="selectedContainerId" class="alloc-select" @change="onContainerChange">
+                      <option :value="null">— select container —</option>
+                      <option v-for="c in containers" :key="c.id" :value="c.id">{{ c.name }}</option>
+                    </select>
+                    <select v-model="selectedDrawer" class="alloc-select">
+                      <option :value="null">— select drawer —</option>
+                      <option v-for="d in containerDrawers" :key="d.position" :value="d">
+                        {{ d.label || `Position ${d.position}` }}
+                      </option>
+                    </select>
+                  </div>
                   <input v-model.number="drawerAllocQty" type="number" min="1" required class="alloc-qty" />
                   <button class="primary" type="submit" :disabled="!selectedDrawer || drawerAllocQty < 1">Assign</button>
                 </form>
@@ -185,6 +191,7 @@ const showConfirm = ref(false)
 const printLoading = ref(false)
 const printMessage = ref('')
 const selectedBoxId = ref('')
+const selectedContainerId = ref(null)
 const selectedDrawer = ref(null)
 const boxAllocQty = ref(1)
 const drawerAllocQty = ref(1)
@@ -192,6 +199,8 @@ const editForm = ref({ legoId: '', legoColorUid: '', description: '', quantity: 
 
 const boxNameMap = computed(() => Object.fromEntries(boxes.value.map(b => [b.id, b.name])))
 const containerNameMap = computed(() => Object.fromEntries(containers.value.map(c => [c.id, c.name])))
+const containerDrawers = computed(() =>
+  drawers.value.filter(d => d.drawerContainerId === selectedContainerId.value))
 
 const unallocated = computed(() => {
   if (!piece.value) return 0
@@ -246,6 +255,10 @@ async function submitEdit() {
   }
 }
 
+function onContainerChange() {
+  selectedDrawer.value = null
+}
+
 async function submitBoxStorage() {
   storageError.value = ''
   try {
@@ -264,6 +277,7 @@ async function submitDrawerStorage() {
     const updated = await allocatePieceToDrawer(
       id, selectedDrawer.value.drawerContainerId, selectedDrawer.value.position, drawerAllocQty.value)
     piece.value = updated
+    selectedContainerId.value = null
     selectedDrawer.value = null
     drawerAllocQty.value = 1
   } catch (e) {
@@ -565,6 +579,14 @@ onMounted(load)
   display: flex;
   gap: var(--space-2);
   align-items: center;
+}
+
+.alloc-col {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  flex: 1;
+  min-width: 0;
 }
 
 .alloc-select {

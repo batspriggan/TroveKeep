@@ -40,7 +40,8 @@ public class LabelPrintService : ILabelPrintService
         var pieceImageUrl = PieceImageUrl(piece.Id);
         AddQrLine(lines, LabelCodes.ForPiece(piece.LegoId, piece.LegoColorId), piece.ImageCached ? pieceImageUrl : null);
 
-        return Serialize(lines, copies, size ?? _settings.DefaultSize);
+        // Bulk-piece labels default to the small format (optional size query overrides).
+        return Serialize(lines, copies, size ?? "small");
     }
 
     public string GetBulkPieceFileName(BulkPiece piece) =>

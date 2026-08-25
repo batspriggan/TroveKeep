@@ -27,6 +27,7 @@
         <table v-if="contents && contents.length">
           <thead>
             <tr>
+              <th></th>
               <th>Lego ID</th>
               <th>Color</th>
               <th>Description</th>
@@ -35,6 +36,9 @@
           </thead>
           <tbody>
             <tr v-for="p in contents" :key="p.id">
+              <td>
+                <img v-if="p.imageCached" :src="`/api/bulkpieces/${p.id}/image`" class="cell-thumb" alt="" />
+              </td>
               <td><RouterLink :to="`/bulkpieces/${p.id}`">{{ p.legoId }}</RouterLink></td>
               <td>
                 <span v-if="p.legoColorRgb" class="color-swatch" :style="{ background: '#' + p.legoColorRgb }"></span>
@@ -128,5 +132,14 @@ onMounted(load)
   border: 1px solid #ccc;
   vertical-align: middle;
   margin-right: 4px;
+}
+
+.cell-thumb {
+  width: 34px;
+  height: 34px;
+  object-fit: cover;
+  border-radius: 4px;
+  border: 1px solid #ddd;
+  display: block;
 }
 </style>
