@@ -63,7 +63,11 @@
                         <img v-if="p.imageCached" :src="`/api/bulkpieces/${p.id}/image`" class="drawer-thumb" :alt="p.legoId" />
                         <span v-else class="drawer-thumb ghost">{{ p.legoId }}</span>
                         <span class="drawer-thumb-caption">
-                          {{ p.description || p.legoId }}
+                          <span class="caption-name">{{ p.description || p.legoId }}</span>
+                          <span v-if="p.legoColorName" class="caption-color">
+                            <span v-if="p.legoColorRgb" class="color-swatch" :style="{ background: '#' + p.legoColorRgb }"></span>
+                            {{ p.legoColorName }}
+                          </span>
                         </span>
                       </RouterLink>
                     </div>
@@ -516,12 +520,36 @@ onMounted(load)
 }
 
 .drawer-thumb-caption {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
   font-size: 10px;
   line-height: 1.1;
   text-align: left;
   color: var(--color-text-secondary);
   overflow-wrap: anywhere;
   min-width: 0;
+}
+
+.caption-name {
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.caption-color {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 9px;
+  text-transform: capitalize;
+}
+
+.color-swatch {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+  border: 1px solid rgba(0, 0, 0, 0.15);
 }
 
 .td-count {

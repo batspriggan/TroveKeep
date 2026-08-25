@@ -51,7 +51,8 @@ public class DrawerContainersController : ControllerBase
     {
         var container = await _service.GetByIdWithDrawersAsync(id);
         if (container is null) return NotFound();
-        return Ok(MapToDetailResponse(container));
+        var colors = (await _colorRepo.GetAllAsync()).ToDictionary(c => c.Id, c => (c.Name, c.Rgb));
+        return Ok(MapToDetailResponse(container, colors));
     }
 
     [HttpPost]
@@ -185,21 +186,28 @@ public class DrawerContainersController : ControllerBase
     private static DrawerContainerResponse MapToResponse(DrawerContainer c) =>
         new(c.Id, c.Name, c.Description, c.ImageCached, c.Drawers.Count, c.CreatedAt, c.UpdatedAt, c.Version);
 
-    private static DrawerContainerDetailResponse MapToDetailResponse(DrawerContainer c) =>
+    private static DrawerContainerDetailResponse MapToDetailResponse(DrawerContainer c, Dictionary<int, (string Name, string Rgb)> colors) =>
         new(c.Id, c.Name, c.Description, c.ImageCached,
-            c.Drawers.Select(MapDrawerToResponse),
+            c.Drawers.Select(d => MapDrawerToResponse(d, colors)),
             c.CreatedAt, c.UpdatedAt, c.Version);
 
     private static DrawerResponse MapDrawerToResponse(Drawer d) =>
+        MapDrawerToResponse(d, new Dictionary<int, (string Name, string Rgb)>());
+
+    private static DrawerResponse MapDrawerToResponse(Drawer d, Dictionary<int, (string Name, string Rgb)> colors) =>
         new(d.Position, d.Label, d.DrawerContainerId, d.BulkPieces.Count,
             d.BulkPieces.Count > 0 ? d.BulkPieces.Select(p => p.LegoId) : null,
             d.CreatedAt, d.UpdatedAt,
-            d.BulkPieces.Select(p => new BulkPieceResponse(
-                p.Id, p.LegoId, p.LegoColorId, null, null,
-                p.Description, p.Quantity, p.ImageCached,
-                p.StorageAllocations.Select(a => new StorageAllocationResponse(
-                    a.StorageId, a.StoragePosition, a.StorageType.ToString(), a.Quantity)),
-                p.CreatedAt, p.UpdatedAt, p.Version)));
+            d.BulkPieces.Select(p =>
+            {
+                colors.TryGetValue(p.LegoColorId, out var color);
+                return new BulkPieceResponse(
+                    p.Id, p.LegoId, p.LegoColorId, color.Name, color.Rgb,
+                    p.Description, p.Quantity, p.ImageCached,
+                    p.StorageAllocations.Select(a => new StorageAllocationResponse(
+                        a.StorageId, a.StoragePosition, a.StorageType.ToString(), a.Quantity)),
+                    p.CreatedAt, p.UpdatedAt, p.Version);
+            }));
 
     private static string Sanitize(string value) =>
         string.Concat(value.Where(char.IsLetterOrDigit)).ToLowerInvariant();
