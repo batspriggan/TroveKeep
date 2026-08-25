@@ -124,7 +124,12 @@ async function toggleCamera() {
   cameraActive.value = true
 
   const onDecoded = (decodedText) => {
-    code.value = decodedText
+    // Ignore spurious/false-positive frames: only codes for labels belong to TroveKeep
+    // (TK:BP:, TK:SET:, TK:BOX:). This stops the camera from flashing closed on random
+    // patterns picked up by the webcam.
+    const t = (decodedText ?? '').trim()
+    if (!/^TK:(BP|SET|BOX):/i.test(t)) return
+    code.value = t
     stopCamera().then(resolve)
   }
   const onDecodeError = () => { /* per-frame decode errors are ignorable */ }
@@ -133,32 +138,39 @@ async function toggleCamera() {
   try {
     const { Html5Qrcode } = await import('html5-qrcode')
 
-    // Try the rear camera first, falling back to any available camera (webcam on
-    // desktop has no "environment" facing). Let Vite's lazy import + nextTick
-    // ensure the target <div> is mounted before html5-qrcode looks it up.
-    const constraints = [
+    // Ensure the target <div> is mounted and empty before html5-qrcode attaches to it.
+    await nextTick()
+    scanner = new Html5Qrcode('trovekeep-camera')
+
+    // Try the rear camera first, falling back to any available camera (a desktop webcam
+    // has no "environment" facing). Reuse the SAME scanner instance for both attempts and
+    // fully stop+clear it in between, so it does not fail on a dirty/duplicate video element.
+    const attempts = [
       { facingMode: { ideal: 'environment' } },
       { },
     ]
 
     let started = false
-    for (const constraint of constraints) {
-      await nextTick()
-      scanner = new Html5Qrcode('trovekeep-camera')
+    let lastError = null
+    for (const constraint of attempts) {
       try {
         await scanner.start(constraint, config, onDecoded, onDecodeError)
         started = true
         break
       } catch (err) {
+        lastError = err
         cameraError.value = `Camera attempt failed: ${err?.message ?? err}`
-        await stopCamera().catch(() => {})
-        if (constraint === constraints[constraints.length - 1]) {
-          throw err
-        }
+        try { await scanner.stop() } catch { /* not started yet */ }
+        try { scanner.clear() } catch { /* nothing to clear */ }
+        await nextTick()
       }
     }
 
-    if (started) cameraError.value = ''
+    if (started) {
+      cameraError.value = ''
+    } else {
+      throw lastError ?? new Error('no camera could be started')
+    }
   } catch (e) {
     cameraError.value = `Camera unavailable: ${e?.message ?? e}`
     cameraActive.value = false
