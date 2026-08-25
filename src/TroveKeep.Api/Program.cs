@@ -67,7 +67,8 @@ var app = builder.Build();
 
 Console.WriteLine("Running database migrations...");
 await new MigrationRunner(
-    app.Services.GetRequiredService<IMongoDatabase>()
+    app.Services.GetRequiredService<IMongoDatabase>(),
+    builder.Configuration["Migration:BackupDir"]
 ).RunAsync();
 Console.WriteLine("Database migrations completed.");
 
