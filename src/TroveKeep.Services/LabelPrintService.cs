@@ -47,6 +47,30 @@ public class LabelPrintService : ILabelPrintService
     public string GetBulkPieceFileName(BulkPiece piece) =>
         $"piece-{Sanitize(piece.LegoId)}-{piece.LegoColorId}.json";
 
+    /// <summary>
+    /// Addresses a bulk-piece label to a specific storage location:
+    /// 1) "{legoId} {colorName}", 2) the location line, 3) a row with QR + piece image.
+    /// Always rendered as the small format.
+    /// </summary>
+    public string BuildBulkPieceLocationLabel(BulkPiece piece, string? colorName, string? locationLine, int? copies = null)
+    {
+        var lines = new List<object>
+        {
+            $"{piece.LegoId}{(!string.IsNullOrWhiteSpace(colorName) ? $" {colorName}" : "")}",
+        };
+
+        if (!string.IsNullOrWhiteSpace(locationLine))
+            lines.Add(locationLine);
+
+        var pieceImageUrl = PieceImageUrl(piece.Id);
+        AddQrLine(lines, LabelCodes.ForPiece(piece.LegoId, piece.LegoColorId), piece.ImageCached ? pieceImageUrl : null);
+
+        return Serialize(lines, copies, "small");
+    }
+
+    public string GetBulkPieceLocationFileName(BulkPiece piece, int index) =>
+        $"piece-{Sanitize(piece.LegoId)}-{piece.LegoColorId}-{index}.json";
+
     // ---- Set ----
 
     public string BuildLegoSetLabel(LegoSet set, int? copies = null, string? size = null)

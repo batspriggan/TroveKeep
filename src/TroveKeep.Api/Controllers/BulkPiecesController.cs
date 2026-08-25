@@ -1,3 +1,4 @@
+using System.IO.Compression;
 using Microsoft.AspNetCore.Mvc;
 using TroveKeep.Api.DTOs.Requests;
 using TroveKeep.Api.DTOs.Responses;
@@ -17,14 +18,18 @@ public class BulkPiecesController : ControllerBase
     private readonly IImageService _imageService;
     private readonly IPartInventoryArchiveRepository _partInventoryRepo;
     private readonly ILabelPrintService _labelPrintService;
+    private readonly IBoxRepository _boxRepo;
+    private readonly IDrawerContainerRepository _drawerContainerRepo;
 
-    public BulkPiecesController(IBulkPieceService service, IColorRepository colorRepo, IImageService imageService, IPartInventoryArchiveRepository partInventoryRepo, ILabelPrintService labelPrintService)
+    public BulkPiecesController(IBulkPieceService service, IColorRepository colorRepo, IImageService imageService, IPartInventoryArchiveRepository partInventoryRepo, ILabelPrintService labelPrintService, IBoxRepository boxRepo, IDrawerContainerRepository drawerContainerRepo)
     {
         _service = service;
         _colorRepo = colorRepo;
         _imageService = imageService;
         _partInventoryRepo = partInventoryRepo;
         _labelPrintService = labelPrintService;
+        _boxRepo = boxRepo;
+        _drawerContainerRepo = drawerContainerRepo;
     }
 
     [HttpGet]
@@ -203,15 +208,49 @@ public class BulkPiecesController : ControllerBase
     [HttpGet("{id:guid}/label-file")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetLabelFile(Guid id, [FromQuery] int? copies = null, [FromQuery] string? size = null)
+    public async Task<IActionResult> GetLabelFile(Guid id, [FromQuery] int? copies = null)
     {
         var piece = await _service.GetByIdAsync(id);
         if (piece is null) return NotFound();
 
-        var json = _labelPrintService.BuildBulkPieceLabel(piece, copies, size);
-        var fileName = _labelPrintService.GetBulkPieceFileName(piece);
+        var allocations = piece.StorageAllocations ?? [];
+        var color = (await _colorRepo.GetAllAsync()).FirstOrDefault(c => c.Id == piece.LegoColorId);
+        var colorName = color?.Name;
 
-        return File(System.Text.Encoding.UTF8.GetBytes(json), "application/json", fileName);
+        var boxIds = allocations.Where(a => a.StorageType == StorageType.Box).Select(a => a.StorageId).Distinct().ToList();
+        var containerIds = allocations.Where(a => a.StorageType == StorageType.Drawer).Select(a => a.StorageId).Distinct().ToList();
+        var boxes = boxIds.Count > 0
+            ? (await _boxRepo.GetByIdsAsync(boxIds)).ToDictionary(b => b.Id)
+            : new Dictionary<Guid, Box>();
+        var containers = containerIds.Count > 0
+            ? (await _drawerContainerRepo.GetByIdsAsync(containerIds)).ToDictionary(c => c.Id)
+            : new Dictionary<Guid, DrawerContainer>();
+
+        using var ms = new MemoryStream();
+        using (var zip = new ZipArchive(ms, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            var index = 0;
+            foreach (var a in allocations)
+            {
+                index++;
+                string locationLine;
+                if (a.StorageType == StorageType.Box)
+                {
+                    locationLine = boxes.GetValueOrDefault(a.StorageId)?.Name ?? "(unknown box)";
+                }
+                else
+                {
+                    var container = containers.GetValueOrDefault(a.StorageId);
+                    locationLine = $"{container?.Name ?? "(unknown container)"} - {a.StoragePosition}";
+                }
+
+                var entry = zip.CreateEntry(_labelPrintService.GetBulkPieceLocationFileName(piece, index), CompressionLevel.Optimal);
+                await using var writer = new StreamWriter(entry.Open());
+                await writer.WriteAsync(_labelPrintService.BuildBulkPieceLocationLabel(piece, colorName, locationLine, copies));
+            }
+        }
+
+        return File(ms.ToArray(), "application/zip", $"piece-{piece.LegoId}-{piece.LegoColorId}-labels.zip");
     }
 
     private async Task<Dictionary<int, (string Name, string Rgb)>> BuildColorLookupAsync()

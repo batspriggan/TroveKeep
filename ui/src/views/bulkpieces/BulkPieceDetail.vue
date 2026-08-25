@@ -18,7 +18,7 @@
           <span class="color-label">{{ piece.legoColorName ?? `Color #${piece.legoColorId}` }}</span>
         </div>
         <div class="piece-actions">
-          <button class="secondary" :disabled="printLoading" @click="printLabel">
+          <button class="secondary" :disabled="printLoading || !(piece.storageAllocations?.length)" @click="printLabel">
             {{ printLoading ? 'Downloading…' : 'Download Label' }}
           </button>
         </div>
@@ -334,7 +334,7 @@ async function printLabel() {
   printMessage.value = ''
   try {
     downloadBulkPieceLabel(id)
-    printMessage.value = 'Label file downloading — save it to the label-tool watch folder.'
+    printMessage.value = 'Labels zip downloading — extract it into the label-tool watch folder.'
   } catch (e) {
     printMessage.value = e.message
   } finally {

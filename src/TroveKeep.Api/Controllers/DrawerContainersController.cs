@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using TroveKeep.Api.DTOs.Requests;
 using TroveKeep.Api.DTOs.Responses;
 using TroveKeep.Core.Exceptions;
+using TroveKeep.Core.Interfaces.Repositories;
 using TroveKeep.Core.Interfaces.Services;
 using TroveKeep.Core.Models;
 
@@ -15,12 +16,14 @@ public class DrawerContainersController : ControllerBase
     private readonly IDrawerContainerService _service;
     private readonly IImageService _imageService;
     private readonly ILabelPrintService _labelPrintService;
+    private readonly IColorRepository _colorRepo;
 
-    public DrawerContainersController(IDrawerContainerService service, IImageService imageService, ILabelPrintService labelPrintService)
+    public DrawerContainersController(IDrawerContainerService service, IImageService imageService, ILabelPrintService labelPrintService, IColorRepository colorRepo)
     {
         _service = service;
         _imageService = imageService;
         _labelPrintService = labelPrintService;
+        _colorRepo = colorRepo;
     }
 
     [HttpGet]
@@ -155,18 +158,23 @@ public class DrawerContainersController : ControllerBase
         var container = await _service.GetByIdWithDrawersAsync(id);
         if (container is null) return NotFound();
 
-        var pieces = (container.Drawers ?? [])
-            .SelectMany(d => d.BulkPieces ?? [])
-            .ToList();
+        var colors = (await _colorRepo.GetAllAsync()).ToDictionary(c => c.Id, c => c.Name);
 
         using var ms = new MemoryStream();
         using (var zip = new ZipArchive(ms, ZipArchiveMode.Create, leaveOpen: true))
         {
-            foreach (var p in pieces)
+            var index = 0;
+            foreach (var drawer in container.Drawers ?? [])
             {
-                var entry = zip.CreateEntry(_labelPrintService.GetBulkPieceFileName(p), CompressionLevel.Optimal);
-                using var writer = new StreamWriter(entry.Open());
-                await writer.WriteAsync(_labelPrintService.BuildBulkPieceLabel(p));
+                foreach (var p in drawer.BulkPieces ?? [])
+                {
+                    index++;
+                    colors.TryGetValue(p.LegoColorId, out var colorName);
+                    var locationLine = $"{container.Name} - {drawer.Position}";
+                    var entry = zip.CreateEntry(_labelPrintService.GetBulkPieceLocationFileName(p, index), CompressionLevel.Optimal);
+                    await using var writer = new StreamWriter(entry.Open());
+                    await writer.WriteAsync(_labelPrintService.BuildBulkPieceLocationLabel(p, colorName, locationLine));
+                }
             }
         }
 

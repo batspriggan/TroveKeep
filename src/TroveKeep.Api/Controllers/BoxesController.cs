@@ -89,15 +89,19 @@ public class BoxesController : ControllerBase
         var box = await _service.GetByIdWithContentsAsync(id);
         if (box is null) return NotFound();
 
-        var pieces = box.BulkPieces ?? [];
+        var colors = (await _colorRepo.GetAllAsync()).ToDictionary(c => c.Id, c => c.Name);
+
         using var ms = new MemoryStream();
         using (var zip = new ZipArchive(ms, ZipArchiveMode.Create, leaveOpen: true))
         {
-            foreach (var p in pieces)
+            var index = 0;
+            foreach (var p in box.BulkPieces ?? [])
             {
-                var entry = zip.CreateEntry(_labelPrintService.GetBulkPieceFileName(p), CompressionLevel.Optimal);
-                using var writer = new StreamWriter(entry.Open());
-                await writer.WriteAsync(_labelPrintService.BuildBulkPieceLabel(p));
+                index++;
+                colors.TryGetValue(p.LegoColorId, out var colorName);
+                var entry = zip.CreateEntry(_labelPrintService.GetBulkPieceLocationFileName(p, index), CompressionLevel.Optimal);
+                await using var writer = new StreamWriter(entry.Open());
+                await writer.WriteAsync(_labelPrintService.BuildBulkPieceLocationLabel(p, colorName, box.Name));
             }
         }
 
