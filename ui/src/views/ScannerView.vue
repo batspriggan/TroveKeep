@@ -148,16 +148,22 @@ async function toggleCamera() {
     stopCamera().then(resolve)
   }
   const onDecodeError = () => { /* per-frame decode errors are ignorable */ }
-  // Lower fps for sharper frames and a viewfinder-relative qrbox large enough for the QR
-  // (dense neutral UUID codes need more pixels than a tiny box gives).
-  const config = {
+
+  // qrbox is proportional to the viewfinder so the QR gets enough pixels; request a high
+  // camera resolution per candidate below. (deviceId is carried inside videoConstraints,
+  // otherwise html5-qrcode ignores the first start() argument when videoConstraints is set.)
+  const baseConfig = (deviceId) => ({
     fps: 5,
-    aspectRatio: 1,
     qrbox: (viewfinderWidth, viewfinderHeight) => {
       const side = Math.max(220, Math.round(Math.min(viewfinderWidth, viewfinderHeight) * 0.6))
       return { width: side, height: side }
     },
-  }
+    videoConstraints: {
+      deviceId: { exact: deviceId },
+      width: { ideal: 1280 },
+      height: { ideal: 720 },
+    },
+  })
 
   try {
     const { Html5Qrcode } = await import('html5-qrcode')
@@ -182,7 +188,7 @@ async function toggleCamera() {
     let lastError = null
     for (const deviceId of candidates) {
       try {
-        await scanner.start(deviceId, config, onDecoded, onDecodeError)
+        await scanner.start(deviceId, baseConfig(deviceId), onDecoded, onDecodeError)
         cameraError.value = ''
         return
       } catch (err) {
