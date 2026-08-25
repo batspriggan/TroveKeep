@@ -101,8 +101,65 @@ podman-compose -f deploy/podman-compose.build.yml up -d --build
 | `ASPNETCORE_ENVIRONMENT` | `Production` | ASP.NET Core environment |
 | `MongoDb__ConnectionString` | `mongodb://admin:password@mongo:27017` | MongoDB connection string |
 | `MongoDb__DatabaseName` | `trovekeep` | MongoDB database name |
+| `Migration__BackupDir` | *(empty)* | Directory (host-visible) where an automatic full backup is written before any pending migration runs. **Required** when there are pending migrations — if unset or the backup fails, startup aborts and no migration runs. Must align with the backup volume mount (e.g. `./data:/data` + `Migration__BackupDir=/data/migrations`). |
+| `LabelTool__PublicBaseUrl` | *(empty)* | Public base URL of the API (no trailing slash) used to build the absolute image URL embedded in a label (label-tool downloads the image from this URL, v1.0.0+). Labels fall back to QR-only when this is unset. |
 
 > **Note:** Change the default MongoDB credentials before exposing the instance to a network.
+
+## Migrations & pre-migration backup
+
+Schema changes are applied as ordered **migrations** in `src/TroveKeep.Migrations/`. The schema version is tracked in the `meta` collection (`schema_version`) and migrations run **on startup**, in order. Never drop the database.
+
+**Automatic backup (fail-fast):** before any pending migration, the runner writes a **full gzip-JSON snapshot** of every collection to `Migration__BackupDir` (filename `auto-backup-v{currentVersion}-{timestamp}.json.gz`). This safety net lets you roll back a destructive migration (e.g. re-keying) to the exact pre-migration state.
+
+Fail-fast guarantees:
+- If `Migration__BackupDir` is **not configured** or the backup write **fails** → startup **aborts** and **no migration runs** (the database is untouched).
+- If a **migration fails** → startup stops immediately: that migration is **not** marked as applied (`schema_version` unchanged) and no subsequent migration runs.
+
+**Deploying with pending migrations:**
+
+```yaml
+services:
+  api:
+    volumes:
+      - ./data:/data          # makes the backups visible/hosted on disk
+    environment:
+      - Migration__BackupDir=/data/migrations
+```
+
+On startup the runner writes `auto-backup-v{currentVersion}-*.json.gz` into `./data/migrations/` (host), then applies the pending migration(s).
+
+## Rollback
+
+A backup written by the migration runner is stored as **gzip-compressed MongoDB extended JSON** and is **not** restored automatically. Each top-level key is a **collection name** and holds an array of documents (with `_id`); MongoDB-specific types are serialized in extended-JSON form (e.g. GUID → `{"$binary": {"base64": ..., "subType": "04"}}`, string keys such as `set_images._id` → plain string).
+
+To roll back a collection to its pre-migration state from the host shell:
+
+```bash
+# 1. Locate the snapshot you want (pre-migration).
+ls -la ./data/migrations/                    # e.g. auto-backup-v1-2026-08-25_15-54-30.json.gz
+
+# 2. Unpack it on the host (or in the container) to a plain .json.
+gunzip -c auto-backup-v1-2026-08-25_15-54-30.json.gz > backup.json
+
+# 3. Copy it into the API container and restore the collection(s) you need with mongosh.
+docker cp backup.json trovekeep-api-1:/tmp/backup.json
+
+docker exec -i trovekeep-mongo-1 mongosh -u admin -p password --authenticationDatabase admin trovekeep \
+  --eval '
+    const fs = require("fs");
+    const data = EJSON.parse(fs.readFileSync("/tmp/backup.json", "utf8"));
+    // Restore per collection, e.g. re-keyed set_images back to their original _id:
+    for (const doc of data.set_images) {
+      const id = doc._id;                 // original pre-migration _id (e.g. set number)
+      db.getCollection("set_images").replaceOne({ _id: id }, doc, { upsert: true });
+    }
+  '
+```
+
+`EJSON.parse` converts the extended-JSON values (GUID `$binary`, etc.) into real BSON on import, so the documents can be written back as-is keyed by their original `_id`.
+
+> 💡 Always keep the **pre-migration** snapshot — it is your exact rollback point. Stop trusting the app (or run on a stopped instance) while restoring, and double-check `meta.schema_version` afterwards so the runner does not re-apply migrations on the next startup after a full rollback.
 
 ## Project structure
 
