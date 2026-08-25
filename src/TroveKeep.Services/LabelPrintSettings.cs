@@ -17,6 +17,13 @@ public class LabelPrintSettings
     /// <summary>Prefix used for the label title (e.g. "LEGO" -> "LEGO 40469").</summary>
     public string Prefix { get; set; } = "LEGO";
 
+    /// <summary>
+    /// Public base URL of the TroveKeep API (no trailing slash), used to build the
+    /// absolute image URL embedded in a label. label-tool downloads the image from
+    /// this URL before printing. Configured via environment (LabelTool__PublicBaseUrl).
+    /// </summary>
+    public string? PublicBaseUrl { get; set; }
+
     /// <summary>Timeout in seconds for the print subprocess.</summary>
     public int TimeoutSeconds { get; set; } = 60;
 }

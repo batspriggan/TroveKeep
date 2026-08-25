@@ -64,7 +64,9 @@ public class SetsController : ControllerBase
         };
         var created = await _service.CreateAsync(model);
         if (!string.IsNullOrWhiteSpace(request.PhotoUrl))
-            _ = _imageService.DownloadAndStoreAsync(created.Id, created.SetNumber, request.PhotoUrl, ImageReferenceType.Set);
+            // Reference image by {set.Id} so that sets and MOCs have a unique
+            // image key (SetNumber is empty for MOCs and shared for all of them).
+            _ = _imageService.DownloadAndStoreAsync(created.Id, created.Id.ToString(), request.PhotoUrl, ImageReferenceType.Set);
         return CreatedAtAction(nameof(GetById), new { id = created.Id }, MapToResponse(created, 0));
     }
 
@@ -75,7 +77,7 @@ public class SetsController : ControllerBase
     {
         var set = await _service.GetByIdAsync(id);
         if (set is null) return NotFound();
-        var image = await _imageService.GetImageAsync(set.SetNumber, ImageReferenceType.Set);
+        var image = await _imageService.GetImageAsync(set.Id.ToString(), ImageReferenceType.Set);
         if (image is null) return NotFound();
         return File(image.Data, image.ContentType);
     }

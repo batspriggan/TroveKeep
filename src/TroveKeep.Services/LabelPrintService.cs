@@ -37,7 +37,8 @@ public class LabelPrintService : ILabelPrintService
         if (!string.IsNullOrWhiteSpace(piece.Description))
             lines.Add(piece.Description);
 
-        lines.Add(Code("qr", LabelCodes.ForPiece(piece.LegoId, piece.LegoColorId)));
+        var pieceImageUrl = PieceImageUrl(piece.Id);
+        AddQrLine(lines, LabelCodes.ForPiece(piece.LegoId, piece.LegoColorId), piece.ImageCached ? pieceImageUrl : null);
 
         return Serialize(lines, copies, size ?? _settings.DefaultSize);
     }
@@ -57,7 +58,8 @@ public class LabelPrintService : ILabelPrintService
         if (!string.IsNullOrWhiteSpace(set.Description))
             lines.Add(set.Description);
 
-        lines.Add(Code("qr", LabelCodes.ForSet(set.SetNumber)));
+        var setImageUrl = SetImageUrl(set.Id);
+        AddQrLine(lines, LabelCodes.ForSet(set.SetNumber), set.ImageCached ? setImageUrl : null);
 
         return Serialize(lines, copies, size ?? _settings.DefaultSize);
     }
@@ -108,8 +110,6 @@ public class LabelPrintService : ILabelPrintService
     {
         var effectiveCopies = copies is > 0 ? copies.Value : _settings.DefaultCopies;
 
-        // Note: image support is intentionally omitted until label-tool supports an
-        // "image" field (label-tool issue #13). Item images can be added here once available.
         var labelFile = new LabelFile(lines, effectiveCopies, size);
         return JsonSerializer.Serialize(labelFile, JsonOptions);
     }
@@ -124,12 +124,55 @@ public class LabelPrintService : ILabelPrintService
 
     private static LabelCodeLine Code(string code, string value) => new(code, value);
 
+    /// <summary>
+    /// Adds the QR code to the label, optionally alongside the piece/set image in a
+    /// composite <c>row</c> when the image is cached and a public base URL is configured.
+    /// Without an image (or base URL) only the QR is emitted, as before.
+    /// </summary>
+    private void AddQrLine(List<object> lines, string codeValue, string? imageUrl)
+    {
+        if (string.IsNullOrEmpty(imageUrl))
+        {
+            lines.Add(Code("qr", codeValue));
+            return;
+        }
+
+        lines.Add(new LabelRowLine(
+        [
+            new LabelCodeLine("qr", codeValue),
+            new LabelImageLine(imageUrl),
+        ]));
+    }
+
+    private string? PieceImageUrl(Guid pieceId) =>
+        ImageUrl($"/api/bulkpieces/{pieceId}/image");
+
+    private string? SetImageUrl(Guid setId) =>
+        ImageUrl($"/api/sets/{setId}/image");
+
+    private string? ImageUrl(string relativePath)
+    {
+        var baseUrl = _settings.PublicBaseUrl;
+        return string.IsNullOrWhiteSpace(baseUrl)
+            ? null
+            : $"{baseUrl.TrimEnd('/')}{relativePath}";
+    }
+
     private static string Sanitize(string value) =>
         string.Concat(value.Where(char.IsLetterOrDigit)).ToLowerInvariant();
 
     private sealed record LabelCodeLine(
         [property: JsonPropertyName("code")] string Code,
         [property: JsonPropertyName("value")] string Value);
+
+    /// <summary>Image element (<c>{"image": "URL|path", "mode": "bw"}</c>).</summary>
+    private sealed record LabelImageLine(
+        [property: JsonPropertyName("image")] string Image,
+        [property: JsonPropertyName("mode")] string Mode = "bw");
+
+    /// <summary>Composite row: multiple graphic elements (<c>{"row": [...]}</c>).</summary>
+    private sealed record LabelRowLine(
+        [property: JsonPropertyName("row")] List<object> Row);
 
     private sealed record LabelFile(
         [property: JsonPropertyName("lines")] List<object> Lines,
