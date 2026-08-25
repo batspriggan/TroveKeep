@@ -400,6 +400,17 @@ onMounted(load)
   .mobile-only {
     display: inline-flex;
   }
+
+  /* Compact on mobile: show thumbnails only, laid out horizontally. */
+  .drawer-tumbs {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+
+  .drawer-thumb-caption {
+    display: none;
+  }
 }
 
 /* ── Drawers table ── */
@@ -439,17 +450,17 @@ onMounted(load)
 
 .drawer-tumbs {
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  align-items: flex-start;
+  flex-direction: column;
+  gap: 4px;
+  align-items: stretch;
 }
 
 .drawer-thumb-wrap {
   display: inline-flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
-  gap: 2px;
-  max-width: 90px;
+  gap: 6px;
+  max-width: 100%;
   text-decoration: none;
   color: var(--color-text-secondary);
 }
@@ -465,6 +476,7 @@ onMounted(load)
   border-radius: 4px;
   border: 1px solid #ddd;
   display: block;
+  flex-shrink: 0;
 }
 
 .drawer-thumb.ghost {
@@ -477,14 +489,16 @@ onMounted(load)
   font-size: 8px;
   font-family: var(--font-mono);
   box-sizing: border-box;
+  flex-shrink: 0;
 }
 
 .drawer-thumb-caption {
   font-size: 10px;
   line-height: 1.1;
-  text-align: center;
+  text-align: left;
   color: var(--color-text-secondary);
   overflow-wrap: anywhere;
+  min-width: 0;
 }
 
 .td-count {
