@@ -142,29 +142,38 @@ async function toggleCamera() {
     await nextTick()
     scanner = new Html5Qrcode('trovekeep-camera')
 
-    // html5-qrcode only accepts facingMode as a string ('environment'/'user') or
-    // { exact: ... } — NOT { ideal: ... }. Prefer the rear camera; on desktop (no rear
-    // camera) that throws OverconstrainedError, so fall back to any camera with a NEW
-    // Html5Qrcode instance (reusing the same one with stop()/start() triggers
-    // "already under transition").
-    const start = (facing) => scanner.start(
-      facing ? { facingMode: facing } : {},
-      config,
-      onDecoded,
-      onDecodeError,
-    )
+    // Per html5-qrcode source (createVideoConstraints), a config object is ONLY valid
+    // with exactly one key, either { facingMode: 'user'|'environment' } or
+    // { deviceId: ... } — never an empty object. Prefer the rear camera, then (on
+    // desktop where there is no rear camera) fall back to 'user'. Use a FRESH
+    // Html5Qrcode instance per attempt: stop()/start() on the same instance raises
+    // "already under transition".
+    const attempts = [
+      { facingMode: 'environment' },
+      { facingMode: 'user' },
+    ]
 
-    try {
-      await start('environment')
-    } catch {
-      // fall back to the default (any) camera on a fresh instance
-      try { scanner.clear() } catch { /* ignore */ }
-      await nextTick()
-      scanner = new Html5Qrcode('trovekeep-camera')
-      await start()
+    let lastError = null
+    for (let i = 0; i < attempts.length; i++) {
+      if (i > 0) {
+        try { scanner.clear() } catch { /* ignore */ }
+        await nextTick()
+        scanner = new Html5Qrcode('trovekeep-camera')
+        await nextTick()
+      }
+      try {
+        await scanner.start(attempts[i], config, onDecoded, onDecodeError)
+        cameraError.value = ''
+        return
+      } catch (err) {
+        lastError = err
+        cameraError.value = `Camera attempt failed: ${err?.message ?? err}`
+      }
     }
 
-    cameraError.value = ''
+    cameraError.value = `Camera unavailable: ${lastError?.message ?? 'no camera could be started'}`
+    cameraActive.value = false
+    await stopCamera().catch(() => {})
   } catch (e) {
     cameraError.value = `Camera unavailable: ${e?.message ?? e}`
     cameraActive.value = false
