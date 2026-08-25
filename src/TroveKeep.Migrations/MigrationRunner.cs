@@ -43,19 +43,15 @@ public class MigrationRunner
                                  .OrderBy(m => m.VersionFrom)
                                  .ToList();
 
-        // Safety net: a full backup of every collection is taken before any pending
-        // migration runs, so a destructive re-key (e.g. migration 002) can be rolled back.
+        // Fail-fast safety net: a full backup of every collection must succeed before any
+        // pending migration runs, so a destructive migration (e.g. #002) can always be
+        // rolled back. If the backup is not configured or fails, we abort without touching
+        // the database. Likewise, if a migration throws, we stop immediately: the failed
+        // migration is never marked as applied (schema_version is unchanged) and NO
+        // subsequent migration runs.
         if (pending.Count > 0)
         {
-            try
-            {
-                await BackupAsync(currentVersion);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"WARNING: pre-migration backup failed ({ex.Message}); continuing with migration. " +
-                                  "Consider configuring Migration:BackupDir.");
-            }
+            await BackupAsync(currentVersion);
         }
 
         foreach (var migration in pending)
@@ -66,6 +62,7 @@ public class MigrationRunner
                 Builders<BsonDocument>.Filter.Eq("_id", "schema_version"),
                 new BsonDocument { ["_id"] = "schema_version", ["version"] = migration.VersionTo },
                 new ReplaceOptions { IsUpsert = true });
+            Console.WriteLine($"Migration {migration.VersionFrom} -> {migration.VersionTo} completed.");
         }
     }
 
@@ -77,27 +74,21 @@ public class MigrationRunner
     private async Task BackupAsync(int currentVersion)
     {
         if (_backupDir is null)
-        {
-            Console.WriteLine("Pre-migration backup skipped (no Migration:BackupDir configured).");
-            return;
-        }
+            throw new InvalidOperationException(
+                "Pre-migration backup required but Migration:BackupDir is not configured. " +
+                "Refusing to run migrations without a backup. Set Migration__BackupDir (env) " +
+                "or Migration:BackupDir in appsettings.");
 
         Directory.CreateDirectory(_backupDir);
 
         var root = new BsonDocument();
         foreach (var name in BackupCollections)
         {
+            // Reading a missing collection returns an empty list (Mongo creates it lazily),
+            // so no try/catch around reads: any real read error must propagate (fail-fast).
             var collection = _db.GetCollection<BsonDocument>(name);
-            try
-            {
-                var docs = await collection.Find(_ => true).ToListAsync();
-                root[name] = new BsonArray(docs);
-            }
-            catch (MongoException)
-            {
-                // Collection missing or not yet created — represent it as empty.
-                root[name] = new BsonArray();
-            }
+            var docs = await collection.Find(_ => true).ToListAsync();
+            root[name] = new BsonArray(docs);
         }
 
         var fileName = $"auto-backup-v{currentVersion}-{DateTime.UtcNow:yyyy-MM-dd_HH-mm-ss}.json.gz";
