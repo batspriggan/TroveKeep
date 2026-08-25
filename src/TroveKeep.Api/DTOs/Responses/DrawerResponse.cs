@@ -7,7 +7,8 @@ public record DrawerResponse(
     int BulkPieceCount,
     IEnumerable<string>? ContentSummary,
     DateTimeOffset CreatedAt,
-    DateTimeOffset UpdatedAt);
+    DateTimeOffset UpdatedAt,
+    IEnumerable<BulkPieceResponse>? BulkPieces = null);
 
 public record DrawerDetailResponse(
     int Position,

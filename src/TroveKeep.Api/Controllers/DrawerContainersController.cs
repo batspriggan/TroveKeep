@@ -155,5 +155,11 @@ public class DrawerContainersController : ControllerBase
     private static DrawerResponse MapDrawerToResponse(Drawer d) =>
         new(d.Position, d.Label, d.DrawerContainerId, d.BulkPieces.Count,
             d.BulkPieces.Count > 0 ? d.BulkPieces.Select(p => p.LegoId) : null,
-            d.CreatedAt, d.UpdatedAt);
+            d.CreatedAt, d.UpdatedAt,
+            d.BulkPieces.Select(p => new BulkPieceResponse(
+                p.Id, p.LegoId, p.LegoColorId, null, null,
+                p.Description, p.Quantity, p.ImageCached,
+                p.StorageAllocations.Select(a => new StorageAllocationResponse(
+                    a.StorageId, a.StoragePosition, a.StorageType.ToString(), a.Quantity)),
+                p.CreatedAt, p.UpdatedAt, p.Version)));
 }

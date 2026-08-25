@@ -48,11 +48,23 @@
               </thead>
               <tbody>
                 <tr v-for="d in drawers" :key="d.position">
-                  <td class="td-pos">{{ d.position }}</td>
+                  <td class="td-pos">
+                    <RouterLink :to="`/drawers/${id}/${d.position}`" class="pos-link">{{ d.position }}</RouterLink>
+                  </td>
                   <td>
-                    <RouterLink :to="`/drawers/${id}/${d.position}`" class="drawer-link">
-                      {{ d.contentSummary?.join(', ') || '(empty)' }}
-                    </RouterLink>
+                    <div v-if="d.bulkPieces?.length" class="drawer-tumbs">
+                      <RouterLink
+                        v-for="p in d.bulkPieces"
+                        :key="p.id"
+                        :to="`/bulkpieces/${p.id}`"
+                        class="drawer-thumb-wrap"
+                        :title="p.legoId"
+                      >
+                        <img v-if="p.imageCached" :src="`/api/bulkpieces/${p.id}/image`" class="drawer-thumb" :alt="p.legoId" />
+                        <span v-else class="drawer-thumb ghost">{{ p.legoId }}</span>
+                      </RouterLink>
+                    </div>
+                    <div v-else>—</div>
                   </td>
                   <td v-if="settings.bulkPiecesEnabled" class="td-count">{{ d.bulkPieceCount }}</td>
                   <td class="td-action">
@@ -409,6 +421,49 @@ onMounted(load)
 .td-pos {
   font-family: var(--font-mono);
   font-weight: 500;
+}
+
+.pos-link {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  color: var(--color-accent);
+  text-decoration: none;
+}
+
+.pos-link:hover {
+  text-decoration: underline;
+}
+
+.drawer-tumbs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+}
+
+.drawer-thumb-wrap {
+  display: inline-flex;
+}
+
+.drawer-thumb {
+  width: 30px;
+  height: 30px;
+  object-fit: cover;
+  border-radius: 4px;
+  border: 1px solid #ddd;
+  display: block;
+}
+
+.drawer-thumb.ghost {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-surface-alt);
+  border: 1px dashed var(--color-border);
+  color: var(--color-text-muted);
+  font-size: 8px;
+  font-family: var(--font-mono);
+  box-sizing: border-box;
 }
 
 .drawer-link {
