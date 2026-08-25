@@ -16,17 +16,15 @@ public class BulkPiecesController : ControllerBase
     private readonly IBulkPieceService _service;
     private readonly IColorRepository _colorRepo;
     private readonly IImageService _imageService;
-    private readonly IPartInventoryArchiveRepository _partInventoryRepo;
     private readonly ILabelPrintService _labelPrintService;
     private readonly IBoxRepository _boxRepo;
     private readonly IDrawerContainerRepository _drawerContainerRepo;
 
-    public BulkPiecesController(IBulkPieceService service, IColorRepository colorRepo, IImageService imageService, IPartInventoryArchiveRepository partInventoryRepo, ILabelPrintService labelPrintService, IBoxRepository boxRepo, IDrawerContainerRepository drawerContainerRepo)
+    public BulkPiecesController(IBulkPieceService service, IColorRepository colorRepo, IImageService imageService, ILabelPrintService labelPrintService, IBoxRepository boxRepo, IDrawerContainerRepository drawerContainerRepo)
     {
         _service = service;
         _colorRepo = colorRepo;
         _imageService = imageService;
-        _partInventoryRepo = partInventoryRepo;
         _labelPrintService = labelPrintService;
         _boxRepo = boxRepo;
         _drawerContainerRepo = drawerContainerRepo;
@@ -70,17 +68,27 @@ public class BulkPiecesController : ControllerBase
             Quantity = request.Quantity,
         };
         var created = await _service.CreateAsync(model);
-        var partInventory = await _partInventoryRepo.GetByPartNumAsync(created.LegoId);
-        if (partInventory is not null && !string.IsNullOrWhiteSpace(partInventory.ImgUrl))
-        {
-            var existing = await _imageService.GetImageAsync(created.LegoId, ImageReferenceType.Part);
-            if (existing is not null)
-                await _service.UpdateImageCachedAsync(created.Id);
-            else
-                _ = _imageService.DownloadAndStoreAsync(created.Id, created.LegoId, partInventory.ImgUrl, ImageReferenceType.Part);
-        }
+        _ = QueuePartImageAsync(created);
         var colors = await BuildColorLookupAsync();
         return CreatedAtAction(nameof(GetById), new { id = created.Id }, MapToResponse(created, colors));
+    }
+
+    private const string RebrickableLdrawBase = "https://cdn.rebrickable.com/media/parts/ldraw";
+
+    /// <summary>
+    /// Queues a fire-and-forget part image download, addressed by (partNum, colorId) via the
+    /// Rebrickable LDRAW render. Falls back to the color-0 render when the exact color has no
+    /// image available, so the piece still shows an indicative image instead of none.
+    /// </summary>
+    private async Task QueuePartImageAsync(BulkPiece piece)
+    {
+        var url = $"{RebrickableLdrawBase}/{piece.LegoColorId}/{piece.LegoId}.png";
+        var ok = await _imageService.DownloadAndStoreAsync(piece.Id, piece.LegoId, url, ImageReferenceType.Part, piece.LegoColorId);
+        if (!ok && piece.LegoColorId != 0)
+        {
+            var url0 = $"{RebrickableLdrawBase}/0/{piece.LegoId}.png";
+            await _imageService.DownloadAndStoreAsync(piece.Id, piece.LegoId, url0, ImageReferenceType.Part, piece.LegoColorId);
+        }
     }
 
     [HttpPut("{id:guid}")]
@@ -219,7 +227,7 @@ public class BulkPiecesController : ControllerBase
     {
         var piece = await _service.GetByIdAsync(id);
         if (piece is null) return NotFound();
-        var image = await _imageService.GetImageAsync(piece.LegoId, ImageReferenceType.Part);
+        var image = await _imageService.GetImageAsync(piece.LegoId, ImageReferenceType.Part, piece.LegoColorId);
         if (image is null) return NotFound();
         return File(image.Data, image.ContentType);
     }

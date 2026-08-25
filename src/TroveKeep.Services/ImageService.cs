@@ -8,21 +8,21 @@ public class ImageService : IImageService
 {
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly IImageRepository _repository;
-	private readonly ILegoSetService _legoSetService;
-	private readonly IBulkPieceService _bulkPieceService;
+    private readonly ILegoSetService _legoSetService;
+    private readonly IBulkPieceService _bulkPieceService;
 
-	public ImageService(IHttpClientFactory httpClientFactory,
+    public ImageService(IHttpClientFactory httpClientFactory,
         IImageRepository repository,
         ILegoSetService legoSetService,
         IBulkPieceService bulkPieceService)
     {
         _httpClientFactory = httpClientFactory;
         _repository = repository;
-		_legoSetService = legoSetService;
-		_bulkPieceService = bulkPieceService;
-	}
+        _legoSetService = legoSetService;
+        _bulkPieceService = bulkPieceService;
+    }
 
-    public async Task<bool> DownloadAndStoreAsync(Guid Id, string referenceNumber, string imgUrl, ImageReferenceType referenceType)
+    public async Task<bool> DownloadAndStoreAsync(Guid Id, string referenceNumber, string imgUrl, ImageReferenceType referenceType, int? colorId = null)
     {
         try
         {
@@ -36,14 +36,15 @@ public class ImageService : IImageService
             await _repository.StoreAsync(new Image
             {
                 ReferenceNumber = referenceNumber,
+                ColorId = colorId,
                 Data = data,
                 ContentType = contentType,
                 DownloadedAt = DateTimeOffset.UtcNow,
                 ReferenceType = referenceType,
             });
-            if(referenceType == ImageReferenceType.Set)
+            if (referenceType == ImageReferenceType.Set)
                 await _legoSetService.UpdateImageCachedAsync(Id).ConfigureAwait(false);
-            else if(referenceType == ImageReferenceType.Part)
+            else if (referenceType == ImageReferenceType.Part)
                 await _bulkPieceService.UpdateImageCachedAsync(Id).ConfigureAwait(false);
             return true;
         }
@@ -53,16 +54,17 @@ public class ImageService : IImageService
         }
     }
 
-    public Task<Image?> GetImageAsync(string referenceNumber, ImageReferenceType referenceType) =>
-        _repository.GetAsync(referenceNumber, referenceType);
+    public Task<Image?> GetImageAsync(string referenceNumber, ImageReferenceType referenceType, int? colorId = null) =>
+        _repository.GetAsync(referenceNumber, referenceType, colorId);
 
-    public async Task StoreUploadAsync(string referenceNumber, ImageReferenceType referenceType, Stream stream, string contentType)
+    public async Task StoreUploadAsync(string referenceNumber, ImageReferenceType referenceType, Stream stream, string contentType, int? colorId = null)
     {
         using var ms = new MemoryStream();
         await stream.CopyToAsync(ms);
         await _repository.StoreAsync(new Image
         {
             ReferenceNumber = referenceNumber,
+            ColorId = colorId,
             Data = ms.ToArray(),
             ContentType = contentType,
             DownloadedAt = DateTimeOffset.UtcNow,
@@ -70,6 +72,6 @@ public class ImageService : IImageService
         });
     }
 
-    public Task DeleteAsync(string referenceNumber, ImageReferenceType referenceType) =>
-        _repository.DeleteAsync(referenceNumber, referenceType);
+    public Task DeleteAsync(string referenceNumber, ImageReferenceType referenceType, int? colorId = null) =>
+        _repository.DeleteAsync(referenceNumber, referenceType, colorId);
 }

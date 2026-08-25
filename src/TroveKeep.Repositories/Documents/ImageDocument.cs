@@ -6,6 +6,7 @@ public class ImageDocument
 {
     [BsonId]
     required public string ReferenceNumber { get; set; }
+    public int? ColorId { get; set; }
     required public byte[] Data { get; set; }
     required public string ContentType { get; set; }
     required public DateTime DownloadedAt { get; set; }

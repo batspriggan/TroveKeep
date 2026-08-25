@@ -28,6 +28,7 @@ public class MigrationRunner
         _migrations = [
             new Migration_001_BaseplateTypeFields(),
             new Migration_002_SetImagesBySetId(),
+            new Migration_003_PartImagesByColor(),
         ];
     }
 
