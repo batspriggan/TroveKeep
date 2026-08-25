@@ -76,19 +76,21 @@ public class BulkPiecesController : ControllerBase
     private const string RebrickableLdrawBase = "https://cdn.rebrickable.com/media/parts/ldraw";
 
     /// <summary>
-    /// Queues a fire-and-forget part image download, addressed by (partNum, colorId) via the
-    /// Rebrickable LDRAW render. Falls back to the color-0 render when the exact color has no
-    /// image available, so the piece still shows an indicative image instead of none.
+    /// Downloads a part image addressed by (partNum, colorId) via the Rebrickable LDRAW render,
+    /// falling back to the color-0 render when the exact color has no image. Returns whether an
+    /// image was stored (and ImageCached set to true). Fire-and-forget from Create, awaited from
+    /// the lazy GET /image re-index.
     /// </summary>
-    private async Task QueuePartImageAsync(BulkPiece piece)
+    private async Task<bool> QueuePartImageAsync(BulkPiece piece)
     {
         var url = $"{RebrickableLdrawBase}/{piece.LegoColorId}/{piece.LegoId}.png";
         var ok = await _imageService.DownloadAndStoreAsync(piece.Id, piece.LegoId, url, ImageReferenceType.Part, piece.LegoColorId);
         if (!ok && piece.LegoColorId != 0)
         {
             var url0 = $"{RebrickableLdrawBase}/0/{piece.LegoId}.png";
-            await _imageService.DownloadAndStoreAsync(piece.Id, piece.LegoId, url0, ImageReferenceType.Part, piece.LegoColorId);
+            ok = await _imageService.DownloadAndStoreAsync(piece.Id, piece.LegoId, url0, ImageReferenceType.Part, piece.LegoColorId);
         }
+        return ok;
     }
 
     [HttpPut("{id:guid}")]
@@ -228,6 +230,15 @@ public class BulkPiecesController : ControllerBase
         var piece = await _service.GetByIdAsync(id);
         if (piece is null) return NotFound();
         var image = await _imageService.GetImageAsync(piece.LegoId, ImageReferenceType.Part, piece.LegoColorId);
+        if (image is null)
+        {
+            // Lazy re-index: the piece has no per-color image yet (e.g. reset by migration 003,
+            // or the initial fire-and-forget failed). Fetch it now and store it.
+            var stored = await QueuePartImageAsync(piece);
+            image = stored
+                ? await _imageService.GetImageAsync(piece.LegoId, ImageReferenceType.Part, piece.LegoColorId)
+                : null;
+        }
         if (image is null) return NotFound();
         return File(image.Data, image.ContentType);
     }

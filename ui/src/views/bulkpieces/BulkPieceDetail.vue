@@ -283,10 +283,28 @@ async function load() {
 
     const containerDetails = await Promise.all(allContainers.map((c) => getDrawerContainerDrawers(c.id)))
     drawers.value = containerDetails.flatMap((c) => c.drawers ?? [])
+
+    // Lazy per-color image re-index: when the piece has no cached image yet (e.g. reset by
+    // migration 003, or the fire-and-forget on create failed), touching /image makes the
+    // backend download the per-color render and set imageCached=true.
+    if (!p.imageCached) {
+      await ensurePieceImage()
+    }
   } catch (e) {
     error.value = e.message
   } finally {
     loading.value = false
+  }
+}
+
+async function ensurePieceImage() {
+  try {
+    const res = await fetch(`/api/bulkpieces/${id}/image`)
+    if (res.ok) {
+      piece.value = await getBulkPiece(id)
+    }
+  } catch {
+    /* no image available for this color — keep the no-photo placeholder */
   }
 }
 
