@@ -142,17 +142,28 @@ async function toggleCamera() {
     await nextTick()
     scanner = new Html5Qrcode('trovekeep-camera')
 
-    // `ideal: 'environment'` prefers the rear camera but falls back to any available one
-    // (e.g. the webcam on desktop), so a single start() is enough. We must NOT retry with
-    // stop()/start() on the same instance: html5-qrcode throws
-    // "cannot transition to a new state, already under transition" on a second start while
-    // the first is still releasing.
-    await scanner.start(
-      { facingMode: { ideal: 'environment' } },
+    // html5-qrcode only accepts facingMode as a string ('environment'/'user') or
+    // { exact: ... } — NOT { ideal: ... }. Prefer the rear camera; on desktop (no rear
+    // camera) that throws OverconstrainedError, so fall back to any camera with a NEW
+    // Html5Qrcode instance (reusing the same one with stop()/start() triggers
+    // "already under transition").
+    const start = (facing) => scanner.start(
+      facing ? { facingMode: facing } : {},
       config,
       onDecoded,
       onDecodeError,
     )
+
+    try {
+      await start('environment')
+    } catch {
+      // fall back to the default (any) camera on a fresh instance
+      try { scanner.clear() } catch { /* ignore */ }
+      await nextTick()
+      scanner = new Html5Qrcode('trovekeep-camera')
+      await start()
+    }
+
     cameraError.value = ''
   } catch (e) {
     cameraError.value = `Camera unavailable: ${e?.message ?? e}`
