@@ -78,6 +78,13 @@
             </table>
             <p v-else class="empty-msg">No drawers yet.</p>
 
+            <div v-if="settings.bulkPiecesEnabled" class="labels-download">
+              <button class="secondary" :disabled="labelsLoading" @click="downloadPieceLabels">
+                {{ labelsLoading ? 'Downloading…' : 'Download All Piece Labels' }}
+              </button>
+              <p v-if="labelsMessage" class="download-msg">{{ labelsMessage }}</p>
+            </div>
+
             <div class="add-drawer">
               <p class="add-drawer-label">Add Drawer</p>
               <form class="add-drawer-row" @submit.prevent="submitDrawer">
@@ -139,6 +146,7 @@ import { useRoute, useRouter } from 'vue-router'
 import {
   getDrawerContainer, updateDrawerContainer, deleteDrawerContainer,
   getDrawerContainerDrawers, addDrawer, uploadContainerImage, deleteContainerImage,
+  downloadContainerPieceLabels,
 } from '../../api/drawercontainers.js'
 import { deleteDrawer } from '../../api/drawers.js'
 import ConfirmDialog from '../../components/ConfirmDialog.vue'
@@ -156,6 +164,8 @@ const loading = ref(true)
 const error = ref('')
 const editError = ref('')
 const drawerError = ref('')
+const labelsLoading = ref(false)
+const labelsMessage = ref('')
 const showConfirm = ref(false)
 const deleteDrawerTarget = ref(null)
 const editForm = ref({ name: '', description: '' })
@@ -210,6 +220,19 @@ async function submitDrawer() {
     drawerForm.value = { position: nextPosition(drawers.value) }
   } catch (e) {
     drawerError.value = e.message
+  }
+}
+
+function downloadPieceLabels() {
+  labelsLoading.value = true
+  labelsMessage.value = ''
+  try {
+    downloadContainerPieceLabels(id)
+    labelsMessage.value = 'Labels zip downloading — extract it into the label-tool watch folder.'
+  } catch (e) {
+    labelsMessage.value = e.message
+  } finally {
+    labelsLoading.value = false
   }
 }
 
@@ -535,6 +558,16 @@ onMounted(load)
 }
 
 /* ── Add drawer ── */
+.labels-download {
+  margin-bottom: var(--space-3);
+}
+
+.download-msg {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  margin-top: var(--space-2);
+}
+
 .add-drawer {
   border-top: 1px solid var(--color-border);
   padding-top: var(--space-3);

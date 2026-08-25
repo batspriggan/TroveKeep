@@ -1,3 +1,4 @@
+using System.IO.Compression;
 using Microsoft.AspNetCore.Mvc;
 using TroveKeep.Api.DTOs.Requests;
 using TroveKeep.Api.DTOs.Responses;
@@ -78,6 +79,30 @@ public class BoxesController : ControllerBase
         var json = _labelPrintService.BuildBoxQrLabel(box, copies);
         var fileName = _labelPrintService.GetBoxQrFileName(box);
         return File(System.Text.Encoding.UTF8.GetBytes(json), "application/json", fileName);
+    }
+
+    [HttpGet("{id:guid}/labels.zip")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetLabelsZip(Guid id)
+    {
+        var box = await _service.GetByIdWithContentsAsync(id);
+        if (box is null) return NotFound();
+
+        var pieces = box.BulkPieces ?? [];
+        using var ms = new MemoryStream();
+        using (var zip = new ZipArchive(ms, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            foreach (var p in pieces)
+            {
+                var entry = zip.CreateEntry(_labelPrintService.GetBulkPieceFileName(p), CompressionLevel.Optimal);
+                using var writer = new StreamWriter(entry.Open());
+                await writer.WriteAsync(_labelPrintService.BuildBulkPieceLabel(p));
+            }
+        }
+
+        var fileName = $"box-{Sanitize(box.Name)}-labels.zip";
+        return File(ms.ToArray(), "application/zip", fileName);
     }
 
     [HttpPost]
@@ -182,4 +207,7 @@ public class BoxesController : ControllerBase
                     p.CreatedAt, p.UpdatedAt, p.Version);
             }),
             b.CreatedAt, b.UpdatedAt, b.Version);
+
+    private static string Sanitize(string value) =>
+        string.Concat(value.Where(char.IsLetterOrDigit)).ToLowerInvariant();
 }

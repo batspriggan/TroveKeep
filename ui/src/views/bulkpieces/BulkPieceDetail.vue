@@ -130,6 +130,9 @@
                       <option :value="null">— select drawer —</option>
                       <option v-for="d in containerDrawers" :key="d.position" :value="d">
                         {{ d.label || `Position ${d.position}` }}
+                        <template v-if="d.bulkPieceCount != null">
+                          ({{ d.bulkPieceCount > 0 ? `${d.bulkPieceCount} pz` : 'empty' }})
+                        </template>
                       </option>
                     </select>
                   </div>
@@ -161,7 +164,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   getBulkPiece, updateBulkPiece, deleteBulkPiece,
@@ -259,6 +262,14 @@ async function submitEdit() {
 function onContainerChange() {
   selectedDrawer.value = null
 }
+
+// When a drawer is chosen, default the quantity to the max number of pieces remaining,
+// so the user can assign all of them in one go without typing it.
+watch(selectedDrawer, (d) => {
+  if (d && unallocated.value > 0) {
+    drawerAllocQty.value = unallocated.value
+  }
+})
 
 async function submitBoxStorage() {
   storageError.value = ''

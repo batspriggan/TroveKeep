@@ -1,3 +1,4 @@
+using System.IO.Compression;
 using Microsoft.AspNetCore.Mvc;
 using TroveKeep.Api.DTOs.Requests;
 using TroveKeep.Api.DTOs.Responses;
@@ -13,11 +14,13 @@ public class DrawerContainersController : ControllerBase
 {
     private readonly IDrawerContainerService _service;
     private readonly IImageService _imageService;
+    private readonly ILabelPrintService _labelPrintService;
 
-    public DrawerContainersController(IDrawerContainerService service, IImageService imageService)
+    public DrawerContainersController(IDrawerContainerService service, IImageService imageService, ILabelPrintService labelPrintService)
     {
         _service = service;
         _imageService = imageService;
+        _labelPrintService = labelPrintService;
     }
 
     [HttpGet]
@@ -144,6 +147,33 @@ public class DrawerContainersController : ControllerBase
         return NoContent();
     }
 
+    [HttpGet("{id:guid}/labels.zip")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetLabelsZip(Guid id)
+    {
+        var container = await _service.GetByIdWithDrawersAsync(id);
+        if (container is null) return NotFound();
+
+        var pieces = (container.Drawers ?? [])
+            .SelectMany(d => d.BulkPieces ?? [])
+            .ToList();
+
+        using var ms = new MemoryStream();
+        using (var zip = new ZipArchive(ms, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            foreach (var p in pieces)
+            {
+                var entry = zip.CreateEntry(_labelPrintService.GetBulkPieceFileName(p), CompressionLevel.Optimal);
+                using var writer = new StreamWriter(entry.Open());
+                await writer.WriteAsync(_labelPrintService.BuildBulkPieceLabel(p));
+            }
+        }
+
+        var fileName = $"container-{Sanitize(container.Name)}-labels.zip";
+        return File(ms.ToArray(), "application/zip", fileName);
+    }
+
     private static DrawerContainerResponse MapToResponse(DrawerContainer c) =>
         new(c.Id, c.Name, c.Description, c.ImageCached, c.Drawers.Count, c.CreatedAt, c.UpdatedAt, c.Version);
 
@@ -162,4 +192,7 @@ public class DrawerContainersController : ControllerBase
                 p.StorageAllocations.Select(a => new StorageAllocationResponse(
                     a.StorageId, a.StoragePosition, a.StorageType.ToString(), a.Quantity)),
                 p.CreatedAt, p.UpdatedAt, p.Version)));
+
+    private static string Sanitize(string value) =>
+        string.Concat(value.Where(char.IsLetterOrDigit)).ToLowerInvariant();
 }

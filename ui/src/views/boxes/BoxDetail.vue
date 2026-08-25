@@ -15,6 +15,9 @@
         <button class="secondary" :disabled="downloadLoading" @click="downloadQr">
           Download QR Label
         </button>
+        <button v-if="settings.bulkPiecesEnabled" class="secondary" :disabled="downloadLoading" @click="downloadPieceLabels">
+          Download All Piece Labels
+        </button>
       </div>
       <p v-if="downloadMessage" class="download-msg">{{ downloadMessage }}</p>
 
@@ -125,7 +128,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { getBoxContents, updateBox, deleteBox, uploadBoxImage, deleteBoxImage, downloadBoxSummary, downloadBoxQr } from '../../api/boxes.js'
+import { getBoxContents, updateBox, deleteBox, uploadBoxImage, deleteBoxImage, downloadBoxSummary, downloadBoxQr, downloadBoxPieceLabels } from '../../api/boxes.js'
 import ConfirmDialog from '../../components/ConfirmDialog.vue'
 import { useSettings } from '../../composables/useSettings.js'
 
@@ -239,6 +242,19 @@ function downloadQr() {
   try {
     downloadBoxQr(id)
     downloadMessage.value = 'QR label downloading — save it to the label-tool watch folder.'
+  } catch (e) {
+    downloadMessage.value = e.message
+  } finally {
+    downloadLoading.value = false
+  }
+}
+
+function downloadPieceLabels() {
+  downloadLoading.value = true
+  downloadMessage.value = ''
+  try {
+    downloadBoxPieceLabels(id)
+    downloadMessage.value = 'Labels zip downloading — extract it into the label-tool watch folder.'
   } catch (e) {
     downloadMessage.value = e.message
   } finally {

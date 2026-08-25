@@ -142,36 +142,36 @@ async function toggleCamera() {
     await nextTick()
     scanner = new Html5Qrcode('trovekeep-camera')
 
-    // Per html5-qrcode source (createVideoConstraints), a config object is ONLY valid
-    // with exactly one key, either { facingMode: 'user'|'environment' } or
-    // { deviceId: ... } — never an empty object. Prefer the rear camera, then (on
-    // desktop where there is no rear camera) fall back to 'user'. Use a FRESH
-    // Html5Qrcode instance per attempt: stop()/start() on the same instance raises
-    // "already under transition".
-    const attempts = [
-      { facingMode: 'environment' },
-      { facingMode: 'user' },
-    ]
+    // Resolve the best camera via enumerateDevices (Html5Qrcode.getCameras) and pass its
+    // deviceId (a string). Passing the deviceId is the most reliable form html5-qrcode
+    // accepts ({ deviceId: { exact } }) and works on desktop webcams and phone cameras.
+    const cameras = await Html5Qrcode.getCameras()
+    if (!cameras || cameras.length === 0) {
+      throw new Error('no camera found — check permissions and that a camera is available')
+    }
+
+    // Prefer the rear/environment camera, otherwise fall back to the first one.
+    const preferred = cameras.find(c => /back|rear|environment/i.test(c.label))
+    const candidates = [preferred?.id, ...cameras.map(c => c.id)]
+      .filter((v, i, a) => v && a.indexOf(v) === i) // dedupe + drop undefined
 
     let lastError = null
-    for (let i = 0; i < attempts.length; i++) {
-      if (i > 0) {
-        try { scanner.clear() } catch { /* ignore */ }
-        await nextTick()
-        scanner = new Html5Qrcode('trovekeep-camera')
-        await nextTick()
-      }
+    for (const deviceId of candidates) {
       try {
-        await scanner.start(attempts[i], config, onDecoded, onDecodeError)
+        await scanner.start(deviceId, config, onDecoded, onDecodeError)
         cameraError.value = ''
         return
       } catch (err) {
         lastError = err
         cameraError.value = `Camera attempt failed: ${err?.message ?? err}`
+        try { scanner.clear() } catch { /* ignore */ }
+        await nextTick()
+        scanner = new Html5Qrcode('trovekeep-camera')
+        await nextTick()
       }
     }
 
-    cameraError.value = `Camera unavailable: ${lastError?.message ?? 'no camera could be started'}`
+    cameraError.value = `Camera unavailable: ${lastError?.message ?? 'could not start any camera'}`
     cameraActive.value = false
     await stopCamera().catch(() => {})
   } catch (e) {

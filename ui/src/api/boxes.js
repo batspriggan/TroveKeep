@@ -25,6 +25,10 @@ export function downloadBoxSummary(id) {
 export function downloadBoxQr(id) {
   triggerDownload(`${BASE}/${id}/label-qr`)
 }
+// Downloads a zip with the label JSON for every bulk piece in the box.
+export function downloadBoxPieceLabels(id) {
+  triggerDownload(`${BASE}/${id}/labels.zip`)
+}
 
 function triggerDownload(href) {
   const a = document.createElement('a')
