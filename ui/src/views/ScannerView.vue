@@ -25,9 +25,9 @@
 
     <div v-if="cameraActive" class="camera-box">
       <div id="trovekeep-camera" ref="cameraEl" class="camera-target"></div>
-      <p v-if="cameraError" class="error">{{ cameraError }}</p>
     </div>
 
+    <p v-if="cameraError" class="error">{{ cameraError }}</p>
     <p v-if="error" class="error">{{ error }}</p>
 
     <div v-if="result" class="result card">
