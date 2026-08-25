@@ -54,9 +54,10 @@ public class LabelPrintService : ILabelPrintService
     /// </summary>
     public string BuildBulkPieceLocationLabel(BulkPiece piece, string? colorName, string? locationLine, int? copies = null)
     {
+        var displayColor = ShowColor(colorName) ? $" {colorName}" : "";
         var lines = new List<object>
         {
-            $"{piece.LegoId}{(!string.IsNullOrWhiteSpace(colorName) ? $" {colorName}" : "")}",
+            $"{piece.LegoId}{displayColor}",
         };
 
         if (!string.IsNullOrWhiteSpace(locationLine))
@@ -185,6 +186,14 @@ public class LabelPrintService : ILabelPrintService
 
     private static string Sanitize(string value) =>
         string.Concat(value.Where(char.IsLetterOrDigit)).ToLowerInvariant();
+
+    /// <summary>
+    /// True when the color name should be printed on the label. The Rebrickable import
+    /// includes a default "Unknown" color; for those we print only the code, not the color.
+    /// </summary>
+    private static bool ShowColor(string? colorName) =>
+        !string.IsNullOrWhiteSpace(colorName)
+        && !string.Equals(colorName, "unknown", StringComparison.OrdinalIgnoreCase);
 
     private sealed record LabelCodeLine(
         [property: JsonPropertyName("code")] string Code,
