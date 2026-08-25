@@ -70,7 +70,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { resolveCode } from '../api/scanner.js'
 
 const code = ref('')
@@ -122,22 +122,47 @@ async function toggleCamera() {
 
   cameraError.value = ''
   cameraActive.value = true
+
+  const onDecoded = (decodedText) => {
+    code.value = decodedText
+    stopCamera().then(resolve)
+  }
+  const onDecodeError = () => { /* per-frame decode errors are ignorable */ }
+  const config = { fps: 10, qrbox: { width: 220, height: 220 } }
+
   try {
     const { Html5Qrcode } = await import('html5-qrcode')
-    scanner = new Html5Qrcode('trovekeep-camera')
 
-    await scanner.start(
-      { facingMode: 'environment' },
-      { fps: 10, qrbox: { width: 220, height: 220 } },
-      (decodedText) => {
-        code.value = decodedText
-        stopCamera().then(resolve)
-      },
-      () => { /* per-frame decode errors are ignorable */ },
-    )
+    // Try the rear camera first, falling back to any available camera (webcam on
+    // desktop has no "environment" facing). Let Vite's lazy import + nextTick
+    // ensure the target <div> is mounted before html5-qrcode looks it up.
+    const constraints = [
+      { facingMode: { ideal: 'environment' } },
+      { },
+    ]
+
+    let started = false
+    for (const constraint of constraints) {
+      await nextTick()
+      scanner = new Html5Qrcode('trovekeep-camera')
+      try {
+        await scanner.start(constraint, config, onDecoded, onDecodeError)
+        started = true
+        break
+      } catch (err) {
+        cameraError.value = `Camera attempt failed: ${err?.message ?? err}`
+        await stopCamera().catch(() => {})
+        if (constraint === constraints[constraints.length - 1]) {
+          throw err
+        }
+      }
+    }
+
+    if (started) cameraError.value = ''
   } catch (e) {
-    cameraError.value = `Camera unavailable: ${e.message ?? e}`
+    cameraError.value = `Camera unavailable: ${e?.message ?? e}`
     cameraActive.value = false
+    await stopCamera().catch(() => {})
   }
 }
 
@@ -182,10 +207,22 @@ onUnmounted(() => { stopCamera() })
 .camera-target {
   width: 100%;
   max-width: 320px;
+  min-height: 220px;
   margin: 0 auto;
   border: 1px solid var(--color-border);
   border-radius: 8px;
   overflow: hidden;
+  background: #000;
+}
+
+.camera-target :deep(video) {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.camera-target :deep(canvas) {
+  display: none;
 }
 
 .card {
