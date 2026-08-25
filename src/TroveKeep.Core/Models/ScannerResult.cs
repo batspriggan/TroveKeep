@@ -12,5 +12,9 @@ public class ScannerResult
     public string? Subtitle { get; set; }
     public int? ColorId { get; set; }
     public int Quantity { get; set; }
+    // For Storage (neutral QR) results: the physical box/drawer the code points to.
+    public StorageType? TargetStorageType { get; set; }
+    public Guid? TargetStorageId { get; set; }
+    public int? TargetStoragePosition { get; set; }
     public List<ResolvedAllocation> Allocations { get; set; } = [];
 }

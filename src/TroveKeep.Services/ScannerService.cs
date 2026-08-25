@@ -10,20 +10,26 @@ public class ScannerService : IScannerService
     private readonly ILegoSetRepository _setRepo;
     private readonly IBoxRepository _boxRepo;
     private readonly IDrawerContainerRepository _containerRepo;
+    private readonly IDrawerRepository _drawerRepo;
     private readonly IAllocationRepository _allocationRepo;
+    private readonly ILabelTargetRepository _labelTargetRepo;
 
     public ScannerService(
         IBulkPieceRepository pieceRepo,
         ILegoSetRepository setRepo,
         IBoxRepository boxRepo,
         IDrawerContainerRepository containerRepo,
-        IAllocationRepository allocationRepo)
+        IDrawerRepository drawerRepo,
+        IAllocationRepository allocationRepo,
+        ILabelTargetRepository labelTargetRepo)
     {
         _pieceRepo = pieceRepo;
         _setRepo = setRepo;
         _boxRepo = boxRepo;
         _containerRepo = containerRepo;
+        _drawerRepo = drawerRepo;
         _allocationRepo = allocationRepo;
+        _labelTargetRepo = labelTargetRepo;
     }
 
     public async Task<ScannerResult?> ResolveAsync(LabelRef reference) => reference.Kind switch
@@ -31,8 +37,46 @@ public class ScannerService : IScannerService
         LabelRefKind.Piece => await ResolvePieceAsync(reference),
         LabelRefKind.Set => await ResolveSetAsync(reference),
         LabelRefKind.Box => await ResolveBoxAsync(reference),
+        LabelRefKind.Storage => await ResolveStorageAsync(reference),
         _ => null,
     };
+
+    /// <summary>Resolves a neutral QR code via the label_targets table to its physical box/drawer.</summary>
+    private async Task<ScannerResult?> ResolveStorageAsync(LabelRef reference)
+    {
+        if (string.IsNullOrWhiteSpace(reference.StorageKey)) return null;
+        var target = await _labelTargetRepo.GetByKeyAsync(reference.StorageKey);
+        if (target is null) return null;
+
+        if (target.TargetType == StorageType.Box)
+        {
+            var box = await _boxRepo.GetByIdAsync(target.StorageId);
+            if (box is null) return null;
+            return new ScannerResult
+            {
+                Kind = LabelRefKind.Storage,
+                Title = box.Name,
+                TargetStorageType = StorageType.Box,
+                TargetStorageId = box.Id,
+                Allocations = [],
+            };
+        }
+        else
+        {
+            var drawer = await _drawerRepo.GetByPositionAsync(target.StorageId, target.StoragePosition ?? 0);
+            if (drawer is null) return null;
+            var container = await _containerRepo.GetByIdAsync(target.StorageId);
+            return new ScannerResult
+            {
+                Kind = LabelRefKind.Storage,
+                Title = $"{container?.Name ?? "Drawer"} - {drawer.Position}",
+                TargetStorageType = StorageType.Drawer,
+                TargetStorageId = target.StorageId,
+                TargetStoragePosition = drawer.Position,
+                Allocations = [],
+            };
+        }
+    }
 
     private async Task<ScannerResult?> ResolvePieceAsync(LabelRef reference)
     {
@@ -43,6 +87,23 @@ public class ScannerService : IScannerService
         if (piece is null) return null;
 
         var allocs = (await _allocationRepo.GetByItemAsync(piece.Id)).ToList();
+
+        // Retro-compat: back-fill the label_target table from a legacy piece QR so the neutral
+        // resolution can point to the piece's current physical location.
+        if (allocs.Count > 0)
+        {
+            var first = allocs[0];
+            var legacyKey = LabelCodes.ForPiece(piece.LegoId, piece.LegoColorId);
+            await _labelTargetRepo.UpsertAsync(new LabelTarget
+            {
+                Key = legacyKey,
+                TargetType = first.StorageType,
+                StorageId = first.StorageId,
+                StoragePosition = first.StoragePosition,
+                CreatedAt = DateTimeOffset.UtcNow,
+                UpdatedAt = DateTimeOffset.UtcNow,
+            });
+        }
 
         return new ScannerResult
         {

@@ -45,6 +45,9 @@ public class ScannerController : ControllerBase
             color?.Name,
             color?.Rgb,
             result.Quantity,
+            result.TargetStorageType?.ToString(),
+            result.TargetStorageId,
+            result.TargetStoragePosition,
             result.Allocations.Select(a => new ScannerAllocationResponse(
                 a.StorageType.ToString(),
                 a.StorageId,

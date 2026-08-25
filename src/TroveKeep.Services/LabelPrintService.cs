@@ -50,9 +50,11 @@ public class LabelPrintService : ILabelPrintService
     /// <summary>
     /// Addresses a bulk-piece label to a specific storage location:
     /// 1) "{legoId} {colorName}", 2) the location line, 3) a row with QR + piece image.
+    /// When <paramref name="qrValue"/> is provided (a neutral storage QR key) it is used as the
+    /// QR payload instead of the per-piece code; otherwise falls back to the piece code.
     /// Always rendered as the small format.
     /// </summary>
-    public string BuildBulkPieceLocationLabel(BulkPiece piece, string? colorName, string? locationLine, int? copies = null)
+    public string BuildBulkPieceLocationLabel(BulkPiece piece, string? colorName, string? locationLine, int? copies = null, string? qrValue = null)
     {
         var displayColor = ShowColor(colorName) ? $" {colorName}" : "";
         var lines = new List<object>
@@ -63,8 +65,9 @@ public class LabelPrintService : ILabelPrintService
         if (!string.IsNullOrWhiteSpace(locationLine))
             lines.Add(locationLine);
 
+        var codeValue = qrValue ?? LabelCodes.ForPiece(piece.LegoId, piece.LegoColorId);
         var pieceImageUrl = PieceImageUrl(piece.Id);
-        AddQrLine(lines, LabelCodes.ForPiece(piece.LegoId, piece.LegoColorId), piece.ImageCached ? pieceImageUrl : null);
+        AddQrLine(lines, codeValue, piece.ImageCached ? pieceImageUrl : null);
 
         return Serialize(lines, copies, "small");
     }

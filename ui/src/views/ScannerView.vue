@@ -42,7 +42,22 @@
       <p v-if="result.subtitle" class="piece-desc">{{ result.subtitle }}</p>
 
       <!-- Box: direct navigation to the box itself -->
-      <template v-if="result.kind === 'Box'">
+      <!-- Storage (neutral QR): points to a physical box or drawer -->
+      <template v-if="result.kind === 'Storage'">
+        <template v-if="result.targetStorageType === 'Box'">
+          <RouterLink :to="`/boxes/${result.targetStorageId}`" class="alloc-link root-link">
+            Open box
+          </RouterLink>
+        </template>
+        <template v-else-if="result.targetStorageType === 'Drawer'">
+          <RouterLink :to="`/drawers/${result.targetStorageId}/${result.targetStoragePosition}`" class="alloc-link root-link">
+            Open drawer
+          </RouterLink>
+        </template>
+        <p v-else class="muted no-alloc">Storage not found.</p>
+      </template>
+
+      <template v-else-if="result.kind === 'Box'">
         <RouterLink :to="`/boxes/${result.id}`" class="alloc-link root-link">
           Open box
         </RouterLink>

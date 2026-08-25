@@ -19,8 +19,9 @@ public class BulkPiecesController : ControllerBase
     private readonly ILabelPrintService _labelPrintService;
     private readonly IBoxRepository _boxRepo;
     private readonly IDrawerContainerRepository _drawerContainerRepo;
+    private readonly ILabelTargetService _labelTargetService;
 
-    public BulkPiecesController(IBulkPieceService service, IColorRepository colorRepo, IImageService imageService, ILabelPrintService labelPrintService, IBoxRepository boxRepo, IDrawerContainerRepository drawerContainerRepo)
+    public BulkPiecesController(IBulkPieceService service, IColorRepository colorRepo, IImageService imageService, ILabelPrintService labelPrintService, IBoxRepository boxRepo, IDrawerContainerRepository drawerContainerRepo, ILabelTargetService labelTargetService)
     {
         _service = service;
         _colorRepo = colorRepo;
@@ -28,6 +29,7 @@ public class BulkPiecesController : ControllerBase
         _labelPrintService = labelPrintService;
         _boxRepo = boxRepo;
         _drawerContainerRepo = drawerContainerRepo;
+        _labelTargetService = labelTargetService;
     }
 
     [HttpGet]
@@ -273,19 +275,22 @@ public class BulkPiecesController : ControllerBase
             {
                 index++;
                 string locationLine;
+                string qrValue;
                 if (a.StorageType == StorageType.Box)
                 {
                     locationLine = boxes.GetValueOrDefault(a.StorageId)?.Name ?? "(unknown box)";
+                    qrValue = await _labelTargetService.GetOrCreateStorageKeyAsync(StorageType.Box, a.StorageId);
                 }
                 else
                 {
                     var container = containers.GetValueOrDefault(a.StorageId);
                     locationLine = $"{container?.Name ?? "(unknown container)"} - {a.StoragePosition}";
+                    qrValue = await _labelTargetService.GetOrCreateStorageKeyAsync(StorageType.Drawer, a.StorageId, a.StoragePosition);
                 }
 
                 var entry = zip.CreateEntry(_labelPrintService.GetBulkPieceLocationFileName(piece, index), CompressionLevel.Optimal);
                 await using var writer = new StreamWriter(entry.Open());
-                await writer.WriteAsync(_labelPrintService.BuildBulkPieceLocationLabel(piece, colorName, locationLine, copies));
+                await writer.WriteAsync(_labelPrintService.BuildBulkPieceLocationLabel(piece, colorName, locationLine, copies, qrValue));
             }
         }
 

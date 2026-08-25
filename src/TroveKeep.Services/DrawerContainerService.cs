@@ -10,17 +10,20 @@ public class DrawerContainerService : IDrawerContainerService
     private readonly IDrawerRepository _drawerRepo;
     private readonly IBulkPieceRepository _pieceRepo;
     private readonly IAllocationRepository _allocationRepo;
+    private readonly ILabelTargetRepository _labelTargetRepo;
 
     public DrawerContainerService(
         IDrawerContainerRepository containerRepo,
         IDrawerRepository drawerRepo,
         IBulkPieceRepository pieceRepo,
-        IAllocationRepository allocationRepo)
+        IAllocationRepository allocationRepo,
+        ILabelTargetRepository labelTargetRepo)
     {
         _containerRepo = containerRepo;
         _drawerRepo = drawerRepo;
         _pieceRepo = pieceRepo;
         _allocationRepo = allocationRepo;
+        _labelTargetRepo = labelTargetRepo;
     }
 
     public async Task<IEnumerable<DrawerContainer>> GetAllAsync()
@@ -95,6 +98,7 @@ public class DrawerContainerService : IDrawerContainerService
     public async Task<bool> DeleteAsync(Guid id)
     {
         await _allocationRepo.RemoveAllByStorageAsync(id);
+        await _labelTargetRepo.DeleteByStorageAsync(id);
         return await _containerRepo.DeleteAsync(id);
     }
 

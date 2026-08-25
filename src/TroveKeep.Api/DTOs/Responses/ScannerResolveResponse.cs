@@ -8,6 +8,9 @@ public record ScannerResolveResponse(
     string? ColorName,
     string? ColorRgb,
     int Quantity,
+    string? TargetStorageType,
+    Guid? TargetStorageId,
+    int? TargetStoragePosition,
     IEnumerable<ScannerAllocationResponse> Allocations);
 
 public record ScannerAllocationResponse(

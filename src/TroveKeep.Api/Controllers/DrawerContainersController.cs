@@ -17,13 +17,15 @@ public class DrawerContainersController : ControllerBase
     private readonly IImageService _imageService;
     private readonly ILabelPrintService _labelPrintService;
     private readonly IColorRepository _colorRepo;
+    private readonly ILabelTargetService _labelTargetService;
 
-    public DrawerContainersController(IDrawerContainerService service, IImageService imageService, ILabelPrintService labelPrintService, IColorRepository colorRepo)
+    public DrawerContainersController(IDrawerContainerService service, IImageService imageService, ILabelPrintService labelPrintService, IColorRepository colorRepo, ILabelTargetService labelTargetService)
     {
         _service = service;
         _imageService = imageService;
         _labelPrintService = labelPrintService;
         _colorRepo = colorRepo;
+        _labelTargetService = labelTargetService;
     }
 
     [HttpGet]
@@ -177,14 +179,31 @@ public class DrawerContainersController : ControllerBase
             var index = 0;
             foreach (var drawer in container.Drawers ?? [])
             {
-                foreach (var p in drawer.BulkPieces ?? [])
+                var drawerKey = await _labelTargetService.GetOrCreateStorageKeyAsync(StorageType.Drawer, id, drawer.Position);
+                var locationLine = $"{container.Name} - {drawer.Position}";
+
+                // Group pieces in this drawer by design id: one label when the same design appears
+                // in multiple colors here (shown as "Multiple").
+                var groups = (drawer.BulkPieces ?? []).GroupBy(p => p.LegoId);
+                foreach (var group in groups)
                 {
                     index++;
-                    colors.TryGetValue(p.LegoColorId, out var colorName);
-                    var locationLine = $"{container.Name} - {drawer.Position}";
-                    var entry = zip.CreateEntry(_labelPrintService.GetBulkPieceLocationFileName(p, index), CompressionLevel.Optimal);
+                    var rep = group.First();
+                    var distinctColors = group.Select(x => x.LegoColorId).Distinct().ToList();
+                    string colorName;
+                    if (distinctColors.Count == 1)
+                    {
+                        colors.TryGetValue(distinctColors[0], out var single);
+                        colorName = single ?? string.Empty;
+                    }
+                    else
+                    {
+                        colorName = "Multiple";
+                    }
+
+                    var entry = zip.CreateEntry(_labelPrintService.GetBulkPieceLocationFileName(rep, index), CompressionLevel.Optimal);
                     await using var writer = new StreamWriter(entry.Open());
-                    await writer.WriteAsync(_labelPrintService.BuildBulkPieceLocationLabel(p, colorName, locationLine));
+                    await writer.WriteAsync(_labelPrintService.BuildBulkPieceLocationLabel(rep, colorName, locationLine, qrValue: drawerKey));
                 }
             }
         }

@@ -17,13 +17,15 @@ public class BoxesController : ControllerBase
     private readonly IColorRepository _colorRepo;
     private readonly IImageService _imageService;
     private readonly ILabelPrintService _labelPrintService;
+    private readonly ILabelTargetService _labelTargetService;
 
-    public BoxesController(IBoxService service, IColorRepository colorRepo, IImageService imageService, ILabelPrintService labelPrintService)
+    public BoxesController(IBoxService service, IColorRepository colorRepo, IImageService imageService, ILabelPrintService labelPrintService, ILabelTargetService labelTargetService)
     {
         _service = service;
         _colorRepo = colorRepo;
         _imageService = imageService;
         _labelPrintService = labelPrintService;
+        _labelTargetService = labelTargetService;
     }
 
     [HttpGet]
@@ -90,6 +92,7 @@ public class BoxesController : ControllerBase
         if (box is null) return NotFound();
 
         var colors = (await _colorRepo.GetAllAsync()).ToDictionary(c => c.Id, c => c.Name);
+        var boxKey = await _labelTargetService.GetOrCreateStorageKeyAsync(StorageType.Box, id);
 
         using var ms = new MemoryStream();
         using (var zip = new ZipArchive(ms, ZipArchiveMode.Create, leaveOpen: true))
@@ -101,7 +104,7 @@ public class BoxesController : ControllerBase
                 colors.TryGetValue(p.LegoColorId, out var colorName);
                 var entry = zip.CreateEntry(_labelPrintService.GetBulkPieceLocationFileName(p, index), CompressionLevel.Optimal);
                 await using var writer = new StreamWriter(entry.Open());
-                await writer.WriteAsync(_labelPrintService.BuildBulkPieceLocationLabel(p, colorName, box.Name));
+                await writer.WriteAsync(_labelPrintService.BuildBulkPieceLocationLabel(p, colorName, box.Name, qrValue: boxKey));
             }
         }
 

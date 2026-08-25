@@ -16,7 +16,7 @@ public interface ILabelPrintService
     /// Builds a bulk-piece label addressed to a specific storage location:
     /// line 1 = "{legoId} {colorName}", line 2 = location, then QR + image.
     /// </summary>
-    string BuildBulkPieceLocationLabel(BulkPiece piece, string? colorName, string? locationLine, int? copies = null);
+    string BuildBulkPieceLocationLabel(BulkPiece piece, string? colorName, string? locationLine, int? copies = null, string? qrValue = null);
     /// <summary>Unique file name for a location-addressed piece label.</summary>
     string GetBulkPieceLocationFileName(BulkPiece piece, int index);
 

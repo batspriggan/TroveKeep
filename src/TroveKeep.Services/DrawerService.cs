@@ -9,12 +9,14 @@ public class DrawerService : IDrawerService
     private readonly IDrawerRepository _repo;
     private readonly IBulkPieceRepository _pieceRepo;
     private readonly IAllocationRepository _allocationRepo;
+    private readonly ILabelTargetRepository _labelTargetRepo;
 
-    public DrawerService(IDrawerRepository repo, IBulkPieceRepository pieceRepo, IAllocationRepository allocationRepo)
+    public DrawerService(IDrawerRepository repo, IBulkPieceRepository pieceRepo, IAllocationRepository allocationRepo, ILabelTargetRepository labelTargetRepo)
     {
         _repo = repo;
         _pieceRepo = pieceRepo;
         _allocationRepo = allocationRepo;
+        _labelTargetRepo = labelTargetRepo;
     }
 
     public async Task<Drawer?> GetByPositionAsync(Guid containerId, int position)
@@ -56,6 +58,7 @@ public class DrawerService : IDrawerService
     public async Task<bool> DeleteAsync(Guid containerId, int position)
     {
         await _allocationRepo.RemoveAllByStorageAsync(containerId, position);
+        await _labelTargetRepo.DeleteByStorageAsync(containerId, position);
         return await _repo.DeleteAsync(containerId, position);
     }
 
@@ -74,6 +77,9 @@ public class DrawerService : IDrawerService
         if (source is null || destination is null) return false;
 
         await _allocationRepo.MoveFromStorageAsync(srcContainerId, srcPosition, dstContainerId, dstPosition);
+        // Keep the association pointing at the new physical location for any label target
+        // that referenced the old drawer position.
+        await _labelTargetRepo.UpdateStorageAsync(srcContainerId, srcPosition, dstContainerId, dstPosition);
         return true;
     }
 
