@@ -11,6 +11,8 @@ export const deleteDrawerContainer = (id) => del(`${BASE}/${id}`)
 
 export const addDrawer = (containerId, body) => post(`${BASE}/${containerId}/drawers`, body)
 
+export const emptyContainer = (id) => post(`${BASE}/${id}/empty`)
+
 function triggerDownload(href) {
   const a = document.createElement('a')
   a.href = href

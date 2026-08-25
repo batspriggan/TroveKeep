@@ -37,18 +37,52 @@ public class BulkPieceService : IBulkPieceService
         return pieces;
     }
 
-    public async Task<(IEnumerable<BulkPiece> Items, long Total)> GetPageAsync(int page, int pageSize, string? query = null)
+    public async Task<(IEnumerable<BulkPiece> Items, long Total)> GetPageAsync(int page, int pageSize, string? query = null, bool? assigned = null)
     {
-        var (items, total) = await _pieceRepo.GetPageAsync(page, pageSize, query);
-        var list = items.ToList();
-        if (list.Count > 0)
+        if (assigned is null)
         {
-            var allocs = await _allocationRepo.GetByItemsAsync(list.Select(x => x.Id));
-            var byItem = allocs.GroupBy(a => a.ItemId).ToDictionary(g => g.Key, g => g.ToList());
-            foreach (var item in list)
-                item.StorageAllocations = byItem.GetValueOrDefault(item.Id) ?? [];
+            var (items, total) = await _pieceRepo.GetPageAsync(page, pageSize, query);
+            var list = items.ToList();
+            if (list.Count > 0)
+            {
+                var allocs = await _allocationRepo.GetByItemsAsync(list.Select(x => x.Id));
+                var byItem = allocs.GroupBy(a => a.ItemId).ToDictionary(g => g.Key, g => g.ToList());
+                foreach (var item in list)
+                    item.StorageAllocations = byItem.GetValueOrDefault(item.Id) ?? [];
+            }
+            return (list, total);
         }
-        return (list, total);
+
+        // Assigned filter: the bulk-piece collection is small, so load everything in memory,
+        // filter by whether a piece has any allocation, then paginate.
+        var all = (await _pieceRepo.GetAllAsync()).ToList();
+        if (!string.IsNullOrWhiteSpace(query))
+        {
+            all = all.Where(p =>
+                p.LegoId.Contains(query, StringComparison.OrdinalIgnoreCase)
+                || p.Description.Contains(query, StringComparison.OrdinalIgnoreCase)).ToList();
+        }
+
+        var byItemAlloc = new Dictionary<Guid, List<StorageAllocation>>();
+        if (all.Count > 0)
+        {
+            var allocs = await _allocationRepo.GetByItemsAsync(all.Select(x => x.Id));
+            byItemAlloc = allocs.GroupBy(a => a.ItemId).ToDictionary(g => g.Key, g => g.ToList());
+        }
+
+        var filtered = all
+            .Where(p =>
+            {
+                var has = byItemAlloc.TryGetValue(p.Id, out var l) && l.Count > 0;
+                return assigned.Value ? has : !has;
+            })
+            .ToList();
+        foreach (var p in filtered)
+            p.StorageAllocations = byItemAlloc.GetValueOrDefault(p.Id) ?? [];
+
+        var totalCount = filtered.Count;
+        var pageItems = filtered.Skip((page - 1) * pageSize).Take(pageSize);
+        return (pageItems, totalCount);
     }
 
     public async Task<BulkPiece?> GetByIdAsync(Guid id)

@@ -95,6 +95,16 @@ public class DrawerContainersController : ControllerBase
         return NoContent();
     }
 
+    [HttpPost("{id:guid}/empty")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> EmptyContainer(Guid id)
+    {
+        var emptied = await _service.EmptyAsync(id);
+        if (!emptied) return NotFound();
+        return NoContent();
+    }
+
     [HttpPost("{id:guid}/drawers")]
     [ProducesResponseType(typeof(DrawerResponse), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]

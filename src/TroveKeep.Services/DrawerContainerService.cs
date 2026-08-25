@@ -98,6 +98,14 @@ public class DrawerContainerService : IDrawerContainerService
         return await _containerRepo.DeleteAsync(id);
     }
 
+    public async Task<bool> EmptyAsync(Guid id)
+    {
+        var container = await _containerRepo.GetByIdAsync(id);
+        if (container is null) return false;
+        await _allocationRepo.RemoveAllByStorageAsync(id);
+        return true;
+    }
+
     public async Task<Drawer?> AddDrawerAsync(Guid containerId, Drawer drawer)
     {
         var container = await _containerRepo.GetByIdAsync(containerId);

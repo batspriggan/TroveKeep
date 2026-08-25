@@ -10,6 +10,8 @@ public interface IDrawerContainerService
     Task<DrawerContainer> CreateAsync(string name, string? description, int drawerCount);
     Task<DrawerContainer?> UpdateAsync(DrawerContainer drawerContainer);
     Task<bool> DeleteAsync(Guid id);
+    /// <summary>Removes all allocations from every drawer of a container (the container and drawers stay).</summary>
+    Task<bool> EmptyAsync(Guid id);
     Task<Drawer?> AddDrawerAsync(Guid containerId, Drawer drawer);
     Task UpdateImageCachedAsync(Guid id, bool cached);
 }

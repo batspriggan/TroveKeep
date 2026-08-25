@@ -63,10 +63,18 @@
         <p v-else>No bulk pieces stored here.</p>
       </div>
 
-      <div class="card">
+      <div class="card actions-card">
+        <button class="secondary" :disabled="emptyLoading" @click="showEmptyConfirm = true">Empty Drawer</button>
         <button class="danger" @click="showConfirm = true">Delete Drawer</button>
       </div>
     </template>
+
+    <ConfirmDialog
+      :open="showEmptyConfirm"
+      :message="`Empty drawer at position ${drawer?.position}? This removes all pieces stored here (the drawer stays).`"
+      @confirm="doEmpty"
+      @cancel="showEmptyConfirm = false"
+    />
 
     <ConfirmDialog
       :open="showConfirm"
@@ -80,7 +88,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { getDrawerContents, updateDrawer, deleteDrawer } from '../../api/drawers.js'
+import { getDrawerContents, updateDrawer, deleteDrawer, emptyDrawer } from '../../api/drawers.js'
 import { setDrawerQuantity } from '../../api/bulkpieces.js'
 import ConfirmDialog from '../../components/ConfirmDialog.vue'
 
@@ -95,6 +103,8 @@ const loading = ref(true)
 const error = ref('')
 const editError = ref('')
 const showConfirm = ref(false)
+const showEmptyConfirm = ref(false)
+const emptyLoading = ref(false)
 const editForm = ref({ label: '' })
 const qtyEdits = ref({})
 const qtySaving = ref(false)
@@ -158,6 +168,20 @@ async function submitEdit() {
   }
 }
 
+async function doEmpty() {
+  emptyLoading.value = true
+  try {
+    await emptyDrawer(containerId, position)
+    showEmptyConfirm.value = false
+    await load()
+  } catch (e) {
+    error.value = e.message
+    showEmptyConfirm.value = false
+  } finally {
+    emptyLoading.value = false
+  }
+}
+
 async function doDelete() {
   try {
     await deleteDrawer(containerId, position)
@@ -210,6 +234,12 @@ onMounted(load)
 .btn-update:hover {
   border-color: var(--color-accent);
   color: var(--color-accent);
+}
+
+.actions-card {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
 }
 
 .cell-thumb {

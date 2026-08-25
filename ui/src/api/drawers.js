@@ -1,4 +1,4 @@
-import { get, put, del } from './client.js'
+import { get, post, put, del } from './client.js'
 
 const BASE = '/api/drawers'
 
@@ -6,3 +6,7 @@ export const getDrawer = (containerId, position) => get(`${BASE}/${containerId}/
 export const getDrawerContents = (containerId, position) => get(`${BASE}/${containerId}/${position}/contents`)
 export const updateDrawer = (containerId, position, body) => put(`${BASE}/${containerId}/${position}`, body)
 export const deleteDrawer = (containerId, position) => del(`${BASE}/${containerId}/${position}`)
+
+export const emptyDrawer = (containerId, position) => post(`${BASE}/${containerId}/${position}/empty`)
+export const moveDrawer = (srcContainerId, srcPosition, destContainerId, destPosition) =>
+  post(`${BASE}/${srcContainerId}/${srcPosition}/move`, { destContainerId, destPosition })

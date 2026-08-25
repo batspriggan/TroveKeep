@@ -75,6 +75,7 @@
                   </td>
                   <td v-if="settings.bulkPiecesEnabled" class="td-count">{{ d.bulkPieceCount }}</td>
                   <td class="td-action">
+                    <button v-if="d.bulkPieceCount > 0" class="btn-action" @click="openMove(d)">Move…</button>
                     <button class="btn-delete" @click="confirmDeleteDrawer(d)">Delete</button>
                   </td>
                 </tr>
@@ -87,6 +88,13 @@
                 {{ labelsLoading ? 'Downloading…' : 'Download All Piece Labels' }}
               </button>
               <p v-if="labelsMessage" class="download-msg">{{ labelsMessage }}</p>
+            </div>
+
+            <div v-if="drawers.some(d => d.bulkPieceCount > 0)" class="container-actions">
+              <button class="secondary" :disabled="emptyLoading" @click="showEmptyConfirm = true">
+                Empty all drawers
+              </button>
+              <p v-if="emptyMessage" class="download-msg">{{ emptyMessage }}</p>
             </div>
 
             <div class="add-drawer">
@@ -141,6 +149,34 @@
       @confirm="doDeleteDrawer"
       @cancel="deleteDrawerTarget = null"
     />
+
+    <ConfirmDialog
+      :open="showEmptyConfirm"
+      :message="`Empty all drawers in '${container?.name}'? This removes every piece stored in them (drawers and container stay).`"
+      @confirm="doEmptyContainer"
+      @cancel="showEmptyConfirm = false"
+    />
+
+    <!-- Move drawer dialog -->
+    <div v-if="moveOpen" class="overlay" @click.self="closeMove">
+      <div class="dialog">
+        <p class="move-title">Move drawer {{ moveSource?.position }} contents</p>
+        <label class="move-label">Destination container</label>
+        <select v-model="moveDestContainer" class="move-select">
+          <option :value="null">— select container —</option>
+          <option v-for="c in allContainers" :key="c.id" :value="c.id">{{ c.name }}</option>
+        </select>
+        <label class="move-label">Destination position</label>
+        <input v-model.number="moveDestPosition" type="number" min="1" class="move-select" />
+        <p v-if="moveError" class="error">{{ moveError }}</p>
+        <div class="btns">
+          <button class="secondary" @click="closeMove">Cancel</button>
+          <button class="primary" :disabled="!moveDestContainer || moveDestPosition < 1 || moveSaving" @click="doMove">
+            Move
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -150,9 +186,9 @@ import { useRoute, useRouter } from 'vue-router'
 import {
   getDrawerContainer, updateDrawerContainer, deleteDrawerContainer,
   getDrawerContainerDrawers, addDrawer, uploadContainerImage, deleteContainerImage,
-  downloadContainerPieceLabels,
+  downloadContainerPieceLabels, getAllDrawerContainers, emptyContainer,
 } from '../../api/drawercontainers.js'
-import { deleteDrawer } from '../../api/drawers.js'
+import { deleteDrawer, moveDrawer } from '../../api/drawers.js'
 import ConfirmDialog from '../../components/ConfirmDialog.vue'
 import { useSettings } from '../../composables/useSettings.js'
 
@@ -170,6 +206,16 @@ const editError = ref('')
 const drawerError = ref('')
 const labelsLoading = ref(false)
 const labelsMessage = ref('')
+const emptyLoading = ref(false)
+const emptyMessage = ref('')
+const showEmptyConfirm = ref(false)
+const allContainers = ref([])
+const moveOpen = ref(false)
+const moveSource = ref(null)
+const moveDestContainer = ref(null)
+const moveDestPosition = ref(1)
+const moveSaving = ref(false)
+const moveError = ref('')
 const showConfirm = ref(false)
 const deleteDrawerTarget = ref(null)
 const editForm = ref({ name: '', description: '' })
@@ -188,12 +234,14 @@ async function load() {
   loading.value = true
   error.value = ''
   try {
-    const [c, d] = await Promise.all([
+    const [c, d, containers] = await Promise.all([
       getDrawerContainer(id),
       getDrawerContainerDrawers(id),
+      getAllDrawerContainers(),
     ])
     container.value = c
     drawers.value = d.drawers
+    allContainers.value = containers
     drawerForm.value = { position: nextPosition(d.drawers) }
     editForm.value = { name: c.name, description: c.description ?? '' }
   } catch (e) {
@@ -253,6 +301,48 @@ async function doDeleteDrawer() {
   } catch (e) {
     error.value = e.message
     deleteDrawerTarget.value = null
+  }
+}
+
+async function doEmptyContainer() {
+  emptyLoading.value = true
+  emptyMessage.value = ''
+  try {
+    await emptyContainer(id)
+    showEmptyConfirm.value = false
+    drawers.value = (await getDrawerContainerDrawers(id)).drawers
+    emptyMessage.value = 'Drawers emptied.'
+  } catch (e) {
+    emptyMessage.value = e.message
+    showEmptyConfirm.value = false
+  } finally {
+    emptyLoading.value = false
+  }
+}
+
+function openMove(d) {
+  moveSource.value = d
+  moveDestContainer.value = null
+  moveDestPosition.value = d.position + 1
+  moveError.value = ''
+  moveOpen.value = true
+}
+
+function closeMove() {
+  moveOpen.value = false
+}
+
+async function doMove() {
+  moveSaving.value = true
+  moveError.value = ''
+  try {
+    await moveDrawer(id, moveSource.value.position, moveDestContainer.value, moveDestPosition.value)
+    moveOpen.value = false
+    drawers.value = (await getDrawerContainerDrawers(id)).drawers
+  } catch (e) {
+    moveError.value = e.message
+  } finally {
+    moveSaving.value = false
   }
 }
 
@@ -577,6 +667,73 @@ onMounted(load)
   background: #fee2e2;
   border-color: #fca5a5;
   color: #b91c1c;
+}
+
+.btn-action {
+  font-size: var(--text-xs);
+  padding: 0.2rem 0.55rem;
+  margin-right: 4px;
+  background: transparent;
+  border: 1px solid var(--color-border);
+  color: var(--color-text-secondary);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.btn-action:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+.container-actions {
+  margin-bottom: var(--space-3);
+}
+
+/* Move / dialog */
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.dialog {
+  background: #fff;
+  border-radius: 8px;
+  padding: 1.5rem;
+  min-width: 280px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.move-title {
+  margin: 0 0 var(--space-2);
+  font-weight: 600;
+}
+
+.move-label {
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+}
+
+.move-select {
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  font-size: var(--text-sm);
+}
+
+.btns {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+  margin-top: var(--space-2);
 }
 
 .empty-msg {

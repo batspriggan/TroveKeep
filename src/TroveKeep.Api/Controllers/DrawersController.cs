@@ -63,6 +63,27 @@ public class DrawersController : ControllerBase
         return NoContent();
     }
 
+    [HttpPost("{containerId:guid}/{position:int}/empty")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> EmptyDrawer(Guid containerId, int position)
+    {
+        var emptied = await _service.EmptyAsync(containerId, position);
+        if (!emptied) return NotFound();
+        return NoContent();
+    }
+
+    [HttpPost("{containerId:guid}/{position:int}/move")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> Move(Guid containerId, int position, [FromBody] MoveDrawerRequest request)
+    {
+        var moved = await _service.MoveAsync(containerId, position, request.DestContainerId, request.DestPosition);
+        if (!moved) return NotFound();
+        return NoContent();
+    }
+
     private async Task<Dictionary<int, (string Name, string Rgb)>> BuildColorLookupAsync()
     {
         var colors = await _colorRepo.GetAllAsync();

@@ -35,9 +35,10 @@ public class BulkPiecesController : ControllerBase
     public async Task<IActionResult> GetAll(
         [FromQuery] int page = 1,
         [FromQuery] int size = 50,
-        [FromQuery] string? q = null)
+        [FromQuery] string? q = null,
+        [FromQuery] bool? assigned = null)
     {
-        var (pieces, total) = await _service.GetPageAsync(page, size, q);
+        var (pieces, total) = await _service.GetPageAsync(page, size, q, assigned);
         var colors = await BuildColorLookupAsync();
         var items = pieces.Select(p => MapToResponse(p, colors));
         var totalPages = (int)Math.Ceiling((double)total / size);

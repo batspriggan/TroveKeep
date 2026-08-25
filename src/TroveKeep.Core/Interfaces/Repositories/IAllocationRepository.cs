@@ -14,4 +14,6 @@ public interface IAllocationRepository
     Task<bool> RemoveByItemAndStorageAsync(Guid itemId, Guid storageId, int? storagePosition = null);
     Task RemoveAllByItemAsync(Guid itemId);
     Task RemoveAllByStorageAsync(Guid storageId, int? position = null);
+    /// <summary>Moves every allocation currently pointing at (srcStorageId, srcPosition) to (dstStorageId, dstPosition).</summary>
+    Task MoveFromStorageAsync(Guid srcStorageId, int? srcPosition, Guid dstStorageId, int? dstPosition);
 }

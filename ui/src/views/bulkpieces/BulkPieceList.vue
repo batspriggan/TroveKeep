@@ -35,6 +35,11 @@
     <template v-else>
       <div class="filter-bar">
         <input :value="query" @input="onQueryInput" type="search" placeholder="Filter by ID or description…" class="filter-input" />
+        <select v-model="assignedFilter" class="filter-select" @change="onFilterChange">
+          <option :value="null">All</option>
+          <option :value="true">Assigned</option>
+          <option :value="false">Unassigned</option>
+        </select>
         <span class="total-count">{{ total }} piece{{ total !== 1 ? 's' : '' }}</span>
       </div>
 
@@ -152,6 +157,7 @@ const total = ref(0)
 const page = ref(Number(route.query.page) || 1)
 const totalPages = ref(1)
 const query = ref(route.query.q ?? '')
+const assignedFilter = ref(null)
 const loading = ref(true)
 const error = ref('')
 const deleteTarget = ref(null)
@@ -167,13 +173,18 @@ function onQueryInput(e) {
   }, 300)
 }
 
+function onFilterChange() {
+  page.value = 1
+  load()
+}
+
 async function load() {
   loading.value = true
   error.value = ''
   router.replace({ query: { ...(query.value ? { q: query.value } : {}), ...(page.value !== 1 ? { page: page.value } : {}) } })
   try {
     const [data, allColors] = await Promise.all([
-      getAllBulkPieces(page.value, 50, query.value),
+      getAllBulkPieces(page.value, 50, query.value, assignedFilter.value),
       colors.value.length ? Promise.resolve(colors.value) : getColorsList()
     ])
     pieces.value = data.items
@@ -313,6 +324,15 @@ onMounted(load)
   font-size: var(--text-sm);
   border-color: var(--color-border);
   background: var(--color-surface);
+}
+
+.filter-select {
+  font-size: var(--text-sm);
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  background: var(--color-surface);
+  color: var(--color-text-primary);
 }
 
 .total-count {

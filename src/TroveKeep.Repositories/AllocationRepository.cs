@@ -128,6 +128,22 @@ public class AllocationRepository : IAllocationRepository
         await _collection.DeleteManyAsync(x => x.ItemId == itemId);
     }
 
+    public async Task MoveFromStorageAsync(Guid srcStorageId, int? srcPosition, Guid dstStorageId, int? dstPosition)
+    {
+        if (srcStorageId == dstStorageId && srcPosition == dstPosition) return;
+
+        var filter = Builders<StorageAllocationDocument>.Filter.And(
+            Builders<StorageAllocationDocument>.Filter.Eq(x => x.StorageId, srcStorageId),
+            Builders<StorageAllocationDocument>.Filter.Eq(x => x.StoragePosition, srcPosition));
+
+        var update = Builders<StorageAllocationDocument>.Update
+            .Set(x => x.StorageId, dstStorageId)
+            .Set(x => x.StoragePosition, dstPosition)
+            .Set(x => x.UpdatedAt, DateTime.UtcNow);
+
+        await _collection.UpdateManyAsync(filter, update);
+    }
+
     public async Task RemoveAllByStorageAsync(Guid storageId, int? position = null)
     {
         if (position.HasValue)

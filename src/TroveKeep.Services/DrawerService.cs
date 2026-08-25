@@ -59,6 +59,24 @@ public class DrawerService : IDrawerService
         return await _repo.DeleteAsync(containerId, position);
     }
 
+    public async Task<bool> EmptyAsync(Guid containerId, int position)
+    {
+        var drawer = await _repo.GetByPositionAsync(containerId, position);
+        if (drawer is null) return false;
+        await _allocationRepo.RemoveAllByStorageAsync(containerId, position);
+        return true;
+    }
+
+    public async Task<bool> MoveAsync(Guid srcContainerId, int srcPosition, Guid dstContainerId, int dstPosition)
+    {
+        var source = await _repo.GetByPositionAsync(srcContainerId, srcPosition);
+        var destination = await _repo.GetByPositionAsync(dstContainerId, dstPosition);
+        if (source is null || destination is null) return false;
+
+        await _allocationRepo.MoveFromStorageAsync(srcContainerId, srcPosition, dstContainerId, dstPosition);
+        return true;
+    }
+
     private async Task EnrichWithCountAsync(Drawer drawer)
     {
         var allocs = (await _allocationRepo.GetByStorageAsync(drawer.DrawerContainerId, drawer.Position)).ToList();
