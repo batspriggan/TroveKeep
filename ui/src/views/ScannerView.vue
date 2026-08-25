@@ -138,39 +138,22 @@ async function toggleCamera() {
   try {
     const { Html5Qrcode } = await import('html5-qrcode')
 
-    // Ensure the target <div> is mounted and empty before html5-qrcode attaches to it.
+    // Ensure the target <div> is mounted before html5-qrcode attaches to it.
     await nextTick()
     scanner = new Html5Qrcode('trovekeep-camera')
 
-    // Try the rear camera first, falling back to any available camera (a desktop webcam
-    // has no "environment" facing). Reuse the SAME scanner instance for both attempts and
-    // fully stop+clear it in between, so it does not fail on a dirty/duplicate video element.
-    const attempts = [
+    // `ideal: 'environment'` prefers the rear camera but falls back to any available one
+    // (e.g. the webcam on desktop), so a single start() is enough. We must NOT retry with
+    // stop()/start() on the same instance: html5-qrcode throws
+    // "cannot transition to a new state, already under transition" on a second start while
+    // the first is still releasing.
+    await scanner.start(
       { facingMode: { ideal: 'environment' } },
-      { },
-    ]
-
-    let started = false
-    let lastError = null
-    for (const constraint of attempts) {
-      try {
-        await scanner.start(constraint, config, onDecoded, onDecodeError)
-        started = true
-        break
-      } catch (err) {
-        lastError = err
-        cameraError.value = `Camera attempt failed: ${err?.message ?? err}`
-        try { await scanner.stop() } catch { /* not started yet */ }
-        try { scanner.clear() } catch { /* nothing to clear */ }
-        await nextTick()
-      }
-    }
-
-    if (started) {
-      cameraError.value = ''
-    } else {
-      throw lastError ?? new Error('no camera could be started')
-    }
+      config,
+      onDecoded,
+      onDecodeError,
+    )
+    cameraError.value = ''
   } catch (e) {
     cameraError.value = `Camera unavailable: ${e?.message ?? e}`
     cameraActive.value = false
