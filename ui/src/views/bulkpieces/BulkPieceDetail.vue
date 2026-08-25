@@ -248,6 +248,7 @@ async function submitEdit() {
       legoColorId,
       description: editForm.value.description,
       quantity: editForm.value.quantity,
+      version: piece.value.version,
     })
     piece.value = updated
   } catch (e) {
