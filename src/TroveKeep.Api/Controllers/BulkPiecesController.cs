@@ -160,6 +160,25 @@ public class BulkPiecesController : ControllerBase
         }
     }
 
+    [HttpPut("{id:guid}/storage/drawer/{containerId:guid}/{position:int}")]
+    [ProducesResponseType(typeof(BulkPieceResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> SetDrawerQuantity(Guid id, Guid containerId, int position, [FromBody] AllocateStorageRequest request)
+    {
+        try
+        {
+            var updated = await _service.SetDrawerQuantityAsync(id, containerId, position, request.Quantity);
+            if (updated is null) return NotFound();
+            var colors = await BuildColorLookupAsync();
+            return Ok(MapToResponse(updated, colors));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+    }
+
     [HttpDelete("{id:guid}/storage/box/{boxId:guid}")]
     [ProducesResponseType(typeof(BulkPieceResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]

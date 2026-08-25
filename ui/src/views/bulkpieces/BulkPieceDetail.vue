@@ -96,7 +96,20 @@
                     </RouterLink>
                   </td>
                   <td class="td-type">{{ a.storageType }}</td>
-                  <td class="td-qty">{{ a.quantity }}</td>
+                  <td class="td-qty">
+                    <template v-if="a.storageType === 'Drawer'">
+                      <input
+                        v-model.number="qtyEdits[allocKey(a)]"
+                        type="number"
+                        min="1"
+                        class="qty-edit"
+                        :disabled="qtySaving"
+                        @keyup.enter="updateAllocQty(a)"
+                      />
+                      <button class="btn-update" :disabled="qtySaving" @click="updateAllocQty(a)" title="Update quantity">✓</button>
+                    </template>
+                    <template v-else>{{ a.quantity }}</template>
+                  </td>
                   <td class="td-action">
                     <button class="btn-remove" @click="deallocate(a)">Remove</button>
                   </td>
@@ -149,6 +162,7 @@
             </div>
 
             <p v-if="storageError" class="error">{{ storageError }}</p>
+            <p v-if="qtyError" class="error">{{ qtyError }}</p>
           </div>
         </div>
       </div>
@@ -169,7 +183,7 @@ import { useRoute, useRouter } from 'vue-router'
 import {
   getBulkPiece, updateBulkPiece, deleteBulkPiece,
   allocatePieceToBox, allocatePieceToDrawer, deallocatePieceFromBox, deallocatePieceFromDrawer, clearPieceStorage,
-  downloadBulkPieceLabel,
+  downloadBulkPieceLabel, setDrawerQuantity,
 } from '../../api/bulkpieces.js'
 import { getAllBoxes } from '../../api/boxes.js'
 import { getAllDrawerContainers, getDrawerContainerDrawers } from '../../api/drawercontainers.js'
@@ -198,6 +212,9 @@ const selectedContainerId = ref(null)
 const selectedDrawer = ref(null)
 const boxAllocQty = ref(1)
 const drawerAllocQty = ref(1)
+const qtyEdits = ref({})
+const qtySaving = ref(false)
+const qtyError = ref('')
 const editForm = ref({ legoId: '', legoColorUid: '', description: '', quantity: 1 })
 
 const boxNameMap = computed(() => Object.fromEntries(boxes.value.map(b => [b.id, b.name])))
@@ -211,6 +228,41 @@ const unallocated = computed(() => {
   return piece.value.quantity - allocated
 })
 const fullyAllocated = computed(() => unallocated.value === 0)
+
+function allocKey(a) {
+  return `${a.storageId}-${a.storagePosition ?? ''}`
+}
+
+// Keep the inline quantity editor in sync with the current allocations.
+watch(() => piece.value?.storageAllocations, (allocs) => {
+  const next = {}
+  for (const a of allocs ?? []) {
+    next[allocKey(a)] = a.quantity
+  }
+  qtyEdits.value = next
+}, { immediate: true })
+
+async function updateAllocQty(a) {
+  const value = Number(qtyEdits.value[allocKey(a)])
+  if (!value || value < 1) {
+    qtyError.value = 'Quantity must be at least 1.'
+    return
+  }
+  qtySaving.value = true
+  qtyError.value = ''
+  try {
+    const updated = await setDrawerQuantity(id, a.storageId, a.storagePosition, value)
+    piece.value = updated
+    // re-sync the input with the canonical value
+    qtyEdits.value = Object.fromEntries((updated.storageAllocations ?? []).map(x => [allocKey(x), x.quantity]))
+  } catch (e) {
+    qtyError.value = e.message
+    // restore the last known value
+    qtyEdits.value[allocKey(a)] = a.quantity
+  } finally {
+    qtySaving.value = false
+  }
+}
 
 async function load() {
   loading.value = true
@@ -538,6 +590,32 @@ onMounted(load)
 .td-type { color: var(--color-text-muted); font-size: var(--text-xs); }
 .td-qty { font-family: var(--font-mono); text-align: right; }
 .td-action { text-align: right; }
+
+.qty-edit {
+  width: 56px;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  padding: 2px 4px;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  text-align: right;
+}
+
+.btn-update {
+  font-size: var(--text-xs);
+  padding: 0.2rem 0.5rem;
+  margin-left: 4px;
+  background: transparent;
+  border: 1px solid var(--color-border);
+  color: var(--color-text-secondary);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.btn-update:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
 
 .btn-remove {
   font-size: var(--text-xs);

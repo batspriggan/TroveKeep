@@ -14,6 +14,8 @@ public interface IBulkPieceService
     Task<BulkPiece?> AllocateToDrawerAsync(Guid id, Guid containerId, int position, int quantity);
     Task<BulkPiece?> DeallocateFromBoxAsync(Guid id, Guid boxId);
     Task<BulkPiece?> DeallocateFromDrawerAsync(Guid id, Guid containerId, int position);
+    /// <summary>Sets the quantity of a piece in a specific drawer, respecting the total-quantity constraint.</summary>
+    Task<BulkPiece?> SetDrawerQuantityAsync(Guid id, Guid containerId, int position, int quantity);
     Task<BulkPiece?> ClearStorageAsync(Guid id);
     Task UpdateImageCachedAsync(Guid id);
 }

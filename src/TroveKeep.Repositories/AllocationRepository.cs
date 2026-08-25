@@ -99,6 +99,19 @@ public class AllocationRepository : IAllocationRepository
         return ToModel(doc);
     }
 
+    public async Task SetQuantityAsync(Guid itemId, Guid storageId, StorageType storageType, int quantity, int? storagePosition = null)
+    {
+        var filter = Builders<StorageAllocationDocument>.Filter.And(
+            Builders<StorageAllocationDocument>.Filter.Eq(x => x.ItemId, itemId),
+            Builders<StorageAllocationDocument>.Filter.Eq(x => x.StorageId, storageId),
+            Builders<StorageAllocationDocument>.Filter.Eq(x => x.StoragePosition, storagePosition));
+
+        var update = Builders<StorageAllocationDocument>.Update
+            .Set(x => x.Quantity, quantity)
+            .Set(x => x.UpdatedAt, DateTime.UtcNow);
+        await _collection.UpdateOneAsync(filter, update);
+    }
+
     public async Task<bool> RemoveByItemAndStorageAsync(Guid itemId, Guid storageId, int? storagePosition = null)
     {
         var filter = Builders<StorageAllocationDocument>.Filter.And(

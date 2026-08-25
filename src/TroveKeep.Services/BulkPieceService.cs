@@ -135,6 +135,32 @@ public class BulkPieceService : IBulkPieceService
         return piece;
     }
 
+    public async Task<BulkPiece?> SetDrawerQuantityAsync(Guid id, Guid containerId, int position, int quantity)
+    {
+        var drawer = await _drawerRepo.GetByPositionAsync(containerId, position);
+        if (drawer is null) return null;
+        if (quantity < 1)
+            throw new InvalidOperationException("Quantity must be at least 1.");
+
+        var piece = await _pieceRepo.GetByIdAsync(id);
+        if (piece is null) return null;
+
+        var allocs = (await _allocationRepo.GetByItemAsync(id)).ToList();
+        var target = allocs.FirstOrDefault(a =>
+            a.StorageType == StorageType.Drawer && a.StorageId == containerId && a.StoragePosition == position);
+        if (target is null) return null;
+
+        var total = allocs.Sum(a => a.Quantity) - target.Quantity + quantity;
+        if (total > piece.Quantity)
+            throw new InvalidOperationException(
+                $"Cannot set {quantity} here: total would be {total}, exceeding piece quantity {piece.Quantity}.");
+
+        await _allocationRepo.SetQuantityAsync(id, containerId, StorageType.Drawer, quantity, position);
+
+        piece.StorageAllocations = (await _allocationRepo.GetByItemAsync(id)).ToList();
+        return piece;
+    }
+
     public async Task<BulkPiece?> ClearStorageAsync(Guid id)
     {
         var piece = await _pieceRepo.GetByIdAsync(id);

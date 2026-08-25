@@ -45,10 +45,21 @@
                 {{ p.legoColorName ?? `#${p.legoColorId}` }}
               </td>
               <td>{{ p.description }}</td>
-              <td>{{ p.storageAllocations.find(a => a.storageId === containerId && a.storagePosition === position)?.quantity ?? '—' }}</td>
+              <td class="td-qty">
+                <input
+                  v-model.number="qtyEdits[p.id]"
+                  type="number"
+                  min="1"
+                  class="qty-edit"
+                  :disabled="qtySaving"
+                  @keyup.enter="updateAllocQty(p)"
+                />
+                <button class="btn-update" :disabled="qtySaving" @click="updateAllocQty(p)" title="Update quantity">✓</button>
+              </td>
             </tr>
           </tbody>
         </table>
+        <p v-if="qtyError" class="error">{{ qtyError }}</p>
         <p v-else>No bulk pieces stored here.</p>
       </div>
 
@@ -70,6 +81,7 @@
 import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getDrawerContents, updateDrawer, deleteDrawer } from '../../api/drawers.js'
+import { setDrawerQuantity } from '../../api/bulkpieces.js'
 import ConfirmDialog from '../../components/ConfirmDialog.vue'
 
 const route = useRoute()
@@ -84,6 +96,41 @@ const error = ref('')
 const editError = ref('')
 const showConfirm = ref(false)
 const editForm = ref({ label: '' })
+const qtyEdits = ref({})
+const qtySaving = ref(false)
+const qtyError = ref('')
+
+async function updateAllocQty(p) {
+  const value = Number(qtyEdits.value[p.id])
+  if (!value || value < 1) {
+    qtyError.value = 'Quantity must be at least 1.'
+    return
+  }
+  qtySaving.value = true
+  qtyError.value = ''
+  try {
+    const updated = await setDrawerQuantity(p.id, containerId, position, value)
+    // updated is the whole piece; reload contents so quantities refresh
+    const detail = await getDrawerContents(containerId, position)
+    contents.value = detail.bulkPieces ?? []
+    syncQtyEdits()
+  } catch (e) {
+    qtyError.value = e.message
+    qtyEdits.value[p.id] = qtyInDrawer(p)
+  } finally {
+    qtySaving.value = false
+  }
+}
+
+function qtyInDrawer(p) {
+  return p.storageAllocations?.find(a => a.storageId === containerId && a.storagePosition === position)?.quantity
+}
+
+function syncQtyEdits() {
+  const next = {}
+  for (const p of contents.value) next[p.id] = qtyInDrawer(p)
+  qtyEdits.value = next
+}
 
 async function load() {
   loading.value = true
@@ -93,6 +140,7 @@ async function load() {
     drawer.value = detail
     contents.value = detail.bulkPieces ?? []
     editForm.value = { label: detail.label ?? '' }
+    syncQtyEdits()
   } catch (e) {
     error.value = e.message
   } finally {
@@ -132,6 +180,36 @@ onMounted(load)
   border: 1px solid #ccc;
   vertical-align: middle;
   margin-right: 4px;
+}
+
+.td-qty {
+  text-align: right;
+}
+
+.qty-edit {
+  width: 56px;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  padding: 2px 4px;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  text-align: right;
+}
+
+.btn-update {
+  font-size: var(--text-xs);
+  padding: 0.2rem 0.5rem;
+  margin-left: 4px;
+  background: transparent;
+  border: 1px solid var(--color-border);
+  color: var(--color-text-secondary);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.btn-update:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
 }
 
 .cell-thumb {

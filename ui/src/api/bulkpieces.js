@@ -15,6 +15,8 @@ export const allocatePieceToDrawer = (id, containerId, position, quantity) =>
 export const deallocatePieceFromBox = (id, boxId) => del(`${BASE}/${id}/storage/box/${boxId}`)
 export const deallocatePieceFromDrawer = (id, containerId, position) =>
   del(`${BASE}/${id}/storage/drawer/${containerId}/${position}`)
+export const setDrawerQuantity = (id, containerId, position, quantity) =>
+  put(`${BASE}/${id}/storage/drawer/${containerId}/${position}`, { quantity })
 export const clearPieceStorage = (id) => del(`${BASE}/${id}/storage`)
 
 // Triggers a browser download of the label JSON (the UI saves it to the label-tool watch folder).
