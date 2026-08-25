@@ -319,7 +319,8 @@ onMounted(load)
 }
 
 .filter-input {
-  flex: 1;
+  flex: 1 1 auto;
+  min-width: 140px;
   max-width: 360px;
   font-size: var(--text-sm);
   border-color: var(--color-border);
@@ -327,6 +328,8 @@ onMounted(load)
 }
 
 .filter-select {
+  flex: 0 0 auto;
+  width: auto;
   font-size: var(--text-sm);
   padding: 0.35rem 0.5rem;
   border: 1px solid var(--color-border);
@@ -514,6 +517,11 @@ onMounted(load)
 
   .filter-input {
     max-width: 100%;
+  }
+
+  .filter-bar {
+    flex-direction: column;
+    align-items: stretch;
   }
 
   .add-row .desc-field {
