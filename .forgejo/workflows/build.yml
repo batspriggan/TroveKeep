@@ -3,6 +3,17 @@ on:
     tags:
       - 'lv*'
 
+env:
+  # Configure these as repository (or organization) variables in Forgejo:
+  #   Settings → Actions → Variables
+  # REGISTRY_HOST   e.g. registry.example.com:5000
+  # REGISTRY_USER   e.g. alex
+  # IMAGE_NAME      e.g. alex/trovekeep
+  # The registry password must be stored as the secret REGISTRY_PASSWORD.
+  REGISTRY_HOST: ${{ vars.REGISTRY_HOST }}
+  REGISTRY_USER: ${{ vars.REGISTRY_USER }}
+  IMAGE_NAME: ${{ vars.IMAGE_NAME }}
+
 jobs:
   build:
     runs-on: docker
@@ -14,15 +25,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - run: |
+      - name: Log in to registry
+        run: |
+          echo "${{ secrets.REGISTRY_PASSWORD }}" \
+            | docker login "$REGISTRY_HOST" -u "$REGISTRY_USER" --password-stdin
+
+      - name: Build and push image
+        run: |
           echo "Building TroveKeep Docker image..."
           VERSION="${GITHUB_REF_NAME#lv}"
+          IMAGE="${REGISTRY_HOST}/${IMAGE_NAME}"
           docker build \
-            -t 192.168.10.21:3333/alex/trovekeep:latest \
-            -t 192.168.10.21:3333/alex/trovekeep:$VERSION \
-            --build-arg VITE_APP_VERSION=$VERSION \
+            -t "${IMAGE}:latest" \
+            -t "${IMAGE}:${VERSION}" \
+            --build-arg VITE_APP_VERSION="${VERSION}" \
             .
-          echo "${{ secrets.REGISTRY_PASSWORD }}" | docker login 192.168.10.21:3333 -u alex --password-stdin
-          docker push 192.168.10.21:3333/alex/trovekeep:latest
-          docker push 192.168.10.21:3333/alex/trovekeep:$VERSION
-
+          docker push "${IMAGE}:latest"
+          docker push "${IMAGE}:${VERSION}"
