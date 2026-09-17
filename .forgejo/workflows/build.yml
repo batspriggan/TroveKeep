@@ -1,15 +1,29 @@
+# Local (self-hosted) image build — Forgejo registry only.
+#
+# This workflow builds the image and pushes it to the *local* Forgejo container
+# registry (see REGISTRY_HOST below). It is meant for LAN deployments that should
+# not depend on the public image.
+#
+# The public image is produced by .github/workflows/docker.yml and published to
+# ghcr.io. This workflow is therefore a manual fallback: it never runs
+# automatically, trigger it from the Forgejo UI (Actions → this workflow → Run).
+#
+# Required Forgejo configuration (Settings → Actions):
+#   Variables (global or repository):
+#     REGISTRY_HOST   e.g. registry.example.com:5000
+#     REGISTRY_USER   e.g. alex
+#     IMAGE_NAME      e.g. alex/trovekeep
+#   Secrets:
+#     REGISTRY_PASSWORD   the registry password/token
 on:
-  push:
-    tags:
-      - 'lv*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Image version tag to build and push (e.g. 3.0.0)'
+        required: true
+        type: string
 
 env:
-  # Configure these as repository (or organization) variables in Forgejo:
-  #   Settings → Actions → Variables
-  # REGISTRY_HOST   e.g. registry.example.com:5000
-  # REGISTRY_USER   e.g. alex
-  # IMAGE_NAME      e.g. alex/trovekeep
-  # The registry password must be stored as the secret REGISTRY_PASSWORD.
   REGISTRY_HOST: ${{ vars.REGISTRY_HOST }}
   REGISTRY_USER: ${{ vars.REGISTRY_USER }}
   IMAGE_NAME: ${{ vars.IMAGE_NAME }}
@@ -32,8 +46,9 @@ jobs:
 
       - name: Build and push image
         run: |
-          echo "Building TroveKeep Docker image..."
-          VERSION="${GITHUB_REF_NAME#lv}"
+          echo "Building TroveKeep Docker image for the local registry..."
+          VERSION="${{ inputs.version }}"
+          VERSION="${VERSION#v}"
           IMAGE="${REGISTRY_HOST}/${IMAGE_NAME}"
           docker build \
             -t "${IMAGE}:latest" \
