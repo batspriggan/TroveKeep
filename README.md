@@ -2,6 +2,18 @@
 
 A self-hosted inventory manager for Lego collections. Track sets and bulk pieces, organise them across boxes and drawer units, import Rebrickable colour and set data, and back up / restore your collection as a single JSON file.
 
+## Scope, audience and security
+
+This project is built for **personal use on a trusted local network** (LAN/VPN). It was designed primarily as a **single-user** application — one person managing their own collection — but nothing prevents a few people on the same network from sharing one instance.
+
+There is **no authentication and no authorisation** of any kind:
+
+- every API endpoint is open to anyone who can reach the server;
+- there are no user accounts, sessions, or permissions;
+- the UI never prompts for credentials.
+
+Because of this, **do not expose TroveKeep to the public internet** (no port-forwarding, no public reverse proxy, no cloud hosting without putting your own authentication layer and TLS in front of it). Anyone who can reach the port can read, modify, and delete the entire inventory. Treat it like a household appliance on the home network, not like a multi-tenant web service.
+
 ## Features
 
 - **Sets** — catalogue Lego sets with set number, description, photo URL, and quantity; download and cache box-art images from Rebrickable
@@ -225,6 +237,10 @@ ui/
     └── views/               Page-level Vue components
 src/archives/                Rebrickable CSV archives (not committed)
 ```
+
+## Development
+
+TroveKeep was developed entirely with the help of AI coding assistants: development started using **Claude**, and later continued using **DeepSeek**. Every change in this repository — backend, frontend, infrastructure and documentation — has been produced through that AI-assisted workflow, with human review and direction at each step.
 
 ## License
 
