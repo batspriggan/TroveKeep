@@ -13,19 +13,6 @@ export const addDrawer = (containerId, body) => post(`${BASE}/${containerId}/dra
 
 export const emptyContainer = (id) => post(`${BASE}/${id}/empty`)
 
-function triggerDownload(href) {
-  const a = document.createElement('a')
-  a.href = href
-  a.download = ''
-  document.body.appendChild(a)
-  a.click()
-  a.remove()
-}
-// Downloads a zip with the label JSON for every bulk piece in the container.
-export function downloadContainerPieceLabels(id) {
-  triggerDownload(`${BASE}/${id}/labels.zip`)
-}
-
 export async function uploadContainerImage(id, file) {
   const form = new FormData()
   form.append('file', file)

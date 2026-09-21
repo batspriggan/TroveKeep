@@ -4,24 +4,27 @@ namespace TroveKeep.Core.Interfaces.Services;
 
 /// <summary>
 /// Builds the JSON documents for labels in the label-tool file format.
-/// The UI downloads them to a locally monitored folder; nothing is written here.
+/// <para>
+/// Without an <see cref="ILabelImageResolver"/> the label references images by URL;
+/// with one (server mode) the images are embedded inline as base64.
+/// </para>
 /// </summary>
 public interface ILabelPrintService
 {
     // ---- Bulk piece ----
-    string BuildBulkPieceLabel(BulkPiece piece, int? copies = null, string? size = null);
+    Task<string> BuildBulkPieceLabel(BulkPiece piece, ILabelImageResolver? images = null, int? copies = null, string? size = null);
     string GetBulkPieceFileName(BulkPiece piece);
 
     /// <summary>
     /// Builds a bulk-piece label addressed to a specific storage location:
     /// line 1 = "{legoId} {colorName}", line 2 = location, then QR + image.
     /// </summary>
-    string BuildBulkPieceLocationLabel(BulkPiece piece, string? colorName, string? locationLine, int? copies = null, string? qrValue = null);
+    Task<string> BuildBulkPieceLocationLabel(BulkPiece piece, string? colorName, string? locationLine, ILabelImageResolver? images = null, int? copies = null, string? qrValue = null);
     /// <summary>Unique file name for a location-addressed piece label.</summary>
     string GetBulkPieceLocationFileName(BulkPiece piece, int index);
 
     // ---- Set ----
-    string BuildLegoSetLabel(LegoSet set, int? copies = null, string? size = null);
+    Task<string> BuildLegoSetLabel(LegoSet set, ILabelImageResolver? images = null, int? copies = null, string? size = null);
     string GetLegoSetFileName(LegoSet set);
 
     // ---- Box (summary = "large" with content overview) ----

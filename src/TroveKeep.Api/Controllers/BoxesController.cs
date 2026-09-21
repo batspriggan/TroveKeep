@@ -1,11 +1,13 @@
 using System.IO.Compression;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.DependencyInjection;
 using TroveKeep.Api.DTOs.Requests;
 using TroveKeep.Api.DTOs.Responses;
 using TroveKeep.Core.Exceptions;
 using TroveKeep.Core.Interfaces.Repositories;
 using TroveKeep.Core.Interfaces.Services;
 using TroveKeep.Core.Models;
+using TroveKeep.Services;
 
 namespace TroveKeep.Api.Controllers;
 
@@ -18,14 +20,16 @@ public class BoxesController : ControllerBase
     private readonly IImageService _imageService;
     private readonly ILabelPrintService _labelPrintService;
     private readonly ILabelTargetService _labelTargetService;
+    private readonly ILabelImageResolver _labelImages;
 
-    public BoxesController(IBoxService service, IColorRepository colorRepo, IImageService imageService, ILabelPrintService labelPrintService, ILabelTargetService labelTargetService)
+    public BoxesController(IBoxService service, IColorRepository colorRepo, IImageService imageService, ILabelPrintService labelPrintService, ILabelTargetService labelTargetService, [FromKeyedServices(LabelImageResolver.ClientKey)] ILabelImageResolver labelImages)
     {
         _service = service;
         _colorRepo = colorRepo;
         _imageService = imageService;
         _labelPrintService = labelPrintService;
         _labelTargetService = labelTargetService;
+        _labelImages = labelImages;
     }
 
     [HttpGet]
@@ -104,7 +108,7 @@ public class BoxesController : ControllerBase
                 colors.TryGetValue(p.LegoColorId, out var colorName);
                 var entry = zip.CreateEntry(_labelPrintService.GetBulkPieceLocationFileName(p, index), CompressionLevel.Optimal);
                 await using var writer = new StreamWriter(entry.Open());
-                await writer.WriteAsync(_labelPrintService.BuildBulkPieceLocationLabel(p, colorName, box.Name, qrValue: boxKey));
+                await writer.WriteAsync(await _labelPrintService.BuildBulkPieceLocationLabel(p, colorName, box.Name, _labelImages, qrValue: boxKey));
             }
         }
 

@@ -19,7 +19,7 @@
         </div>
         <div class="piece-actions">
           <button class="secondary" :disabled="printLoading || !(piece.storageAllocations?.length)" @click="printLabel">
-            {{ printLoading ? 'Downloading…' : 'Download Label' }}
+            {{ printLoading ? (config.mode === 'server' ? 'Printing…' : 'Downloading…') : (config.mode === 'server' ? 'Print Labels' : 'Download Label') }}
           </button>
         </div>
       </header>
@@ -183,11 +183,12 @@ import { useRoute, useRouter } from 'vue-router'
 import {
   getBulkPiece, updateBulkPiece, deleteBulkPiece,
   allocatePieceToBox, allocatePieceToDrawer, deallocatePieceFromBox, deallocatePieceFromDrawer, clearPieceStorage,
-  downloadBulkPieceLabel, setDrawerQuantity,
+  setDrawerQuantity,
 } from '../../api/bulkpieces.js'
 import { getAllBoxes } from '../../api/boxes.js'
 import { getAllDrawerContainers, getDrawerContainerDrawers } from '../../api/drawercontainers.js'
 import { getColorsList } from '../../api/archives.js'
+import { useLabels } from '../../composables/useLabels.js'
 import ConfirmDialog from '../../components/ConfirmDialog.vue'
 import ColorSelect from '../../components/ColorSelect.vue'
 
@@ -403,8 +404,8 @@ async function printLabel() {
   printLoading.value = true
   printMessage.value = ''
   try {
-    downloadBulkPieceLabel(id)
-    printMessage.value = 'Labels zip downloading — extract it into the label-tool watch folder.'
+    const { message, error } = await printOrDownload('bulkpiece', id)
+    printMessage.value = error ? `${message} ${error}` : message
   } catch (e) {
     printMessage.value = e.message
   } finally {
@@ -412,7 +413,11 @@ async function printLabel() {
   }
 }
 
-onMounted(load)
+const { config, ensureConfig, printOrDownload } = useLabels()
+onMounted(() => {
+  ensureConfig()
+  load()
+})
 </script>
 
 <style scoped>

@@ -22,6 +22,56 @@
     </section>
 
     <section class="card">
+      <h2>Label Printing</h2>
+      <p class="muted">
+        Choose how labels reach the printer. In <strong>client</strong> mode the label files are
+        downloaded and the user manages them (label-tool watch folder). In <strong>server</strong>
+        mode labels are sent to a remote label-tool server over HTTP and printed there.
+      </p>
+
+      <div class="radio-row">
+        <label class="toggle-label">
+          <input type="radio" value="client" v-model="form.mode" />
+          Client (download files)
+        </label>
+        <label class="toggle-label">
+          <input type="radio" value="server" v-model="form.mode" />
+          Server (print remotely)
+        </label>
+      </div>
+
+      <template v-if="form.mode === 'server'">
+        <div class="field-row">
+          <label>Server URL</label>
+          <input v-model="form.serverUrl" placeholder="http://192.168.10.14:9898" />
+        </div>
+        <div class="field-row">
+          <label>Token (optional)</label>
+          <input v-model="form.serverToken" type="password" :placeholder="config.hasServerToken ? '•••••••• (unchanged)' : 'no token'" />
+        </div>
+        <div class="server-test">
+          <button class="secondary" :disabled="testing" @click="testConnection">
+            {{ testing ? 'Testing…' : 'Test Connection' }}
+          </button>
+          <span v-if="health" class="health">
+            <template v-if="health.printer">
+              <span class="ok">● stampante: {{ health.printer }}</span>
+              <span class="muted-inline">— coda: {{ health.pending }} pending, {{ health.printing }} in stampa, {{ health.failed }} falliti</span>
+            </template>
+            <span v-else class="warn">● server OK ma nessuna stampante collegata</span>
+          </span>
+          <span v-else-if="healthError" class="error">{{ healthError }}</span>
+        </div>
+      </template>
+
+      <p v-if="saveError" class="error">{{ saveError }}</p>
+      <p v-if="saveSuccess" class="success">{{ saveSuccess }}</p>
+      <button class="primary" :disabled="saving || !configLoaded" @click="save">
+        {{ saving ? 'Saving…' : 'Save Label Settings' }}
+      </button>
+    </section>
+
+    <section class="card">
       <h2>Backup</h2>
       <p class="muted">Download a compressed snapshot of all data including Rebrickable catalog and cached images.</p>
       <p v-if="backupError" class="error">{{ backupError }}</p>
@@ -54,12 +104,75 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
 import { downloadBackup, uploadRestore } from '../api/settings.js'
 import { useSettings } from '../composables/useSettings.js'
+import { getLabelConfig, updateLabelConfig, getServerHealth } from '../api/labels.js'
 
 const settings = useSettings()
+
+// ---- Label printing ----
+const config = reactive({ mode: 'client', serverUrl: null, hasServerToken: false })
+const configLoaded = ref(false)
+const form = reactive({ mode: 'client', serverUrl: '', serverToken: '' })
+const saving = ref(false)
+const saveError = ref('')
+const saveSuccess = ref('')
+const testing = ref(false)
+const health = ref(null)
+const healthError = ref('')
+
+async function loadLabelConfig() {
+  try {
+    const cfg = await getLabelConfig()
+    config.mode = cfg.mode
+    config.serverUrl = cfg.serverUrl
+    config.hasServerToken = cfg.hasServerToken
+    form.mode = cfg.mode
+    form.serverUrl = cfg.serverUrl ?? ''
+    configLoaded.value = true
+  } catch (e) {
+    saveError.value = `Impossibile leggere la configurazione: ${e.message}`
+  }
+}
+
+async function save() {
+  saving.value = true
+  saveError.value = ''
+  saveSuccess.value = ''
+  try {
+    const cfg = await updateLabelConfig({
+      mode: form.mode,
+      serverUrl: form.mode === 'server' ? form.serverUrl : null,
+      serverToken: form.serverToken || null,
+    })
+    config.mode = cfg.mode
+    config.serverUrl = cfg.serverUrl
+    config.hasServerToken = cfg.hasServerToken
+    form.serverToken = ''
+    saveSuccess.value = 'Label settings saved.'
+  } catch (e) {
+    saveError.value = e.message
+  } finally {
+    saving.value = false
+  }
+}
+
+async function testConnection() {
+  testing.value = true
+  health.value = null
+  healthError.value = ''
+  try {
+    health.value = await getServerHealth()
+  } catch (e) {
+    healthError.value = 'Server non raggiungibile (salva la configurazione prima di testare).'
+  } finally {
+    testing.value = false
+  }
+}
+
+onMounted(loadLabelConfig)
 
 const backupLoading = ref(false)
 const backupError = ref('')
@@ -158,6 +271,59 @@ h2 {
   align-items: center;
   gap: 1rem;
   flex-wrap: wrap;
+}
+
+.radio-row {
+  display: flex;
+  gap: 1.5rem;
+  margin-bottom: 1rem;
+}
+
+.field-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin-bottom: 0.75rem;
+}
+
+.field-row label {
+  font-size: 0.875rem;
+  color: #475569;
+}
+
+.field-row input {
+  padding: 0.5rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  font-size: 0.9rem;
+}
+
+.server-test {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+
+.health {
+  font-size: 0.875rem;
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.health .ok {
+  color: #16a34a;
+}
+
+.health .warn {
+  color: #d97706;
+}
+
+.muted-inline {
+  color: #64748b;
 }
 
 .success {

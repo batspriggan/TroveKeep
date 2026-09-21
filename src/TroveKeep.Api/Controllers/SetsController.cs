@@ -1,9 +1,11 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.DependencyInjection;
 using TroveKeep.Api.DTOs.Requests;
 using TroveKeep.Api.DTOs.Responses;
 using TroveKeep.Core.Exceptions;
 using TroveKeep.Core.Interfaces.Services;
 using TroveKeep.Core.Models;
+using TroveKeep.Services;
 
 namespace TroveKeep.Api.Controllers;
 
@@ -15,13 +17,15 @@ public class SetsController : ControllerBase
     private readonly IImageService _imageService;
     private readonly ISetPhotoService _photoService;
     private readonly ILabelPrintService _labelPrintService;
+    private readonly ILabelImageResolver _labelImages;
 
-    public SetsController(ILegoSetService service, IImageService imageService, ISetPhotoService photoService, ILabelPrintService labelPrintService)
+    public SetsController(ILegoSetService service, IImageService imageService, ISetPhotoService photoService, ILabelPrintService labelPrintService, [FromKeyedServices(LabelImageResolver.ClientKey)] ILabelImageResolver labelImages)
     {
         _service = service;
         _imageService = imageService;
         _photoService = photoService;
         _labelPrintService = labelPrintService;
+        _labelImages = labelImages;
     }
 
     [HttpGet]
@@ -90,7 +94,7 @@ public class SetsController : ControllerBase
         var set = await _service.GetByIdAsync(id);
         if (set is null) return NotFound();
 
-        var json = _labelPrintService.BuildLegoSetLabel(set, copies, size);
+        var json = await _labelPrintService.BuildLegoSetLabel(set, _labelImages, copies, size);
         var fileName = _labelPrintService.GetLegoSetFileName(set);
         return File(System.Text.Encoding.UTF8.GetBytes(json), "application/json", fileName);
     }

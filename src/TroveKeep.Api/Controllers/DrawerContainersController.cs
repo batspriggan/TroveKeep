@@ -1,11 +1,13 @@
 using System.IO.Compression;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.DependencyInjection;
 using TroveKeep.Api.DTOs.Requests;
 using TroveKeep.Api.DTOs.Responses;
 using TroveKeep.Core.Exceptions;
 using TroveKeep.Core.Interfaces.Repositories;
 using TroveKeep.Core.Interfaces.Services;
 using TroveKeep.Core.Models;
+using TroveKeep.Services;
 
 namespace TroveKeep.Api.Controllers;
 
@@ -18,14 +20,16 @@ public class DrawerContainersController : ControllerBase
     private readonly ILabelPrintService _labelPrintService;
     private readonly IColorRepository _colorRepo;
     private readonly ILabelTargetService _labelTargetService;
+    private readonly ILabelImageResolver _labelImages;
 
-    public DrawerContainersController(IDrawerContainerService service, IImageService imageService, ILabelPrintService labelPrintService, IColorRepository colorRepo, ILabelTargetService labelTargetService)
+    public DrawerContainersController(IDrawerContainerService service, IImageService imageService, ILabelPrintService labelPrintService, IColorRepository colorRepo, ILabelTargetService labelTargetService, [FromKeyedServices(LabelImageResolver.ClientKey)] ILabelImageResolver labelImages)
     {
         _service = service;
         _imageService = imageService;
         _labelPrintService = labelPrintService;
         _colorRepo = colorRepo;
         _labelTargetService = labelTargetService;
+        _labelImages = labelImages;
     }
 
     [HttpGet]
@@ -203,7 +207,7 @@ public class DrawerContainersController : ControllerBase
 
                     var entry = zip.CreateEntry(_labelPrintService.GetBulkPieceLocationFileName(rep, index), CompressionLevel.Optimal);
                     await using var writer = new StreamWriter(entry.Open());
-                    await writer.WriteAsync(_labelPrintService.BuildBulkPieceLocationLabel(rep, colorName, locationLine, qrValue: drawerKey));
+                    await writer.WriteAsync(await _labelPrintService.BuildBulkPieceLocationLabel(rep, colorName, locationLine, _labelImages, qrValue: drawerKey));
                 }
             }
         }

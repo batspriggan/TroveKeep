@@ -36,6 +36,7 @@ builder.Services.AddScoped<IPartInventoryArchiveRepository, PartInventoryArchive
 builder.Services.AddScoped<IPartCategoryRepository, PartCategoryRepository>();
 builder.Services.AddScoped<IImageRepository, ImageRepository>();
 builder.Services.AddScoped<ILabelTargetRepository, LabelTargetRepository>();
+builder.Services.AddScoped<ILabelPrintConfigRepository, LabelPrintConfigRepository>();
 builder.Services.AddScoped<ISetPhotoRepository, SetPhotoRepository>();
 builder.Services.AddScoped<ITableTemplateRepository, TableTemplateRepository>();
 builder.Services.AddScoped<IRoomRepository, RoomRepository>();
@@ -58,11 +59,18 @@ builder.Services.AddScoped<ITableTemplateService, TableTemplateService>();
 builder.Services.AddScoped<IRoomService, RoomService>();
 builder.Services.AddScoped<IBaseplateService, BaseplateService>();
 builder.Services.AddHttpClient("SetImages");
+builder.Services.AddHttpClient("LabelServer");
 
-// Label printing (label-tool subprocess) and scanner resolution
+// Label printing (client download vs remote label-tool server)
 var labelPrintSettings = builder.Configuration.GetSection("LabelTool").Get<LabelPrintSettings>() ?? new LabelPrintSettings();
 builder.Services.AddSingleton(labelPrintSettings);
 builder.Services.AddScoped<ILabelPrintService, LabelPrintService>();
+builder.Services.AddScoped<ILabelServerClient, LabelServerClient>();
+builder.Services.AddKeyedScoped<ILabelImageResolver>(LabelImageResolver.ServerKey,
+    (sp, _) => new LabelImageResolver(sp.GetRequiredService<IImageService>(), labelPrintSettings, inline: true));
+builder.Services.AddKeyedScoped<ILabelImageResolver>(LabelImageResolver.ClientKey,
+    (sp, _) => new LabelImageResolver(sp.GetRequiredService<IImageService>(), labelPrintSettings, inline: false));
+builder.Services.AddScoped<ILabelDispatchService, LabelDispatchService>();
 builder.Services.AddScoped<IScannerService, ScannerService>();
 
 var app = builder.Build();

@@ -488,3 +488,6 @@ archives
 appsettings.Development.json
 .vite
 .tokensave
+
+# pi task artifacts (local only)
+.pi/

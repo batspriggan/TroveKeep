@@ -1,3 +1,4 @@
+using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using TroveKeep.Core.Interfaces.Services;
@@ -7,8 +8,15 @@ namespace TroveKeep.Services;
 
 /// <summary>
 /// Builds the label JSON documents in the label-tool file format.
-/// No I/O happens here: the API returns the text (and a suggested file name) and the
-/// UI downloads it to the folder monitored by <c>label-tool watch</c>.
+/// <para>
+/// Two sinks are supported:
+/// <list type="bullet">
+///   <item><b>client</b> — no resolver: the label references its images by URL and the
+///         API returns the text so the UI can download it into the watch folder;</item>
+///   <item><b>server</b> — with an <see cref="ILabelImageResolver"/>: images are embedded
+///         inline as base64 so the payload is self-sufficient when posted over HTTP.</item>
+/// </list>
+/// </para>
 /// </summary>
 public class LabelPrintService : ILabelPrintService
 {
@@ -16,6 +24,8 @@ public class LabelPrintService : ILabelPrintService
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+        // Labels contain large base64 image payloads: avoid escaping '+' as \u002B.
+        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
     };
 
     private readonly LabelPrintSettings _settings;
@@ -27,7 +37,7 @@ public class LabelPrintService : ILabelPrintService
 
     // ---- Bulk piece ----
 
-    public string BuildBulkPieceLabel(BulkPiece piece, int? copies = null, string? size = null)
+    public async Task<string> BuildBulkPieceLabel(BulkPiece piece, ILabelImageResolver? images = null, int? copies = null, string? size = null)
     {
         var lines = new List<object>
         {
@@ -37,8 +47,10 @@ public class LabelPrintService : ILabelPrintService
         if (!string.IsNullOrWhiteSpace(piece.Description))
             lines.Add(piece.Description);
 
-        var pieceImageUrl = PieceImageUrl(piece.Id);
-        AddQrLine(lines, LabelCodes.ForPiece(piece.LegoId, piece.LegoColorId), piece.ImageCached ? pieceImageUrl : null);
+        var image = piece.ImageCached && images is not null
+            ? await images.ResolvePieceImageAsync(piece.Id, piece.LegoId, piece.LegoColorId)
+            : null;
+        AddQrLine(lines, LabelCodes.ForPiece(piece.LegoId, piece.LegoColorId), image);
 
         // Bulk-piece labels default to the small format (optional size query overrides).
         return Serialize(lines, copies, size ?? "small");
@@ -54,7 +66,7 @@ public class LabelPrintService : ILabelPrintService
     /// QR payload instead of the per-piece code; otherwise falls back to the piece code.
     /// Always rendered as the small format.
     /// </summary>
-    public string BuildBulkPieceLocationLabel(BulkPiece piece, string? colorName, string? locationLine, int? copies = null, string? qrValue = null)
+    public async Task<string> BuildBulkPieceLocationLabel(BulkPiece piece, string? colorName, string? locationLine, ILabelImageResolver? images = null, int? copies = null, string? qrValue = null)
     {
         var displayColor = ShowColor(colorName) ? $" {colorName}" : "";
         var lines = new List<object>
@@ -66,8 +78,10 @@ public class LabelPrintService : ILabelPrintService
             lines.Add(locationLine);
 
         var codeValue = qrValue ?? LabelCodes.ForPiece(piece.LegoId, piece.LegoColorId);
-        var pieceImageUrl = PieceImageUrl(piece.Id);
-        AddQrLine(lines, codeValue, piece.ImageCached ? pieceImageUrl : null);
+        var image = piece.ImageCached && images is not null
+            ? await images.ResolvePieceImageAsync(piece.Id, piece.LegoId, piece.LegoColorId)
+            : null;
+        AddQrLine(lines, codeValue, image);
 
         return Serialize(lines, copies, "small");
     }
@@ -77,7 +91,7 @@ public class LabelPrintService : ILabelPrintService
 
     // ---- Set ----
 
-    public string BuildLegoSetLabel(LegoSet set, int? copies = null, string? size = null)
+    public async Task<string> BuildLegoSetLabel(LegoSet set, ILabelImageResolver? images = null, int? copies = null, string? size = null)
     {
         var lines = new List<object>
         {
@@ -87,8 +101,10 @@ public class LabelPrintService : ILabelPrintService
         if (!string.IsNullOrWhiteSpace(set.Description))
             lines.Add(set.Description);
 
-        var setImageUrl = SetImageUrl(set.Id);
-        AddQrLine(lines, LabelCodes.ForSet(set.SetNumber), set.ImageCached ? setImageUrl : null);
+        var image = set.ImageCached && images is not null
+            ? await images.ResolveSetImageAsync(set.Id, set.SetNumber)
+            : null;
+        AddQrLine(lines, LabelCodes.ForSet(set.SetNumber), image);
 
         return Serialize(lines, copies, size ?? _settings.DefaultSize);
     }
@@ -155,12 +171,12 @@ public class LabelPrintService : ILabelPrintService
 
     /// <summary>
     /// Adds the QR code to the label, optionally alongside the piece/set image in a
-    /// composite <c>row</c> when the image is cached and a public base URL is configured.
-    /// Without an image (or base URL) only the QR is emitted, as before.
+    /// composite <c>row</c> when a resolved image is available.
+    /// Without an image only the QR is emitted, as before.
     /// </summary>
-    private void AddQrLine(List<object> lines, string codeValue, string? imageUrl)
+    private static void AddQrLine(List<object> lines, string codeValue, LabelImage? image)
     {
-        if (string.IsNullOrEmpty(imageUrl))
+        if (image is null)
         {
             lines.Add(Code("qr", codeValue));
             return;
@@ -169,23 +185,17 @@ public class LabelPrintService : ILabelPrintService
         lines.Add(new LabelRowLine(
         [
             new LabelCodeLine("qr", codeValue),
-            new LabelImageLine(imageUrl),
+            ToImageLine(image),
         ]));
     }
 
-    private string? PieceImageUrl(Guid pieceId) =>
-        ImageUrl($"/api/bulkpieces/{pieceId}/image");
-
-    private string? SetImageUrl(Guid setId) =>
-        ImageUrl($"/api/sets/{setId}/image");
-
-    private string? ImageUrl(string relativePath)
-    {
-        var baseUrl = _settings.PublicBaseUrl;
-        return string.IsNullOrWhiteSpace(baseUrl)
-            ? null
-            : $"{baseUrl.TrimEnd('/')}{relativePath}";
-    }
+    /// <summary>
+    /// Picks the inline base64 form when present (server mode), otherwise the URL (client mode).
+    /// </summary>
+    private static LabelImageLine ToImageLine(LabelImage image) =>
+        image.Base64 is not null
+            ? new LabelImageLine(image.FileName, image.Base64, image.Mode)
+            : new LabelImageLine(image.Url!, Mode: image.Mode);
 
     private static string Sanitize(string value) =>
         string.Concat(value.Where(char.IsLetterOrDigit)).ToLowerInvariant();
@@ -209,9 +219,10 @@ public class LabelPrintService : ILabelPrintService
         [property: JsonPropertyName("code")] string Code,
         [property: JsonPropertyName("value")] string Value);
 
-    /// <summary>Image element (<c>{"image": "URL|path", "mode": "bw"}</c>).</summary>
+    /// <summary>Image element: <c>{"image": "URL|name", "data": "base64", "mode": "bw"}</c>.</summary>
     private sealed record LabelImageLine(
         [property: JsonPropertyName("image")] string Image,
+        [property: JsonPropertyName("data")] string? Data = null,
         [property: JsonPropertyName("mode")] string Mode = "bw");
 
     /// <summary>Composite row: multiple graphic elements (<c>{"row": [...]}</c>).</summary>

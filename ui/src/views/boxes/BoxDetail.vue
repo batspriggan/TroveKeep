@@ -10,13 +10,13 @@
       <h1 class="box-title">{{ box.name }}</h1>
       <div class="label-actions">
         <button class="secondary" :disabled="downloadLoading" @click="downloadSummary">
-          {{ downloadLoading ? 'Downloading…' : 'Download Summary Label' }}
+          {{ downloadLoading ? (config.mode === 'server' ? 'Printing…' : 'Downloading…') : (config.mode === 'server' ? 'Print Summary Label' : 'Download Summary Label') }}
         </button>
         <button class="secondary" :disabled="downloadLoading" @click="downloadQr">
-          Download QR Label
+          {{ config.mode === 'server' ? 'Print QR Label' : 'Download QR Label' }}
         </button>
         <button v-if="settings.bulkPiecesEnabled" class="secondary" :disabled="downloadLoading" @click="downloadPieceLabels">
-          Download All Piece Labels
+          {{ config.mode === 'server' ? 'Print All Piece Labels' : 'Download All Piece Labels' }}
         </button>
       </div>
       <p v-if="downloadMessage" class="download-msg">{{ downloadMessage }}</p>
@@ -128,7 +128,8 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { getBoxContents, updateBox, deleteBox, uploadBoxImage, deleteBoxImage, downloadBoxSummary, downloadBoxQr, downloadBoxPieceLabels } from '../../api/boxes.js'
+import { getBoxContents, updateBox, deleteBox, uploadBoxImage, deleteBoxImage } from '../../api/boxes.js'
+import { useLabels } from '../../composables/useLabels.js'
 import ConfirmDialog from '../../components/ConfirmDialog.vue'
 import { useSettings } from '../../composables/useSettings.js'
 
@@ -223,12 +224,12 @@ async function doDelete() {
   }
 }
 
-function downloadSummary() {
+async function runLabelAction(kind) {
   downloadLoading.value = true
   downloadMessage.value = ''
   try {
-    downloadBoxSummary(id)
-    downloadMessage.value = 'Summary label downloading — save it to the label-tool watch folder.'
+    const { message, error } = await printOrDownload(kind, id)
+    downloadMessage.value = error ? `${message} ${error}` : message
   } catch (e) {
     downloadMessage.value = e.message
   } finally {
@@ -236,33 +237,15 @@ function downloadSummary() {
   }
 }
 
-function downloadQr() {
-  downloadLoading.value = true
-  downloadMessage.value = ''
-  try {
-    downloadBoxQr(id)
-    downloadMessage.value = 'QR label downloading — save it to the label-tool watch folder.'
-  } catch (e) {
-    downloadMessage.value = e.message
-  } finally {
-    downloadLoading.value = false
-  }
-}
+const downloadSummary = () => runLabelAction('box-summary')
+const downloadQr = () => runLabelAction('box-qr')
+const downloadPieceLabels = () => runLabelAction('box-pieces')
 
-function downloadPieceLabels() {
-  downloadLoading.value = true
-  downloadMessage.value = ''
-  try {
-    downloadBoxPieceLabels(id)
-    downloadMessage.value = 'Labels zip downloading — extract it into the label-tool watch folder.'
-  } catch (e) {
-    downloadMessage.value = e.message
-  } finally {
-    downloadLoading.value = false
-  }
-}
-
-onMounted(load)
+const { config, ensureConfig, printOrDownload } = useLabels()
+onMounted(() => {
+  ensureConfig()
+  load()
+})
 </script>
 
 <style scoped>

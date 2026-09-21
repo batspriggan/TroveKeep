@@ -12,7 +12,7 @@
         <span v-if="set.isMoc" class="moc-badge">MOC</span>
         <span class="set-desc">{{ set.description }}</span>
         <button class="secondary set-download" :disabled="downloadLoading" @click="downloadLabel">
-          {{ downloadLoading ? 'Downloading…' : 'Download Label' }}
+          {{ downloadLoading ? (config.mode === 'server' ? 'Printing…' : 'Downloading…') : (config.mode === 'server' ? 'Print Label' : 'Download Label') }}
         </button>
       </header>
       <p v-if="downloadMessage" class="download-msg">{{ downloadMessage }}</p>
@@ -145,8 +145,9 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { getSet, updateSet, deleteSet, allocateSetToBox, deallocateSetStorage, clearSetStorage, getSetPhotos, uploadSetPhoto, deleteSetPhoto, downloadSetLabel } from '../../api/sets.js'
+import { getSet, updateSet, deleteSet, allocateSetToBox, deallocateSetStorage, clearSetStorage, getSetPhotos, uploadSetPhoto, deleteSetPhoto } from '../../api/sets.js'
 import { getAllBoxes } from '../../api/boxes.js'
+import { useLabels } from '../../composables/useLabels.js'
 import ConfirmDialog from '../../components/ConfirmDialog.vue'
 
 const route = useRoute()
@@ -275,12 +276,12 @@ async function doDelete() {
   }
 }
 
-function downloadLabel() {
+async function downloadLabel() {
   downloadLoading.value = true
   downloadMessage.value = ''
   try {
-    downloadSetLabel(id)
-    downloadMessage.value = 'Label file downloading — save it to the label-tool watch folder.'
+    const { message, error } = await printOrDownload('set', id, { size: null })
+    downloadMessage.value = error ? `${message} ${error}` : message
   } catch (e) {
     downloadMessage.value = e.message
   } finally {
@@ -288,7 +289,11 @@ function downloadLabel() {
   }
 }
 
-onMounted(load)
+const { config, ensureConfig, printOrDownload } = useLabels()
+onMounted(() => {
+  ensureConfig()
+  load()
+})
 </script>
 
 <style scoped>

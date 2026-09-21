@@ -1,11 +1,13 @@
 using System.IO.Compression;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.DependencyInjection;
 using TroveKeep.Api.DTOs.Requests;
 using TroveKeep.Api.DTOs.Responses;
 using TroveKeep.Core.Exceptions;
 using TroveKeep.Core.Interfaces.Repositories;
 using TroveKeep.Core.Interfaces.Services;
 using TroveKeep.Core.Models;
+using TroveKeep.Services;
 
 namespace TroveKeep.Api.Controllers;
 
@@ -20,8 +22,9 @@ public class BulkPiecesController : ControllerBase
     private readonly IBoxRepository _boxRepo;
     private readonly IDrawerContainerRepository _drawerContainerRepo;
     private readonly ILabelTargetService _labelTargetService;
+    private readonly ILabelImageResolver _labelImages;
 
-    public BulkPiecesController(IBulkPieceService service, IColorRepository colorRepo, IImageService imageService, ILabelPrintService labelPrintService, IBoxRepository boxRepo, IDrawerContainerRepository drawerContainerRepo, ILabelTargetService labelTargetService)
+    public BulkPiecesController(IBulkPieceService service, IColorRepository colorRepo, IImageService imageService, ILabelPrintService labelPrintService, IBoxRepository boxRepo, IDrawerContainerRepository drawerContainerRepo, ILabelTargetService labelTargetService, [FromKeyedServices(LabelImageResolver.ClientKey)] ILabelImageResolver labelImages)
     {
         _service = service;
         _colorRepo = colorRepo;
@@ -30,6 +33,7 @@ public class BulkPiecesController : ControllerBase
         _boxRepo = boxRepo;
         _drawerContainerRepo = drawerContainerRepo;
         _labelTargetService = labelTargetService;
+        _labelImages = labelImages;
     }
 
     [HttpGet]
@@ -290,7 +294,7 @@ public class BulkPiecesController : ControllerBase
 
                 var entry = zip.CreateEntry(_labelPrintService.GetBulkPieceLocationFileName(piece, index), CompressionLevel.Optimal);
                 await using var writer = new StreamWriter(entry.Open());
-                await writer.WriteAsync(_labelPrintService.BuildBulkPieceLocationLabel(piece, colorName, locationLine, copies, qrValue));
+                await writer.WriteAsync(await _labelPrintService.BuildBulkPieceLocationLabel(piece, colorName, locationLine, _labelImages, copies, qrValue));
             }
         }
 

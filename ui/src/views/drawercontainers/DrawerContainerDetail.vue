@@ -85,7 +85,7 @@
 
             <div v-if="settings.bulkPiecesEnabled" class="labels-download">
               <button class="secondary" :disabled="labelsLoading" @click="downloadPieceLabels">
-                {{ labelsLoading ? 'Downloading…' : 'Download All Piece Labels' }}
+                {{ labelsLoading ? (config.mode === 'server' ? 'Printing…' : 'Downloading…') : (config.mode === 'server' ? 'Print All Piece Labels' : 'Download All Piece Labels') }}
               </button>
               <p v-if="labelsMessage" class="download-msg">{{ labelsMessage }}</p>
             </div>
@@ -186,13 +186,15 @@ import { useRoute, useRouter } from 'vue-router'
 import {
   getDrawerContainer, updateDrawerContainer, deleteDrawerContainer,
   getDrawerContainerDrawers, addDrawer, uploadContainerImage, deleteContainerImage,
-  downloadContainerPieceLabels, getAllDrawerContainers, emptyContainer,
+  getAllDrawerContainers, emptyContainer,
 } from '../../api/drawercontainers.js'
 import { deleteDrawer, moveDrawer } from '../../api/drawers.js'
+import { useLabels } from '../../composables/useLabels.js'
 import ConfirmDialog from '../../components/ConfirmDialog.vue'
 import { useSettings } from '../../composables/useSettings.js'
 
 const settings = useSettings()
+const { config, ensureConfig, printOrDownload } = useLabels()
 
 const route = useRoute()
 const router = useRouter()
@@ -275,12 +277,12 @@ async function submitDrawer() {
   }
 }
 
-function downloadPieceLabels() {
+async function downloadPieceLabels() {
   labelsLoading.value = true
   labelsMessage.value = ''
   try {
-    downloadContainerPieceLabels(id)
-    labelsMessage.value = 'Labels zip downloading — extract it into the label-tool watch folder.'
+    const { message, error } = await printOrDownload('container-pieces', id)
+    labelsMessage.value = error ? `${message} ${error}` : message
   } catch (e) {
     labelsMessage.value = e.message
   } finally {
@@ -389,7 +391,10 @@ async function removePhoto() {
   }
 }
 
-onMounted(load)
+onMounted(() => {
+  ensureConfig()
+  load()
+})
 </script>
 
 <style scoped>

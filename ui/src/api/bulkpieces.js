@@ -22,13 +22,3 @@ export const setDrawerQuantity = (id, containerId, position, quantity) =>
   put(`${BASE}/${id}/storage/drawer/${containerId}/${position}`, { quantity })
 
 export const clearPieceStorage = (id) => del(`${BASE}/${id}/storage`)
-
-// Triggers a browser download of the label JSON (the UI saves it to the label-tool watch folder).
-export function downloadBulkPieceLabel(id) {
-  const a = document.createElement('a')
-  a.href = `${BASE}/${id}/label-file`
-  a.download = ''
-  document.body.appendChild(a)
-  a.click()
-  a.remove()
-}
