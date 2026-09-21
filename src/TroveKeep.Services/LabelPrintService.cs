@@ -219,11 +219,11 @@ public class LabelPrintService : ILabelPrintService
         [property: JsonPropertyName("code")] string Code,
         [property: JsonPropertyName("value")] string Value);
 
-    /// <summary>Image element: <c>{"image": "URL|name", "data": "base64", "mode": "bw"}</c>.</summary>
+    /// <summary>Image element: <c>{"image": "URL|name", "data": "base64", "mode": "dither"}</c>.</summary>
     private sealed record LabelImageLine(
         [property: JsonPropertyName("image")] string Image,
         [property: JsonPropertyName("data")] string? Data = null,
-        [property: JsonPropertyName("mode")] string Mode = "bw");
+        [property: JsonPropertyName("mode")] string Mode = "dither");
 
     /// <summary>Composite row: multiple graphic elements (<c>{"row": [...]}</c>).</summary>
     private sealed record LabelRowLine(

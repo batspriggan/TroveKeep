@@ -7,7 +7,13 @@ namespace TroveKeep.Core.Interfaces.Services;
 public sealed record BuiltLabel(string Json, string FileName, string Size);
 
 /// <summary>An image ready to be embedded in a label line.</summary>
-public sealed record LabelImage(string? Url, string? Base64, string FileName, string Mode = "bw");
+/// <param name="Mode">
+/// Binarization mode for the thermal printer. Defaults to <c>dither</c>
+/// (Floyd-Steinberg): the catalog images are colour POV-Ray renders with
+/// gradients, and a fixed 50% threshold (<c>bw</c>) flattens them into a solid
+/// silhouette (a dark-coloured piece becomes an all-black blob).
+/// </param>
+public sealed record LabelImage(string? Url, string? Base64, string FileName, string Mode = "dither");
 
 /// <summary>
 /// Resolves a cached image into the two forms a label can embed:
