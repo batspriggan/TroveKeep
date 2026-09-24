@@ -126,10 +126,6 @@
           <span class="sum-value">{{ summary.free }}</span>
         </div>
         <div class="sum-card">
-          <span class="sum-label">In layout</span>
-          <span class="sum-value">{{ summary.inLayout }}</span>
-        </div>
-        <div class="sum-card">
           <span class="sum-label">Surface</span>
           <span class="sum-value">
             {{ summary.studs2.toLocaleString() }} stud²
@@ -338,7 +334,6 @@
           <th>Color</th>
           <th class="num-col">Qty</th>
           <th class="num-col">Free</th>
-          <th class="num-col">Reserved</th>
           <th>RoadShape</th>
           <th></th>
         </tr>
@@ -386,7 +381,7 @@
               <span
                 v-if="bp.overReserved"
                 class="over-badge"
-                :title="`Reserved ${bp.reservedQuantity} but only ${bp.quantity} owned — update the quantity`"
+                :title="`${bp.reservedQuantity} reserved by MOCs, but only ${bp.quantity} owned — update the quantity`"
               >⚠ Over-reserved</span>
             </td>
             <td class="id-col">{{ bp.partNum || '—' }}</td>
@@ -414,7 +409,6 @@
               </div>
             </td>
             <td class="num-col" :class="{ 'zero': (bp.availableQuantity ?? 0) === 0 }">{{ bp.availableQuantity ?? 0 }}</td>
-            <td class="num-col">{{ bp.reservedQuantity ?? 0 }}</td>
             <td>
               <span v-if="bp.type === 'Road'">{{ bp.roadShape || '—' }}</span>
               <span v-else class="muted">—</span>
@@ -429,16 +423,12 @@
           <!-- Reserved by -->
           <tr v-if="expanded[bp.id]" :key="bp.id + '-res'" class="res-row">
             <td></td>
-            <td colspan="11">
+            <td colspan="10">
               <div class="res-panel">
                 <div class="res-header">
                   <span class="res-stat">
                     <strong>Reserved by MOC</strong>
                     <span class="res-stat-value">{{ bp.reservedQuantity ?? 0 }}</span>
-                  </span>
-                  <span class="res-stat">
-                    <strong>Used in table layouts</strong>
-                    <span class="res-stat-value">{{ bp.inLayoutQuantity ?? 0 }}</span>
                   </span>
                 </div>
 
@@ -559,7 +549,6 @@ const form = reactive({
   linkedSetId: null,
   notes: '',
   legoColorIdFallback: 0,
-  isImported: false,
 })
 
 // ── Computed ─────────────────────────────────────────────────────────────────
@@ -612,18 +601,17 @@ const filtered = computed(() => {
 const filteredReviewCount = computed(() => filtered.value.filter(b => b.needsReview).length)
 
 const summary = computed(() => {
-  let totalQty = 0, reserved = 0, free = 0, inLayout = 0, studs2 = 0
+  let totalQty = 0, reserved = 0, free = 0, studs2 = 0
   const byType = { Standard: 0, Road: 0, Custom: 0 }
   for (const bp of placeableBaseplates.value) {
     const q = bp.quantity ?? 0
     totalQty += q
     reserved += bp.reservedQuantity ?? 0
     free += bp.availableQuantity ?? 0
-    inLayout += bp.inLayoutQuantity ?? 0
     studs2 += (bp.widthStuds ?? 0) * (bp.depthStuds ?? 0) * q
     if (byType[bp.type] !== undefined) byType[bp.type] += q
   }
-  return { totalQty, reserved, free, inLayout, studs2, m2: studs2 * STUDS_TO_M2, byType }
+  return { totalQty, reserved, free, studs2, m2: studs2 * STUDS_TO_M2, byType }
 })
 
 // ── Data loading ─────────────────────────────────────────────────────────────
@@ -929,7 +917,6 @@ function resetForm() {
     widthStuds: null, depthStuds: null,
     colorUid: '', roadShape: '', quantity: 1,
     linkedSetId: null, notes: '', legoColorIdFallback: 0,
-    isImported: false,
   })
   sizeInput.value = ''
   partQuery.value = ''
@@ -1001,9 +988,9 @@ function selectPart(r) {
   if (r.guessedStudX > 0) form.widthStuds = r.guessedStudX
   if (r.guessedStudY > 0) form.depthStuds = r.guessedStudY
   if (r.guessedStudX > 0 && r.guessedStudY > 0) sizeInput.value = `${r.guessedStudX}x${r.guessedStudY}`
-  // Dimensions for archive parts are guessed from the part name, so the new row is
-  // an import: it stays flagged for review until the user confirms it.
-  form.isImported = true
+  // The part dimensions come from the archive but the physical colour still has to be
+  // picked in the form, and the guessed size may be wrong: the row is NOT an import.
+  // Importing a legacy backlog is a separate flow (the `imported` query flag).
   partResults.value = []
   partQuery.value = ''
 }
@@ -1048,7 +1035,7 @@ async function submitForm() {
   try {
     const saved = editingId.value
       ? await updateBaseplate(editingId.value, body)
-      : await createBaseplate(body, form.isImported === true)
+      : await createBaseplate(body)
     replaceRow(saved)
     closeForm()
   } catch (e) {

@@ -109,7 +109,9 @@ public class BaseplateService : IBaseplateService
 
     public bool ComputeNeedsReview(Baseplate bp, bool isImported)
     {
-        // Imported rows (part-search / migration dedup) always need a human check first.
+        // Imported rows (legacy backlog / migration dedup) always need a human check first.
+        // This flag is NOT set by the UI: a row created from the part archive carries guessed
+        // dimensions too, but those are visible in the form the user just filled in.
         if (isImported) return true;
 
         if (bp.Quantity < 1) return true;
