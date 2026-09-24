@@ -3,6 +3,7 @@ using MongoDB.Bson.Serialization.Attributes;
 
 namespace TroveKeep.Repositories.Documents;
 
+[BsonIgnoreExtraElements]
 public class PlacedTableDocument
 {
     [BsonGuidRepresentation(GuidRepresentation.Standard)]

@@ -1,5 +1,49 @@
 # TroveKeep
 
+> ⚠️ **Upgrading to v4.0.0 — read this first.**
+> Baseplates have been **moved out of Archives** into their own top-level section, and the
+> baseplate data model has changed: rows now carry a **quantity** per type/colour, MOC
+> reservations, road shape and a review flag. The startup migration (`Migration_005`)
+> backfills those fields, **merges duplicate baseplate documents** (same type + part +
+> colour + stud dimensions) and **dissolves MOC-linked "baseplate" rows** into reservations,
+> re-pointing the room layouts at real plate types.
+> **This is destructive:** only the oldest document of each duplicate group is kept, and its
+> metadata (`ImageCached`, `LinkedSetId`, `Notes`) wins — metadata that existed only on the
+> discarded duplicates is lost. Quantities are summed and MOC reservations are merged, so no
+> inventory count is lost. Placements of MOC rows in room layouts are **preserved** (each MOC
+> block becomes the real plates it is built on); anything that cannot be converted
+> automatically is left in a **quarantine** state to reconcile by hand, and planning is
+> blocked until it is resolved. Treat the merge as irreversible.
+>
+> You are protected by the **automatic pre-migration backup**: the runner writes a full
+> gzip-JSON snapshot of every collection to `Migration__BackupDir`
+> (`auto-backup-v{currentVersion}-{timestamp}.json.gz`) **before** any pending migration runs,
+> and refuses to start if that backup cannot be written. Keep that snapshot — see
+> [Rollback](#rollback) for how to restore it. Back up your production database before
+> upgrading.
+>
+> **Post-upgrade clean-up is expected — the migration cannot know your real inventory.**
+> Every baseplate row is backfilled with **`Quantity = 1`**, then corrected as follows:
+> - **Set the real owned quantities by hand.** A type you own 100 of will still say `1` until
+>   you edit it in the **Baseplates** library. Rows flagged **⚠ To review** are the ones the
+>   migration could not verify (imported from the part archive, merged, or dissolved from a MOC);
+>   review and confirm them.
+> - **Reservations may exceed the owned quantity.** Dissolving a MOC reserves the plates it is
+>   built on (`Fattoria` = `4× 32×32`), so a type with `Quantity = 1` shows a red
+>   **⚠ Over-reserved** badge. This is a warning, not an error: fix the owned quantity in the
+>   library and both the badge and the planner numbers settle. Availability is clamped at 0
+>   meanwhile.
+> - **Fix the “odd” cases by hand.** Anything the migration could not convert automatically
+>   (no matching plate module, linked set missing, ambiguous geometry) is left in a
+>   **quarantine** state and listed under **Unresolved MOC plates** in the Baseplates library.
+>   Each row offers three actions: pick the real plate type and grid (`Reconcile`), declare it a
+>   physical plate after all (`Not a MOC`), or delete it. **The planner refuses to open while any
+>   quarantined row exists** — reconcile them and it unlocks automatically.
+> - **Mixed-size MOC footprints are approximate.** The layout rectangle is derived from the
+>   reserved plates (compact square arrangement, e.g. `4 plates → 2×2`). A MOC mixing plate
+>   sizes has no single correct rectangle: the UI labels it *mixed sizes* and you reconcile the
+>   layout yourself. Existing placements are always preserved either way.
+
 A self-hosted inventory manager for Lego collections. Track sets and bulk pieces, organise them across boxes and drawer units, import Rebrickable colour and set data, and back up / restore your collection as a single JSON file.
 
 ## Scope, audience and security
@@ -24,7 +68,8 @@ Because of this, **do not expose TroveKeep to the public internet** (no port-for
 - **Label printing** — generate QR labels for boxes, drawer containers, drawers, and bulk pieces (single or as a `.zip` batch) and hand them to a `label-tool` watch folder for printing; parts can carry a per-colour image next to the QR
 - **Archives** — import the Rebrickable colours, sets, parts, and part-categories CSV archives for colour resolution, set typeahead, and part search
 - **Table Planner** — drag-and-drop room layout editor; define table templates, place them on a canvas with snap-to-grid and edge magnetism, and calculate how many LEGO baseplates cover a selected table group
-- **Baseplate Library** — manage LEGO baseplate parts (linked to the Rebrickable parts archive) with their stud dimensions; used by the plate calculator in the room planner
+- **Baseplates** — a top-level library for the baseplates that underpin a Lego city layout: type (Standard / Road / Custom), stud dimensions, colour, **quantity owned per type and colour**, road shape, image, and **MOC reservations** (a MOC or set can hold N baseplates of a type, removing them from the freely usable pool). Rows imported from the Rebrickable part archive, merged by a migration, or awaiting reconciliation are flagged with a warning badge in the navigation
+- **Build Check** — inside the Table Planner, select any set of table aggregates (configurations) and check the **combined baseplate requirement** against what you own, per baseplate type; layouts deliberately do **not** consume availability, since the same plates can serve different layouts on different occasions
 - **Backup / Restore** — export the full inventory to a JSON file and restore it on any instance; individual rooms can also be exported and imported as ZIP files
 
 ## Tech stack
@@ -109,9 +154,9 @@ The app is available at `http://localhost:8080`.
 | Tag | Meaning |
 | --- | --- |
 | `latest` | Most recent stable release |
-| `X.Y.Z` | A specific release (e.g. `3.0.0`) |
-| `X.Y` | Latest patch of a minor line (e.g. `3.0`) |
-| `dev` | Latest pre-release (version tags containing a hyphen, e.g. `3.1.0-beta1`) |
+| `X.Y.Z` | A specific release (e.g. `4.0.0`) |
+| `X.Y` | Latest patch of a minor line (e.g. `4.0`) |
+| `dev` | Latest pre-release (version tags containing a hyphen, e.g. `4.0.0-beta1`) |
 
 Images are built and pushed automatically by GitHub Actions whenever a `v*` tag is pushed (see `.github/workflows/docker.yml`).
 
@@ -212,11 +257,11 @@ TroveKeep uses a single version line: `vMAJOR.MINOR.PATCH` (semantic versioning)
 **Pushing a `v*` tag is what triggers a release build.** On tag push, GitHub Actions builds the image and publishes it to `ghcr.io` (see `.github/workflows/docker.yml`).
 
 ```bash
-git tag v3.1.0
-git push github v3.1.0
+git tag v4.0.0
+git push github v4.0.0
 ```
 
-Pre-releases are expressed with a hyphen (`v3.1.0-beta1`): they are published under the `dev` tag instead of `latest`. The public registry no longer receives `lv*` tags — that prefix belonged to the local build line and is retired.
+Pre-releases are expressed with a hyphen (`v4.0.0-beta1`): they are published under the `dev` tag instead of `latest`. The public registry no longer receives `lv*` tags — that prefix belonged to the local build line and is retired.
 
 ## Project structure
 
@@ -234,7 +279,7 @@ ui/
     ├── composables/         Shared reactive state (e.g. settings)
     ├── router/              Vue Router configuration
     ├── utils/               PDF/print helpers
-    └── views/               Page-level Vue components
+    └── views/               Page-level Vue components (baseplates/, tableplanner/, …)
 src/archives/                Rebrickable CSV archives (not committed)
 ```
 

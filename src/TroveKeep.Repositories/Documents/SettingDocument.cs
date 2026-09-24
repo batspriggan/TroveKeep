@@ -16,6 +16,7 @@ public class SettingDocument
     public DateTime UpdatedAt { get; set; }
 }
 
+[BsonIgnoreExtraElements]
 public class LabelPrintConfigDocument
 {
     required public string Mode { get; set; }

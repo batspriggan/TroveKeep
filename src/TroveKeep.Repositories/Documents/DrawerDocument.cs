@@ -1,5 +1,8 @@
+using MongoDB.Bson.Serialization.Attributes;
+
 namespace TroveKeep.Repositories.Documents;
 
+[BsonIgnoreExtraElements]
 public class DrawerDocument
 {
     public int Position { get; set; }

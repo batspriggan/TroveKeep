@@ -256,100 +256,6 @@
       </table>
     </div>
 
-    <!-- Baseplates -->
-    <div v-if="settings.tablePlannerEnabled" class="baseplates-section">
-      <h2 class="section-heading">Baseplates</h2>
-      <p class="muted">Define LEGO baseplates used by the plate calculator in the Table Planner.</p>
-
-      <table v-if="baseplates.length" class="data-table bp-table">
-        <thead>
-          <tr>
-            <th>Preview</th>
-            <th>Type</th>
-            <th>Part #</th>
-            <th>Name</th>
-            <th>Size (studs)</th>
-            <th>Image</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="b in baseplates" :key="b.id">
-            <td>
-              <span v-if="b.type === 'Standard'"
-                class="swatch" :style="{ background: b.legoColorRgb ? '#' + b.legoColorRgb : '#ccc' }"
-                :title="b.legoColorName ?? ''"></span>
-              <img v-else-if="b.imageCached || (b.type === 'Custom' && b.linkedSetId)"
-                :src="getBaseplateImageUrl(b.id)" class="bp-thumb"
-                :alt="b.name" @error="e => e.target.style.display='none'" />
-              <span v-else class="muted">—</span>
-            </td>
-            <td><span class="bp-type-badge" :class="b.type.toLowerCase()">{{ b.type }}</span></td>
-            <td class="id-col">{{ b.partNum || '—' }}</td>
-            <td>{{ b.name }}</td>
-            <td>{{ b.widthStuds }}×{{ b.depthStuds }}</td>
-            <td class="bp-img-col">
-              <template v-if="b.type !== 'Standard'">
-                <label class="bp-upload-label">
-                  <input type="file" accept="image/*" @change="e => onBpFileChange(e, b.id)" style="display:none" />
-                  <span class="bp-upload-link">{{ bpPendingFile[b.id] ? bpPendingFile[b.id].name : (b.imageCached ? 'Replace' : 'Upload') }}</span>
-                </label>
-                <button v-if="bpPendingFile[b.id]" class="primary small" style="margin-left:0.4rem" @click="saveBpImage(b.id)">Save</button>
-              </template>
-              <span v-else class="muted">—</span>
-            </td>
-            <td class="bp-action-col">
-              <button class="import-btn danger-btn" @click="removeBaseplate(b.id)">Delete</button>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-      <p v-else class="muted" style="margin-top:0.5rem">No baseplates yet.</p>
-
-      <form class="bp-add-form" @submit.prevent="addBaseplate">
-        <!-- Type selector -->
-        <label class="bp-label">Type
-          <select v-model="newBpType" class="bp-type-select">
-            <option>Standard</option>
-            <option>Road</option>
-            <option>Custom</option>
-          </select>
-        </label>
-
-        <!-- Part search (Standard + Road) -->
-        <template v-if="newBpType !== 'Custom'">
-          <div class="bp-search-wrap">
-            <input v-model="newBpQuery" placeholder="Search part…" class="bp-search-input" />
-            <ul v-if="newBpResults.length > 0" class="bp-dropdown">
-              <li v-for="r in newBpResults" :key="r.partNum" class="bp-dropdown-item" @click="selectBpResult(r)">
-                {{ r.partNum }} — {{ r.name }}
-              </li>
-            </ul>
-          </div>
-        </template>
-
-        <!-- Set search (Custom) -->
-        <template v-else>
-          <div class="bp-search-wrap">
-            <input v-model="newBpSetQuery" placeholder="Search your sets…" class="bp-search-input" />
-            <ul v-if="newBpSetResults.length > 0" class="bp-dropdown">
-              <li v-for="s in newBpSetResults" :key="s.id" class="bp-dropdown-item" @click="selectBpSet(s)">
-                {{ s.setNumber ? s.setNumber + ' — ' : '' }}{{ s.description }}{{ s.isMoc ? ' (MOC)' : '' }}
-              </li>
-            </ul>
-          </div>
-        </template>
-
-        <span v-if="newBpSelected" class="bp-selected-badge">{{ newBpSelected.partNum ? newBpSelected.partNum + ' — ' : '' }}{{ newBpSelected.name }}</span>
-
-        <label class="bp-label">W <input v-model.number="newBpWidth" type="number" min="1" max="256" class="bp-num-input" required /> studs</label>
-        <label class="bp-label">D <input v-model.number="newBpDepth" type="number" min="1" max="256" class="bp-num-input" required /> studs</label>
-
-        <label v-if="newBpType === 'Standard'" class="bp-label">Color <ColorSelect v-model="newBpColorUid" :colors="colors" /></label>
-
-        <button class="primary small" type="submit" :disabled="!newBpSelected">Add Baseplate</button>
-      </form>
-    </div>
     <!-- Table Templates -->
     <div v-if="settings.tablePlannerEnabled" class="tpl-section">
       <h2 class="section-heading">Table Templates</h2>
@@ -406,7 +312,6 @@
 
 <script setup>
 import { ref, watch, onMounted } from 'vue'
-import ColorSelect from '../components/ColorSelect.vue'
 import { useSettings } from '../composables/useSettings.js'
 
 const settings = useSettings()
@@ -416,10 +321,8 @@ import {
   getPartsStatus, uploadParts,
   getPartsInventoryStatus, uploadPartsInventory,
   getPartCategoriesStatus, uploadPartCategories, getPartCategoriesList,
-  searchArchivePartsBaseplates,
 } from '../api/archives.js'
-import { getAllBaseplates, createBaseplate, deleteBaseplate, getBaseplateImageUrl, uploadBaseplateImage, getAllTemplates, createTemplate, updateTemplate, deleteTemplate } from '../api/tableplanner.js'
-import { getAllSets } from '../api/sets.js'
+import { getAllTemplates, createTemplate, updateTemplate, deleteTemplate } from '../api/tableplanner.js'
 
 // --- Folder import ---
 const KNOWN_ARCHIVES = {
@@ -676,104 +579,6 @@ async function reloadPartCategoriesData() {
   }
 }
 
-// --- Baseplates ---
-const baseplates = ref([])
-const allSets = ref([])
-const newBpType = ref('Standard')
-const newBpQuery = ref('')
-const newBpResults = ref([])
-const newBpSelected = ref(null)
-const newBpWidth = ref(null)
-const newBpDepth = ref(null)
-const newBpColorUid = ref('')
-const newBpSetQuery = ref('')
-const newBpSetResults = ref([])
-const newBpLinkedSetId = ref(null)
-const bpPendingFile = ref({})  // id → File
-
-watch(newBpQuery, async (q) => {
-  if (q.length >= 2) newBpResults.value = await searchArchivePartsBaseplates(q, 10)
-  else newBpResults.value = []
-})
-
-watch(newBpSetQuery, (q) => {
-  if (!q) { newBpSetResults.value = []; return }
-  const lq = q.toLowerCase()
-  newBpSetResults.value = allSets.value.filter(s =>
-    (s.setNumber ?? '').toLowerCase().includes(lq) ||
-    (s.description ?? '').toLowerCase().includes(lq)
-  ).slice(0, 10)
-})
-
-watch(newBpType, () => {
-  newBpSelected.value = null
-  newBpLinkedSetId.value = null
-  newBpSetQuery.value = ''
-  newBpResults.value = []
-  newBpQuery.value = ''
-})
-
-function selectBpResult(result) {
-  newBpSelected.value = { partNum: result.partNum, name: result.name }
-  newBpWidth.value = result.guessedStudX > 0 ? result.guessedStudX : null
-  newBpDepth.value = result.guessedStudY > 0 ? result.guessedStudY : null
-  newBpResults.value = []
-  newBpQuery.value = ''
-}
-
-function selectBpSet(s) {
-  newBpLinkedSetId.value = s.id
-  newBpSelected.value = { partNum: s.setNumber ?? '', name: s.description }
-  newBpSetResults.value = []
-  newBpSetQuery.value = ''
-}
-
-async function addBaseplate() {
-  if (!newBpSelected.value) return
-  const legoColorId = newBpType.value === 'Standard'
-    ? (colors.value.find(c => c.uniqueId === newBpColorUid.value)?.id ?? 0)
-    : 0
-  const bp = await createBaseplate({
-    type: newBpType.value,
-    partNum: newBpSelected.value.partNum,
-    name: newBpSelected.value.name,
-    widthStuds: newBpWidth.value,
-    depthStuds: newBpDepth.value,
-    legoColorId,
-    linkedSetId: newBpType.value === 'Custom' ? newBpLinkedSetId.value : null,
-  })
-  baseplates.value.push(bp)
-  newBpSelected.value = null
-  newBpWidth.value = null
-  newBpDepth.value = null
-  newBpColorUid.value = ''
-  newBpLinkedSetId.value = null
-}
-
-async function removeBaseplate(id) {
-  if (!confirm('Delete this baseplate?')) return
-  await deleteBaseplate(id)
-  baseplates.value = baseplates.value.filter(b => b.id !== id)
-}
-
-function onBpFileChange(e, id) {
-  const file = e.target.files[0]
-  if (!file) return
-  bpPendingFile.value = { ...bpPendingFile.value, [id]: file }
-}
-
-async function saveBpImage(id) {
-  const file = bpPendingFile.value[id]
-  if (!file) return
-  await uploadBaseplateImage(id, file)
-  const next = { ...bpPendingFile.value }
-  delete next[id]
-  bpPendingFile.value = next
-  // refresh the plate so imageCached flips
-  const fresh = await getAllBaseplates()
-  baseplates.value = fresh
-}
-
 // --- Table Templates ---
 const templates = ref([])
 const tplForm = ref({ description: '', widthCm: 200, depthCm: 80, color: '#8b6340' })
@@ -843,9 +648,6 @@ onMounted(async () => {
   await loadPartCategoriesStatus()
   if (partCategoriesStatus.value.count > 0) await loadPartCategories()
   if (settings.tablePlannerEnabled) {
-    baseplates.value = await getAllBaseplates()
-    const setsPage = await getAllSets(1, 1000).catch(() => ({ items: [] }))
-    allSets.value = setsPage.items ?? setsPage ?? []
     await loadTemplates()
   }
 })
@@ -1081,145 +883,11 @@ onMounted(async () => {
   font-size: 0.85rem;
 }
 
-/* ── Baseplate type badge ── */
-.bp-type-badge {
-  display: inline-block;
-  font-size: 0.72rem;
-  padding: 0.1rem 0.45rem;
-  border-radius: 10px;
-  font-weight: 500;
-  white-space: nowrap;
-}
-.bp-type-badge.standard { background: #e3f0e8; color: #2a7a3a; }
-.bp-type-badge.road     { background: #e8eaf6; color: #3949ab; }
-.bp-type-badge.custom   { background: #fff3e0; color: #e65100; }
-
-.bp-thumb {
-  width: 32px;
-  height: 20px;
-  object-fit: cover;
-  border-radius: 2px;
-  border: 1px solid #e2e8f0;
-  vertical-align: middle;
-}
-
-.bp-img-col {
-  white-space: nowrap;
-}
-
-.bp-upload-label {
-  cursor: pointer;
-}
-
-.bp-upload-link {
-  font-size: 0.78rem;
-  color: #3b82f6;
-  text-decoration: underline;
-  cursor: pointer;
-}
-
-.bp-type-select {
-  padding: 0.25rem 0.4rem;
-  border: 1px solid #cbd5e1;
-  border-radius: 4px;
-  font-size: 0.875rem;
-}
-
-/* ── Baseplates section ── */
-.baseplates-section {
-  margin-top: 2rem;
-  padding-top: 1.5rem;
-  border-top: 2px solid #e2e8f0;
-}
-
 .section-heading {
   margin: 0 0 0.25rem;
   font-size: 1.05rem;
   font-weight: 600;
   color: #1e293b;
-}
-
-.bp-table {
-  margin-top: 0.75rem;
-  margin-bottom: 1rem;
-}
-
-.bp-action-col {
-  text-align: right;
-  white-space: nowrap;
-}
-
-.bp-add-form {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 0.6rem;
-  margin-top: 0.75rem;
-}
-
-.bp-search-wrap {
-  position: relative;
-}
-
-.bp-search-input {
-  padding: 0.3rem 0.5rem;
-  border: 1px solid #cbd5e1;
-  border-radius: 4px;
-  font-size: 0.875rem;
-  min-width: 200px;
-}
-
-.bp-dropdown {
-  position: absolute;
-  top: 100%;
-  left: 0;
-  z-index: 100;
-  background: #fff;
-  border: 1px solid #cbd5e1;
-  border-radius: 4px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  min-width: 320px;
-  max-height: 200px;
-  overflow-y: auto;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.12);
-}
-
-.bp-dropdown-item {
-  padding: 0.35rem 0.65rem;
-  font-size: 0.85rem;
-  cursor: pointer;
-}
-
-.bp-dropdown-item:hover {
-  background: #f0f5ff;
-}
-
-.bp-selected-badge {
-  background: #dde8f5;
-  border: 1px solid #aac2e8;
-  border-radius: 4px;
-  padding: 0.2rem 0.5rem;
-  font-size: 0.85rem;
-  color: #2a4e80;
-}
-
-.bp-label {
-  display: flex;
-  align-items: center;
-  gap: 0.3rem;
-  font-size: 0.875rem;
-  color: #475569;
-}
-
-.bp-num-input {
-  width: 54px;
-  padding: 0.25rem 0.35rem;
-  border: 1px solid #cbd5e1;
-  border-radius: 4px;
-  font-size: 0.875rem;
-  text-align: center;
 }
 
 /* ── Table Templates section ── */

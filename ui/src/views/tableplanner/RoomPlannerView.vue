@@ -1,7 +1,8 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { getRoom, getAllTemplates, saveRoomLayout, updateRoom, getAllBaseplates } from '../../api/tableplanner.js'
+import { getRoom, getAllTemplates, saveRoomLayout, updateRoom } from '../../api/tableplanner.js'
+import { getAllBaseplates } from '../../api/baseplates.js'
 import { generateRoomPdf } from '../../utils/roomPdf.js'
 
 const route = useRoute()

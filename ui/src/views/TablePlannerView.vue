@@ -67,6 +67,7 @@ onMounted(() => loadRooms())
     <div class="tab-bar">
       <button class="tab active">Rooms</button>
       <button class="tab" @click="router.push('/table-planner/baseplates')">Baseplate Planner</button>
+      <button class="tab" @click="router.push('/table-planner/build-check')">Build Check</button>
     </div>
 
     <!-- ── Rooms ── -->

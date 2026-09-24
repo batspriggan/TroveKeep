@@ -10,6 +10,7 @@
       <RouterLink to="/search" class="mobile-hide">Search</RouterLink>
       <RouterLink to="/scanner" class="mobile-hide">Scanner</RouterLink>
       <RouterLink to="/archives">Archives</RouterLink>
+      <RouterLink to="/baseplates">Baseplates</RouterLink>
       <RouterLink to="/settings">Settings</RouterLink>
       <RouterLink v-if="settings.tablePlannerEnabled" to="/table-planner" class="mobile-hide">Table Planner</RouterLink>
     </div>

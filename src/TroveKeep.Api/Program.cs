@@ -58,6 +58,8 @@ builder.Services.AddScoped<IRoomExportService, RoomExportService>();
 builder.Services.AddScoped<ITableTemplateService, TableTemplateService>();
 builder.Services.AddScoped<IRoomService, RoomService>();
 builder.Services.AddScoped<IBaseplateService, BaseplateService>();
+builder.Services.AddScoped<IPlanningService, PlanningService>();
+builder.Services.AddScoped<IMocReconciliationService, MocReconciliationService>();
 builder.Services.AddHttpClient("SetImages");
 builder.Services.AddHttpClient("LabelServer");
 

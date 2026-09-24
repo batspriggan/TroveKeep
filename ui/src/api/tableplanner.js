@@ -2,26 +2,12 @@ import { get, post, put, del } from './client.js'
 
 const TEMPLATES = '/api/table-templates'
 const ROOMS = '/api/rooms'
-const BASEPLATES = '/api/baseplates'
 
 // Templates
 export const getAllTemplates = () => get(TEMPLATES)
 export const createTemplate = (body) => post(TEMPLATES, body)
 export const updateTemplate = (id, body) => put(`${TEMPLATES}/${id}`, body)
 export const deleteTemplate = (id) => del(`${TEMPLATES}/${id}`)
-
-// Baseplates
-export const getAllBaseplates = () => get(BASEPLATES)
-export const createBaseplate = (data) => post(BASEPLATES, data)
-export const deleteBaseplate = (id) => del(`${BASEPLATES}/${id}`)
-export const getBaseplateImageUrl = (id) => `${BASEPLATES}/${id}/image`
-
-export async function uploadBaseplateImage(id, file) {
-  const form = new FormData()
-  form.append('file', file)
-  const res = await fetch(`${BASEPLATES}/${id}/image`, { method: 'POST', body: form })
-  if (!res.ok) throw new Error(`HTTP ${res.status}`)
-}
 
 // Rooms
 export const getAllRooms = () => get(ROOMS)
@@ -30,7 +16,20 @@ export const createRoom = (body) => post(ROOMS, body)
 export const updateRoom = (id, body) => put(`${ROOMS}/${id}`, body)
 export const saveRoomLayout = (id, layout, aggregateSelections, version = 0) => put(`${ROOMS}/${id}/layout`, { layout, aggregateSelections, version })
 export const saveAggregateBpLayout = (roomId, representativeId, placedBaseplates) =>
-  put(`${ROOMS}/${roomId}/aggregate-bp-layouts/${representativeId}`, { placedBaseplates })
+  put(`${ROOMS}/${roomId}/aggregate-bp-layouts/${representativeId}`, {
+    // `sourceSetId` is optional in the model (null for plates placed individually);
+    // `placementId` identifies the placed instance (null for single plates). Both are
+    // normalised here so the payload is stable and backwards compatible.
+    placedBaseplates: (placedBaseplates ?? []).map(p => ({
+      instanceId: p.instanceId,
+      baseplateId: p.baseplateId,
+      xMm: p.xMm,
+      yMm: p.yMm,
+      rotation: p.rotation,
+      sourceSetId: p.sourceSetId ?? null,
+      placementId: p.placementId ?? null,
+    })),
+  })
 export const deleteRoom = (id) => del(`${ROOMS}/${id}`)
 
 export async function exportRoom(id) {

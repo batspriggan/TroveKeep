@@ -24,6 +24,15 @@
       <span>Boxes</span>
     </RouterLink>
 
+    <RouterLink to="/baseplates" class="nav-item">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <rect x="3" y="6" width="18" height="12" rx="1.5"/>
+        <circle cx="7" cy="10" r="0.9"/><circle cx="12" cy="10" r="0.9"/><circle cx="17" cy="10" r="0.9"/>
+        <circle cx="7" cy="14" r="0.9"/><circle cx="12" cy="14" r="0.9"/><circle cx="17" cy="14" r="0.9"/>
+      </svg>
+      <span>Baseplates</span>
+    </RouterLink>
+
     <RouterLink v-if="settings.bulkPiecesEnabled" to="/drawercontainers" class="nav-item">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <path d="M12 3L2 8l10 5 10-5-10-5zM2 13l10 5 10-5M2 18l10 5 10-5"/>

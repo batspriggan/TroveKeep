@@ -4,7 +4,7 @@ public record PlacedTableResponse(Guid InstanceId, Guid TemplateId, double XCm, 
 
 public record AggregateSelectionResponse(string RepresentativeId, string BpKey);
 
-public record PlacedBaseplateResponse(Guid InstanceId, Guid BaseplateId, int XMm, int YMm, int Rotation);
+public record PlacedBaseplateResponse(Guid InstanceId, Guid BaseplateId, int XMm, int YMm, int Rotation, Guid? SourceSetId = null, Guid? PlacementId = null);
 
 public record AggregateBpLayoutResponse(string RepresentativeId, IEnumerable<PlacedBaseplateResponse> PlacedBaseplates, int LayoutVersion = 0);
 

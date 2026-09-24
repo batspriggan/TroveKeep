@@ -30,6 +30,7 @@ public class MigrationRunner
             new Migration_002_SetImagesBySetId(),
             new Migration_003_PartImagesByColor(),
             new Migration_004_LabelTargetsIndex(),
+            new Migration_005_BaseplateQuantity(),
         ];
     }
 

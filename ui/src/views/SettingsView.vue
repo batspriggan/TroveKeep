@@ -17,7 +17,7 @@
           <input type="checkbox" v-model="settings.tablePlannerEnabled" />
           Table Planner
         </label>
-        <span class="muted">Enable the Table Planner, including rooms, table templates and plates configuration.</span>
+        <span class="muted">Enable the Table Planner, including rooms and table templates.</span>
       </div>
     </section>
 

@@ -107,6 +107,7 @@ public class RoomRepository : IRoomRepository
         var existing = await _rooms.Find(x => x.Id == id).FirstOrDefaultAsync();
         if (existing is null) return null;
 
+        var previous = existing.AggregateBpLayouts.FirstOrDefault(l => l.RepresentativeId == representativeId);
         var layouts = existing.AggregateBpLayouts
             .Where(l => l.RepresentativeId != representativeId)
             .ToList();
@@ -114,15 +115,8 @@ public class RoomRepository : IRoomRepository
         layouts.Add(new AggregateBpLayoutDocument
         {
             RepresentativeId = representativeId,
-            LayoutVersion = 1,
-            PlacedBaseplates = placedBaseplates.Select(p => new PlacedBaseplateDocument
-            {
-                InstanceId = p.InstanceId,
-                BaseplateId = p.BaseplateId,
-                XMm = p.XMm,
-                YMm = p.YMm,
-                Rotation = p.Rotation,
-            }).ToList(),
+            LayoutVersion = previous?.LayoutVersion ?? 1,
+            PlacedBaseplates = placedBaseplates.Select(ToPlacedBaseplateDocument).ToList(),
         });
 
         var update = Builders<RoomDocument>.Update
@@ -135,6 +129,48 @@ public class RoomRepository : IRoomRepository
             new FindOneAndUpdateOptions<RoomDocument> { ReturnDocument = ReturnDocument.After });
 
         return result is null ? null : ToModel(result);
+    }
+
+    public async Task<bool> SaveAggregateBpLayoutsAsync(Guid id, IEnumerable<AggregateBpLayout> layouts)
+    {
+        var docs = layouts.Select(l => new AggregateBpLayoutDocument
+        {
+            RepresentativeId = l.RepresentativeId,
+            LayoutVersion = l.LayoutVersion,
+            PlacedBaseplates = l.PlacedBaseplates.Select(ToPlacedBaseplateDocument).ToList(),
+        }).ToList();
+
+        var update = Builders<RoomDocument>.Update
+            .Set(r => r.AggregateBpLayouts, docs)
+            .Set(r => r.UpdatedAt, DateTime.UtcNow)
+            .Inc(r => r.Version, 1);
+
+        var result = await _rooms.UpdateOneAsync(x => x.Id == id, update);
+        return result.ModifiedCount > 0;
+    }
+
+    public async Task RemoveBaseplateReferencesAsync(Guid baseplateId)
+    {
+        var rooms = await _rooms.Find(_ => true).ToListAsync();
+
+        foreach (var room in rooms)
+        {
+            var changed = false;
+
+            foreach (var layout in room.AggregateBpLayouts)
+            {
+                var removed = layout.PlacedBaseplates.RemoveAll(p => p.BaseplateId == baseplateId);
+                if (removed > 0) changed = true;
+            }
+
+            if (!changed) continue;
+
+            var update = Builders<RoomDocument>.Update
+                .Set(r => r.AggregateBpLayouts, room.AggregateBpLayouts)
+                .Set(r => r.UpdatedAt, DateTime.UtcNow)
+                .Inc(r => r.Version, 1);
+            await _rooms.UpdateOneAsync(r => r.Id == room.Id, update);
+        }
     }
 
     public async Task<bool> DeleteAsync(Guid id)
@@ -173,6 +209,8 @@ public class RoomRepository : IRoomRepository
                 XMm = p.XMm,
                 YMm = p.YMm,
                 Rotation = p.Rotation,
+                SourceSetId = p.SourceSetId,
+                PlacementId = p.PlacementId,
             }).ToList(),
         }).ToList(),
         CreatedAt = new DateTimeOffset(DateTime.SpecifyKind(doc.CreatedAt, DateTimeKind.Utc)),
@@ -203,17 +241,21 @@ public class RoomRepository : IRoomRepository
         {
             RepresentativeId = l.RepresentativeId,
             LayoutVersion = l.LayoutVersion,
-            PlacedBaseplates = l.PlacedBaseplates.Select(p => new PlacedBaseplateDocument
-            {
-                InstanceId = p.InstanceId,
-                BaseplateId = p.BaseplateId,
-                XMm = p.XMm,
-                YMm = p.YMm,
-                Rotation = p.Rotation,
-            }).ToList(),
+            PlacedBaseplates = l.PlacedBaseplates.Select(ToPlacedBaseplateDocument).ToList(),
         }).ToList(),
         CreatedAt = model.CreatedAt.UtcDateTime,
         UpdatedAt = model.UpdatedAt.UtcDateTime,
         Version = model.Version,
+    };
+
+    private static PlacedBaseplateDocument ToPlacedBaseplateDocument(PlacedBaseplate p) => new()
+    {
+        InstanceId = p.InstanceId,
+        BaseplateId = p.BaseplateId,
+        XMm = p.XMm,
+        YMm = p.YMm,
+        Rotation = p.Rotation,
+        SourceSetId = p.SourceSetId,
+        PlacementId = p.PlacementId,
     };
 }

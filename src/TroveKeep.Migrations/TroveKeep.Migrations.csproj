@@ -12,6 +12,9 @@
 
   <ItemGroup>
     <ProjectReference Include="..\TroveKeep.Core\TroveKeep.Core.csproj" />
+    <!-- Migration_005 builds the reconciliation service by hand from IMongoDatabase (no DI). -->
+    <ProjectReference Include="..\TroveKeep.Repositories\TroveKeep.Repositories.csproj" />
+    <ProjectReference Include="..\TroveKeep.Services\TroveKeep.Services.csproj" />
   </ItemGroup>
 
 </Project>

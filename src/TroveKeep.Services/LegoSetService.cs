@@ -69,6 +69,7 @@ public class LegoSetService : ILegoSetService
     {
         await _allocationRepo.RemoveAllByItemAsync(id);
         await _baseplateRepo.DeleteByLinkedSetIdAsync(id);
+        await _baseplateRepo.RemoveReservationsBySetIdAsync(id);
         return await _setRepo.DeleteAsync(id);
     }
 

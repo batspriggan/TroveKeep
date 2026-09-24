@@ -102,6 +102,86 @@
 
             <p v-if="storageError" class="error">{{ storageError }}</p>
           </div>
+
+          <!-- Baseplates used (MOC and regular sets) -->
+          <div class="card bp-card">
+            <div class="bp-header">
+              <h2>Baseplates used</h2>
+              <span v-if="bpFootprint" class="footprint-pill">
+                {{ bpFootprint.cols }}×{{ bpFootprint.rows }}
+                <template v-if="!bpFootprint.heterogeneous">
+                  = {{ bpFootprint.width }}×{{ bpFootprint.depth }} stud
+                </template>
+                <template v-else>· mixed sizes</template>
+              </span>
+            </div>
+
+            <table v-if="bpReservations.length" class="alloc-table bp-table">
+              <thead>
+                <tr>
+                  <th>Baseplate</th>
+                  <th>Size (studs)</th>
+                  <th class="th-qty">Qty</th>
+                  <th class="th-qty">Free</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="r in bpReservations" :key="r.baseplateId">
+                  <td>
+                    <span class="swatch" :style="{ background: r.legoColorRgb ? '#' + r.legoColorRgb : '#ccc' }"></span>
+                    <span>{{ r.plateName }}</span>
+                    <span v-if="r.legoColorName" class="bp-color">· {{ r.legoColorName }}</span>
+                  </td>
+                  <td>{{ r.widthStuds }}×{{ r.depthStuds }}</td>
+                  <td class="td-qty">{{ r.quantity }}</td>
+                  <td class="td-qty">
+                    <span v-if="bpAvailable(r) !== null">{{ bpAvailable(r) }}</span>
+                    <span v-else class="muted">—</span>
+                  </td>
+                  <td class="td-action">
+                    <button class="btn-remove" :disabled="bpBusy" @click="removeBpReservation(r)">Remove</button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+            <p v-else class="no-storage">
+              No baseplates declared for this {{ set?.isMoc ? 'MOC' : 'set' }}.
+            </p>
+
+            <div class="alloc-form-group bp-add-group">
+              <p class="alloc-form-label">Add baseplate</p>
+              <form class="alloc-row bp-add-row" @submit.prevent="addBpReservation">
+                <select v-model="bpSelectedId" class="alloc-select">
+                  <option value="">— select baseplate —</option>
+                  <option
+                    v-for="b in bpCatalog"
+                    :key="b.id"
+                    :value="b.id"
+                  >
+                    {{ b.partNum ? b.partNum + ' — ' : '' }}{{ b.name }} ·
+                    {{ b.widthStuds }}×{{ b.depthStuds }} · {{ b.availableQuantity ?? 0 }} free
+                  </option>
+                </select>
+                <input
+                  v-model.number="bpQty"
+                  type="number"
+                  min="1"
+                  class="alloc-qty"
+                />
+                <button
+                  class="primary"
+                  type="submit"
+                  :disabled="!bpSelectedId || bpQty < 1 || bpBusy"
+                >Add</button>
+              </form>
+              <p v-if="bpSelectedId" class="bp-hint">
+                {{ bpSelectedMax }} free for this type.
+              </p>
+            </div>
+
+            <p v-if="bpError" class="error">{{ bpError }}</p>
+          </div>
         </div>
 
         <!-- Edit + delete (bottom-left on desktop, last on mobile) -->
@@ -147,6 +227,9 @@ import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getSet, updateSet, deleteSet, allocateSetToBox, deallocateSetStorage, clearSetStorage, getSetPhotos, uploadSetPhoto, deleteSetPhoto } from '../../api/sets.js'
 import { getAllBoxes } from '../../api/boxes.js'
+import {
+  getBaseplatesBySet, getAllBaseplates, addReservation, removeReservation,
+} from '../../api/baseplates.js'
 import { useLabels } from '../../composables/useLabels.js'
 import ConfirmDialog from '../../components/ConfirmDialog.vue'
 
@@ -169,6 +252,14 @@ const selectedBoxId = ref('')
 const allocQty = ref(1)
 const editForm = ref({ setNumber: '', description: '', quantity: 1, isMoc: false })
 
+// ── Baseplates used ──────────────────────────────────────────────────────────
+const bpReservations = ref([])
+const bpCatalog = ref([])
+const bpError = ref('')
+const bpSelectedId = ref('')
+const bpQty = ref(1)
+const bpBusy = ref(false)
+
 const boxNameMap = computed(() => Object.fromEntries(boxes.value.map(b => [b.id, b.name])))
 
 const unallocated = computed(() => {
@@ -178,6 +269,40 @@ const unallocated = computed(() => {
 })
 
 const fullyAllocated = computed(() => unallocated.value === 0)
+
+// ── Baseplates: derived footprint + availability ─────────────────────────────
+const bpCatalogById = computed(() => Object.fromEntries(bpCatalog.value.map(b => [b.id, b])))
+
+const bpSelectedMax = computed(() => {
+  const bp = bpCatalogById.value[bpSelectedId.value]
+  return bp?.availableQuantity ?? 0
+})
+
+// Compact arrangement of the reserved plates: cols = ceil(sqrt(N)). The footprint
+// is only exact when all reserved plates share the same type; otherwise we warn.
+const bpFootprint = computed(() => {
+  const list = bpReservations.value
+  const total = list.reduce((sum, r) => sum + (r.quantity ?? 0), 0)
+  if (total <= 0) return null
+  const first = list[0]
+  const homogeneous = list.every(r =>
+    r.widthStuds === first.widthStuds && r.depthStuds === first.depthStuds)
+  const cols = Math.ceil(Math.sqrt(total))
+  const rows = Math.ceil(total / cols)
+  return {
+    total,
+    cols,
+    rows,
+    width: homogeneous ? cols * first.widthStuds : null,
+    depth: homogeneous ? rows * first.depthStuds : null,
+    heterogeneous: !homogeneous,
+  }
+})
+
+function bpAvailable(r) {
+  const bp = bpCatalogById.value[r.baseplateId]
+  return bp ? (bp.availableQuantity ?? 0) : null
+}
 
 async function load() {
   loading.value = true
@@ -192,6 +317,53 @@ async function load() {
     error.value = e.message
   } finally {
     loading.value = false
+  }
+  loadBaseplateData()
+}
+
+async function loadBaseplateData() {
+  bpError.value = ''
+  try {
+    const [reservations, catalog] = await Promise.all([
+      getBaseplatesBySet(id),
+      getAllBaseplates(),
+    ])
+    bpReservations.value = reservations ?? []
+    // Quarantined rows are not placeable and must not be offered for reservation.
+    bpCatalog.value = (catalog ?? []).filter(b => !b.quarantined)
+  } catch (e) {
+    bpError.value = e.message
+  }
+}
+
+async function addBpReservation() {
+  bpError.value = ''
+  const bp = bpCatalogById.value[bpSelectedId.value]
+  if (!bp) return
+  const qty = Math.max(1, Math.floor(Number(bpQty.value) || 1))
+  bpBusy.value = true
+  try {
+    await addReservation(bp.id, id, qty)
+    bpSelectedId.value = ''
+    bpQty.value = 1
+    await loadBaseplateData()
+  } catch (e) {
+    bpError.value = e.message
+  } finally {
+    bpBusy.value = false
+  }
+}
+
+async function removeBpReservation(r) {
+  bpError.value = ''
+  bpBusy.value = true
+  try {
+    await removeReservation(r.baseplateId, id)
+    await loadBaseplateData()
+  } catch (e) {
+    bpError.value = e.message
+  } finally {
+    bpBusy.value = false
   }
 }
 
@@ -614,4 +786,58 @@ onMounted(() => {
 
 /* ── Danger zone ── */
 .danger-zone { border-color: #fee2e2; }
+
+/* ── Baseplates used ── */
+.bp-card { margin-top: var(--space-4); }
+
+.bp-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-3);
+}
+
+.bp-header h2 { margin: 0; }
+
+.footprint-pill {
+  font-size: var(--text-xs);
+  font-family: var(--font-mono);
+  background: var(--color-surface-alt);
+  border: 1px solid var(--color-border);
+  border-radius: 20px;
+  padding: 2px var(--space-3);
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+
+.bp-table { margin-bottom: 0; }
+
+.bp-color {
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+}
+
+.swatch {
+  display: inline-block;
+  width: 0.9rem;
+  height: 0.9rem;
+  border-radius: 2px;
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  vertical-align: middle;
+  margin-right: 0.35rem;
+}
+
+.muted { color: var(--color-text-muted); }
+
+.bp-add-group { margin-top: var(--space-3); }
+
+.bp-add-row { flex-wrap: wrap; }
+
+.bp-hint {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  margin: var(--space-1) 0 0;
+}
 </style>

@@ -22,7 +22,25 @@ public class BaseplateDocument
     [BsonGuidRepresentation(GuidRepresentation.Standard)]
     public Guid? LinkedSetId { get; set; }
 
+    public RoadShape? RoadShape { get; set; }
+    public int Quantity { get; set; } = 1;
+    public List<BaseplateReservationDocument> Reservations { get; set; } = [];
+    public string? Notes { get; set; }
+    public bool NeedsReview { get; set; }
+    public bool Quarantined { get; set; }
+    public string? QuarantineReason { get; set; }
+
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
     public int Version { get; set; }
+}
+
+[BsonIgnoreExtraElements]
+public class BaseplateReservationDocument
+{
+    [BsonGuidRepresentation(GuidRepresentation.Standard)]
+    public Guid SetId { get; set; }
+
+    public int Quantity { get; set; }
+    public DateTime CreatedAt { get; set; }
 }

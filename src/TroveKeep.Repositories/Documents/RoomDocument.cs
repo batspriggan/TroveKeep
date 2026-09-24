@@ -21,12 +21,17 @@ public class RoomDocument
     public int Version { get; set; }
 }
 
+[BsonIgnoreExtraElements]
 public class AggregateSelectionDocument
 {
     public string RepresentativeId { get; set; } = string.Empty;
     public string BpKey { get; set; } = string.Empty;
 }
 
+// Nested documents need their own [BsonIgnoreExtraElements]: the attribute on the parent does
+// not apply to embedded types, so a field removed from a nested class would otherwise break
+// deserialization of existing documents (e.g. the retired `ModuleGrid`).
+[BsonIgnoreExtraElements]
 public class AggregateBpLayoutDocument
 {
     public string RepresentativeId { get; set; } = string.Empty;
@@ -34,6 +39,7 @@ public class AggregateBpLayoutDocument
     public int LayoutVersion { get; set; }
 }
 
+[BsonIgnoreExtraElements]
 public class PlacedBaseplateDocument
 {
     [BsonGuidRepresentation(GuidRepresentation.Standard)]
@@ -43,4 +49,11 @@ public class PlacedBaseplateDocument
     public int XMm { get; set; }
     public int YMm { get; set; }
     public int Rotation { get; set; }
+
+    /// <summary>MOC/set this placement originates from; null for individually placed plates.</summary>
+    [BsonGuidRepresentation(GuidRepresentation.Standard)]
+    public Guid? SourceSetId { get; set; }
+
+    [BsonGuidRepresentation(GuidRepresentation.Standard)]
+    public Guid? PlacementId { get; set; }
 }

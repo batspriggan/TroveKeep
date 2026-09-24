@@ -12,4 +12,4 @@ public record AggregateSelectionRequest(string RepresentativeId, string BpKey);
 
 public record SaveAggregateBpLayoutRequest(IEnumerable<PlacedBaseplateRequest> PlacedBaseplates);
 
-public record PlacedBaseplateRequest(Guid InstanceId, Guid BaseplateId, int XMm, int YMm, int Rotation);
+public record PlacedBaseplateRequest(Guid InstanceId, Guid BaseplateId, int XMm, int YMm, int Rotation, Guid? SourceSetId = null, Guid? PlacementId = null);

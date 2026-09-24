@@ -2,16 +2,24 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { getAllRooms, getAllTemplates } from '../../api/tableplanner.js'
+import { getAllBaseplates } from '../../api/baseplates.js'
 
 const router = useRouter()
 const rooms = ref([])
 const templates = ref([])
 const loading = ref(true)
 
+// Planner gate (contract §F): block the aggregate list while the catalogue has
+// quarantined rows. Recomputed on every load → automatic unblock.
+const blocked = ref(false)
+const quarantinedPlates = ref([])
+
 onMounted(async () => {
-  const [r, t] = await Promise.all([getAllRooms(), getAllTemplates()])
+  const [r, t, bps] = await Promise.all([getAllRooms(), getAllTemplates(), getAllBaseplates()])
   rooms.value = r
   templates.value = t
+  quarantinedPlates.value = bps.filter(b => b.quarantined === true)
+  blocked.value = quarantinedPlates.value.length > 0
   loading.value = false
 })
 
@@ -120,9 +128,30 @@ const allAggregates = computed(() => {
     <div class="tab-bar">
       <button class="tab" @click="router.push('/table-planner')">Rooms</button>
       <button class="tab active">Baseplate Planner</button>
+      <button class="tab" @click="router.push('/table-planner/build-check')">Build Check</button>
     </div>
 
     <div v-if="loading" class="loading">Loading…</div>
+
+    <!-- ── Quarantine gate (contract §F) ──────────────────────────────── -->
+    <div v-else-if="blocked" class="blocked-screen">
+      <h2>Baseplate planner is blocked</h2>
+      <p class="blocked-text">
+        {{ quarantinedPlates.length }}
+        baseplate{{ quarantinedPlates.length === 1 ? '' : 's' }} couldn't be converted
+        automatically and must be reconciled before planning.
+      </p>
+      <ul class="blocked-list">
+        <li v-for="bp in quarantinedPlates" :key="bp.id" class="blocked-item">
+          <span class="blocked-name">{{ bp.name || 'Baseplate' }}</span>
+          <span class="blocked-dims">{{ bp.widthStuds }}×{{ bp.depthStuds }} stud</span>
+          <span class="blocked-reason">{{ bp.quarantineReason || 'No reason provided' }}</span>
+        </li>
+      </ul>
+      <router-link class="blocked-link" to="/baseplates">
+        Go to the baseplate library to reconcile →
+      </router-link>
+    </div>
 
     <template v-else>
       <p v-if="allAggregates.length === 0" class="empty">
@@ -223,6 +252,44 @@ h1 { margin: 0 0 1rem; }
 
 .bp-count { font-weight: 600; color: #2a5a2a; }
 .bp-none { color: #aaa; }
+
+/* ── Quarantine gate (contract §F) ───────────────────────────────────────── */
+.blocked-screen {
+  max-width: 680px;
+  background: #fff8f0;
+  border: 1px solid #e8b070;
+  border-left: 5px solid #d97706;
+  border-radius: 8px;
+  padding: 1.25rem 1.5rem;
+}
+.blocked-screen h2 { margin: 0 0 0.5rem; color: #92400e; font-size: 1.1rem; }
+.blocked-text { margin: 0 0 0.85rem; color: #6b4a22; font-size: 0.92rem; line-height: 1.45; }
+.blocked-list { list-style: none; margin: 0 0 1rem; padding: 0; display: flex; flex-direction: column; gap: 0.35rem; }
+.blocked-item {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  background: #fff;
+  border: 1px solid #eee0cc;
+  border-radius: 5px;
+  padding: 0.4rem 0.6rem;
+  font-size: 0.85rem;
+}
+.blocked-name { font-weight: 600; color: #333; }
+.blocked-dims { color: #777; white-space: nowrap; }
+.blocked-reason { color: #a05020; font-style: italic; margin-left: auto; }
+.blocked-link {
+  display: inline-block;
+  background: #d97706;
+  color: #fff;
+  text-decoration: none;
+  border-radius: 4px;
+  padding: 0.4rem 0.9rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+.blocked-link:hover { background: #b45309; }
 
 button.primary {
   background: #3a6ea5;

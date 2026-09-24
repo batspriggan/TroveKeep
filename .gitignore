@@ -491,3 +491,6 @@ appsettings.Development.json
 
 # pi task artifacts (local only)
 .pi/
+
+# Local pre-migration backups (dev only)
+migration-backups/
