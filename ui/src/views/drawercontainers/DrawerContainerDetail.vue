@@ -259,6 +259,7 @@ async function submitEdit() {
     const updated = await updateDrawerContainer(id, {
       name: editForm.value.name,
       description: editForm.value.description || null,
+      version: container.value.version,
     })
     container.value = { ...container.value, ...updated }
   } catch (e) {

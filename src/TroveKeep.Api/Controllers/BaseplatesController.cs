@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using TroveKeep.Api.DTOs.Requests;
 using TroveKeep.Api.DTOs.Responses;
+using TroveKeep.Core.Exceptions;
 using TroveKeep.Core.Interfaces.Repositories;
 using TroveKeep.Core.Interfaces.Services;
 using TroveKeep.Core.Models;
@@ -79,6 +80,7 @@ public class BaseplatesController : ControllerBase
     [ProducesResponseType(typeof(BaseplateResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<IActionResult> Update(Guid id, [FromBody] UpdateBaseplateRequest request)
     {
         try
@@ -95,18 +97,21 @@ public class BaseplatesController : ControllerBase
                 RoadShape = ParseRoadShape(request.RoadShape),
                 Quantity = request.Quantity ?? 1,
                 Notes = request.Notes,
+                Version = request.Version,
             };
             var updated = await _service.UpdateAsync(id, model);
             var ctx = await BuildContextAsync([updated]);
             return Ok(MapToResponse(updated, ctx));
         }
         catch (KeyNotFoundException) { return NotFound(); }
+        catch (ConcurrencyException ex) { return Conflict(new { error = ex.Message }); }
         catch (InvalidOperationException ex) { return BadRequest(new { error = ex.Message }); }
     }
 
     [HttpPost("{id:guid}/confirm")]
     [ProducesResponseType(typeof(BaseplateResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<IActionResult> Confirm(Guid id)
     {
         try
@@ -116,6 +121,7 @@ public class BaseplatesController : ControllerBase
             return Ok(MapToResponse(bp, ctx));
         }
         catch (KeyNotFoundException) { return NotFound(); }
+        catch (ConcurrencyException ex) { return Conflict(new { error = ex.Message }); }
     }
 
     [HttpPost("{id:guid}/reservations")]
@@ -212,6 +218,7 @@ public class BaseplatesController : ControllerBase
     [HttpPost("{id:guid}/unquarantine")]
     [ProducesResponseType(typeof(BaseplateResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<IActionResult> Unquarantine(Guid id, [FromBody] UnquarantineRequest request)
     {
         try
@@ -221,6 +228,7 @@ public class BaseplatesController : ControllerBase
             return Ok(MapToResponse(bp, ctx));
         }
         catch (KeyNotFoundException) { return NotFound(); }
+        catch (ConcurrencyException ex) { return Conflict(new { error = ex.Message }); }
     }
 
     /// <summary>All baseplate reservations held by a set/MOC, denormalised with the plate data.</summary>

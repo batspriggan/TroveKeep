@@ -45,7 +45,8 @@ public class BaseplateRepository : IBaseplateRepository
     {
         var update = Builders<BaseplateDocument>.Update
             .Set(d => d.ImageCached, cached)
-            .Set(d => d.UpdatedAt, DateTime.UtcNow);
+            .Set(d => d.UpdatedAt, DateTime.UtcNow)
+            .Inc(d => d.Version, 1);
         await _baseplates.UpdateOneAsync(d => d.Id == id, update);
     }
 
@@ -71,9 +72,18 @@ public class BaseplateRepository : IBaseplateRepository
         // (see BaseplateService.UpdateAsync). This keeps the repository a plain store and lets
         // UnquarantineAsync explicitly clear LinkedSetId.
         doc.UpdatedAt = DateTime.UtcNow;
-        doc.Version = existing.Version + 1;
+        // Optimistic concurrency: the caller must supply the Version it read. This guards the
+        // embedded Reservations collection against lost updates from concurrent reservation
+        // writes (which mutate the same document), so we do NOT silently adopt existing.Version.
+        doc.Version = baseplate.Version + 1;
 
-        await _baseplates.ReplaceOneAsync(d => d.Id == baseplate.Id, doc);
+        var result = await _baseplates.ReplaceOneAsync(
+            d => d.Id == baseplate.Id && d.Version == baseplate.Version, doc);
+
+        if (result.ModifiedCount == 0)
+            throw new ConcurrencyException(
+                $"Baseplate {baseplate.Id} was modified by someone else. Please refresh and try again.");
+
         return ToModel(doc);
     }
 
@@ -118,7 +128,8 @@ public class BaseplateRepository : IBaseplateRepository
     {
         var update = Builders<BaseplateDocument>.Update
             .PullFilter(d => d.Reservations, r => r.SetId == setId)
-            .Set(d => d.UpdatedAt, DateTime.UtcNow);
+            .Set(d => d.UpdatedAt, DateTime.UtcNow)
+            .Inc(d => d.Version, 1);
         var result = await _baseplates.UpdateOneAsync(d => d.Id == baseplateId, update);
         return result.ModifiedCount > 0;
     }
@@ -129,7 +140,8 @@ public class BaseplateRepository : IBaseplateRepository
             .ElemMatch(d => d.Reservations, r => r.SetId == setId);
         var update = Builders<BaseplateDocument>.Update
             .PullFilter(d => d.Reservations, r => r.SetId == setId)
-            .Set(d => d.UpdatedAt, DateTime.UtcNow);
+            .Set(d => d.UpdatedAt, DateTime.UtcNow)
+            .Inc(d => d.Version, 1);
         await _baseplates.UpdateManyAsync(filter, update);
     }
 

@@ -375,6 +375,7 @@ async function submitEdit() {
       description: editForm.value.description,
       quantity: editForm.value.quantity,
       isMoc: editForm.value.isMoc,
+      version: set.value.version,
     })
     set.value = updated
   } catch (e) {

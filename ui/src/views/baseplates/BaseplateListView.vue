@@ -549,6 +549,7 @@ const form = reactive({
   linkedSetId: null,
   notes: '',
   legoColorIdFallback: 0,
+  version: 0,
 })
 
 // ── Computed ─────────────────────────────────────────────────────────────────
@@ -660,6 +661,7 @@ function toUpdateBody(bp, overrides = {}) {
     roadShape: bp.roadShape ?? null,
     quantity: bp.quantity ?? 1,
     notes: bp.notes ?? null,
+    version: bp.version ?? 0,
     ...overrides,
   }
 }
@@ -916,7 +918,7 @@ function resetForm() {
     type: 'Standard', partNum: '', name: '',
     widthStuds: null, depthStuds: null,
     colorUid: '', roadShape: '', quantity: 1,
-    linkedSetId: null, notes: '', legoColorIdFallback: 0,
+    linkedSetId: null, notes: '', legoColorIdFallback: 0, version: 0,
   })
   sizeInput.value = ''
   partQuery.value = ''
@@ -944,6 +946,7 @@ function openEdit(bp) {
   form.linkedSetId = bp.linkedSetId ?? null
   form.notes = bp.notes ?? ''
   form.legoColorIdFallback = bp.legoColorId ?? 0
+  form.version = bp.version ?? 0
   const c = colors.value.find(col => col.id === bp.legoColorId)
   form.colorUid = c?.uniqueId ?? ''
   if (bp.widthStuds && bp.depthStuds) sizeInput.value = `${bp.widthStuds}x${bp.depthStuds}`
@@ -1030,6 +1033,7 @@ async function submitForm() {
     roadShape: form.type === 'Road' ? (form.roadShape || null) : null,
     quantity: Math.max(0, Number(form.quantity) || 0),
     notes: form.notes || null,
+    ...(editingId.value ? { version: form.version ?? 0 } : {}),
   }
   saving.value = true
   try {

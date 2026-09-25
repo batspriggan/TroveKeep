@@ -169,7 +169,7 @@ async function load() {
 async function submitEdit() {
   editError.value = ''
   try {
-    const updated = await updateBox(id, { name: editForm.value.name })
+    const updated = await updateBox(id, { name: editForm.value.name, version: box.value.version })
     box.value = { ...box.value, ...updated }
   } catch (e) {
     editError.value = e.message

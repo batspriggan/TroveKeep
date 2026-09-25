@@ -22,7 +22,8 @@ public record UpdateBaseplateRequest(
     Guid? LinkedSetId,
     string? RoadShape,
     int? Quantity,
-    string? Notes);
+    string? Notes,
+    int Version = 0);
 
 public record CreateReservationRequest(Guid SetId, int Quantity);
 
