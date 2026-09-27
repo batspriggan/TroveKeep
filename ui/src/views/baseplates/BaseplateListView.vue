@@ -139,6 +139,62 @@
         <span class="type-chip road">Road {{ summary.byType.Road }}</span>
         <span class="type-chip custom">Custom {{ summary.byType.Custom }}</span>
       </div>
+
+      <!-- Catalogue breakdown: what is owned, not what is free. -->
+      <div v-if="sizeTotals.length" class="size-table-wrap">
+        <div class="size-table-head">
+          <h2>Inventory by size and colour</h2>
+          <button
+            v-if="filterSize !== 'all' || filterColor !== 'all'"
+            class="clear-btn"
+            @click="clearSizeColorFilters"
+          >Clear selection</button>
+        </div>
+
+        <table class="size-table">
+          <thead>
+            <tr>
+              <th class="corner">Size</th>
+              <th
+                v-for="c in matrixColors"
+                :key="c.key"
+                class="col-head"
+                :class="{ active: filterColor === c.key }"
+                @click="toggleColorFilter(c.key)"
+              >
+                <span class="swatch" :style="{ background: c.rgb ? '#' + c.rgb : '#ccc' }"></span>
+                <span class="col-name">{{ c.name }}</span>
+              </th>
+              <th class="total-head">Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="row in matrixRows" :key="row.key">
+              <th
+                class="row-head"
+                :class="{ active: filterSize === row.key }"
+                :title="`${row.plateCount} plate(s) in this size`"
+                @click="toggleSizeFilter(row.key)"
+              >{{ row.label }}</th>
+              <td
+                v-for="c in matrixColors"
+                :key="c.key"
+                class="cell"
+                :class="{ 'cell-empty': !row.cells[c.key], active: filterSize === row.key && filterColor === c.key }"
+                @click="toggleCell(row.key, c.key)"
+              >{{ row.cells[c.key] ?? '' }}</td>
+              <td class="cell total-cell">{{ row.total }}</td>
+            </tr>
+          </tbody>
+          <tfoot>
+            <tr>
+              <th class="row-head">Total</th>
+              <td v-for="c in matrixColors" :key="c.key" class="cell total-cell">{{ matrixColumnTotals[c.key] }}</td>
+              <td class="cell grand-total">{{ matrixGrandTotal }}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
     </section>
 
     <!-- ── Filters ── -->
@@ -152,24 +208,6 @@
           :class="{ active: filterType === t }"
           @click="filterType = t"
         >{{ t === 'all' ? 'All' : t }}</button>
-      </div>
-
-      <div v-if="colorOptions.length" class="filter-row">
-        <span class="filter-label">Color</span>
-        <button
-          class="chip"
-          :class="{ active: filterColor === 'all' }"
-          @click="filterColor = 'all'"
-        >All</button>
-        <button
-          v-for="c in colorOptions"
-          :key="c.id"
-          class="chip"
-          :class="{ active: filterColor === String(c.id) }"
-          @click="filterColor = String(c.id)"
-        >
-          <span class="swatch" :style="{ background: c.rgb ? '#' + c.rgb : '#ccc' }"></span>{{ c.name }}
-        </button>
       </div>
 
       <div class="filter-row">
@@ -569,26 +607,13 @@ const overReservedCount = computed(() => placeableBaseplates.value.filter(b => b
 watch(needsReviewCount, (n) => { if (n === 0) onlyReview.value = false })
 watch(overReservedCount, (n) => { if (n === 0) onlyOverReserved.value = false })
 
-const colorOptions = computed(() => {
-  const map = new Map()
-  for (const bp of placeableBaseplates.value) {
-    if ((bp.legoColorId ?? 0) > 0 && !map.has(bp.legoColorId)) {
-      map.set(bp.legoColorId, {
-        id: bp.legoColorId,
-        name: bp.legoColorName ?? `Color ${bp.legoColorId}`,
-        rgb: bp.legoColorRgb,
-      })
-    }
-  }
-  return [...map.values()].sort((a, b) => a.name.localeCompare(b.name))
-})
-
 const filtered = computed(() => {
   const q = search.value.trim().toLowerCase()
   return baseplates.value.filter(bp => {
     if (bp.quarantined) return false
     if (filterType.value !== 'all' && bp.type !== filterType.value) return false
-    if (filterColor.value !== 'all' && String(bp.legoColorId) !== filterColor.value) return false
+    if (filterSize.value !== 'all' && sizeKey(bp) !== filterSize.value) return false
+    if (filterColor.value !== 'all' && colorKey(bp) !== filterColor.value) return false
     if (onlyReview.value && !bp.needsReview) return false
     if (onlyOverReserved.value && !bp.overReserved) return false
     if (q) {
@@ -600,6 +625,112 @@ const filtered = computed(() => {
 })
 
 const filteredReviewCount = computed(() => filtered.value.filter(b => b.needsReview).length)
+
+const filterSize = ref('all')
+
+// A plate can be laid down either way round, so 16x32 and 32x16 are the same physical size:
+// group by the shorter side first, otherwise the catalogue splits into look-alike entries.
+function sizeKey(bp) {
+  const w = bp.widthStuds ?? 0
+  const d = bp.depthStuds ?? 0
+  if (w <= 0 || d <= 0) return 'unknown'
+  return `${Math.min(w, d)}x${Math.max(w, d)}`
+}
+
+// Pure catalogue count by size: it counts what is owned, deliberately ignoring reservations
+// (those belong to the availability numbers above, not to an inventory breakdown).
+const sizeTotals = computed(() => {
+  const map = new Map()
+  for (const bp of placeableBaseplates.value) {
+    const key = sizeKey(bp)
+    const entry = map.get(key) ?? { key, label: key === 'unknown' ? 'No size' : key, quantity: 0, plates: 0 }
+    entry.quantity += bp.quantity ?? 0
+    entry.plates += 1
+    map.set(key, entry)
+  }
+  return [...map.values()].sort((a, b) => {
+    if (a.key === 'unknown') return 1
+    if (b.key === 'unknown') return -1
+    // Biggest plates first: that is how a baseplate inventory is usually read.
+    const area = (s) => {
+      const [x, y] = s.key.split('x').map(Number)
+      return x * y
+    }
+    return area(b) - area(a) || a.label.localeCompare(b.label)
+  })
+})
+
+// Colour key of a plate. Road plates carry no meaningful colour (the archive stores 0), so they
+// get their own bucket instead of being lumped under the "Black" id 0 that 0 happens to map to.
+function colorKey(bp) {
+  if (bp.type === 'Road') return 'road'
+  return (bp.legoColorId ?? 0) > 0 ? String(bp.legoColorId) : 'none'
+}
+
+const matrixRows = computed(() => {
+  const map = new Map()
+  for (const bp of placeableBaseplates.value) {
+    const key = sizeKey(bp)
+    const row = map.get(key) ?? { key, label: key === 'unknown' ? 'No size' : key, cells: {}, total: 0, plateCount: 0 }
+    const ck = colorKey(bp)
+    const q = bp.quantity ?? 0
+    row.cells[ck] = (row.cells[ck] ?? 0) + q
+    row.total += q
+    row.plateCount += 1
+    map.set(key, row)
+  }
+  const order = new Map(sizeTotals.value.map((s, i) => [s.key, i]))
+  return [...map.values()].sort((a, b) => (order.get(a.key) ?? 99) - (order.get(b.key) ?? 99))
+})
+
+// A colour column is only shown when some plate actually uses it: an empty column would just
+// add noise to a small catalogue.
+const matrixColors = computed(() => {
+  const map = new Map()
+  for (const bp of baseplates.value) {
+    if (bp.quarantined) continue
+    const key = colorKey(bp)
+    if (map.has(key)) continue
+    map.set(key, {
+      key,
+      name: key === 'road' ? 'Road' : key === 'none' ? 'No colour' : (bp.legoColorName ?? `Color ${bp.legoColorId}`),
+      rgb: key === 'road' || key === 'none' ? '' : (bp.legoColorRgb ?? ''),
+    })
+  }
+  return [...map.values()].sort((a, b) => a.name.localeCompare(b.name))
+})
+
+const matrixColumnTotals = computed(() => {
+  const out = {}
+  for (const row of matrixRows.value)
+    for (const [ck, q] of Object.entries(row.cells)) out[ck] = (out[ck] ?? 0) + q
+  return out
+})
+
+const matrixGrandTotal = computed(() => matrixRows.value.reduce((sum, r) => sum + r.total, 0))
+
+function toggleSizeFilter(key) {
+  filterSize.value = filterSize.value === key ? 'all' : key
+  if (filterSize.value !== 'all' && filterType.value !== 'all') filterType.value = 'all'
+}
+
+function toggleColorFilter(key) {
+  filterColor.value = filterColor.value === key ? 'all' : key
+  if (filterColor.value !== 'all' && filterType.value !== 'all') filterType.value = 'all'
+}
+
+// Clicking a filled cell means "this size AND this colour": the two filters combine.
+function toggleCell(sizeK, colorK) {
+  const same = filterSize.value === sizeK && filterColor.value === colorK
+  filterSize.value = same ? 'all' : sizeK
+  filterColor.value = same ? 'all' : colorK
+  if (!same && filterType.value !== 'all') filterType.value = 'all'
+}
+
+function clearSizeColorFilters() {
+  filterSize.value = 'all'
+  filterColor.value = 'all'
+}
 
 const summary = computed(() => {
   let totalQty = 0, reserved = 0, free = 0, studs2 = 0
@@ -1151,6 +1282,95 @@ h1 { margin: 0; }
 .type-chip.standard { background: #e3f0e8; color: #2a7a3a; }
 .type-chip.road     { background: #e8eaf6; color: #3949ab; }
 .type-chip.custom   { background: #fff3e0; color: #e65100; }
+
+.size-table-wrap {
+  margin-top: 0.85rem;
+  max-width: 760px;
+}
+
+.size-table-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.4rem;
+}
+
+.size-table-head h2 {
+  font-size: 0.85rem;
+  margin: 0;
+  color: #455a64;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.clear-btn {
+  font-size: 0.75rem;
+  background: none;
+  border: none;
+  padding: 0;
+  color: #1976d2;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.size-table {
+  border-collapse: collapse;
+  font-size: 0.82rem;
+  background: #fff;
+}
+
+.size-table th,
+.size-table td {
+  border: 1px solid #e0e4ea;
+  padding: 0.3rem 0.55rem;
+  text-align: center;
+}
+
+.size-table thead th {
+  background: #f4f6f9;
+  color: #37474f;
+  font-weight: 600;
+  vertical-align: bottom;
+}
+
+.size-table .corner { text-align: left; }
+
+.col-head { cursor: pointer; white-space: nowrap; }
+.col-head:hover { background: #e7ecf3; }
+.col-head.active { background: #37474f; color: #fff; }
+.col-head .swatch {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  margin-right: 0.3rem;
+  border: 1px solid rgba(0, 0, 0, 0.2);
+  vertical-align: middle;
+}
+
+.row-head {
+  text-align: left;
+  background: #f4f6f9;
+  font-weight: 600;
+  color: #37474f;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.row-head:hover { background: #e7ecf3; }
+.row-head.active { background: #37474f; color: #fff; }
+
+.cell { cursor: pointer; font-variant-numeric: tabular-nums; }
+.cell-empty { color: #cfd6dd; cursor: default; }
+.cell:hover:not(.cell-empty) { background: #eef4fb; }
+.cell.active { background: #37474f; color: #fff; }
+
+.total-head { font-weight: 700; }
+.total-cell { background: #fafbfc; font-weight: 600; }
+.grand-total { background: #eceff1; font-weight: 700; }
+
+.size-table tfoot th,
+.size-table tfoot td { border-top: 2px solid #cfd6dd; }
 
 /* ── Filters ── */
 .filters { margin-bottom: 1rem; }
