@@ -228,6 +228,12 @@
           ⚠ Over-reserved ({{ overReservedCount }})
         </button>
         <input v-model="search" class="search-input" placeholder="Search part # or name…" />
+        <button
+          class="chip"
+          :class="{ active: grouped }"
+          :title="grouped ? 'Show a flat list' : 'Group by type and size'"
+          @click="grouped = !grouped"
+        >{{ grouped ? '▾ Grouped' : '▸ Group by type & size' }}</button>
         <button class="primary small" @click="openAdd">+ Add Baseplate</button>
         <button
           v-if="filteredReviewCount > 0"
@@ -245,7 +251,7 @@
       <div class="form-grid">
         <label class="field">
           <span>Type</span>
-          <select v-model="form.type" @change="onTypeChange">
+          <select v-model="form.type">
             <option>Standard</option>
             <option>Road</option>
             <option>Custom</option>
@@ -377,146 +383,56 @@
         </tr>
       </thead>
       <tbody>
-        <template v-for="bp in filtered" :key="bp.id">
-          <tr :class="{ 'row-review': bp.needsReview, 'row-empty': (bp.availableQuantity ?? 0) === 0 }">
-            <td class="expand-col">
-              <button class="expand-btn" :title="expanded[bp.id] ? 'Collapse' : 'Show reservations'" @click="toggleExpand(bp.id)">
-                {{ expanded[bp.id] ? '▾' : '▸' }}
-              </button>
-            </td>
-            <td class="preview-col">
-              <template v-if="bp.type === 'Standard'">
-                <span
-                  class="swatch"
-                  :style="{ background: bp.legoColorRgb ? '#' + bp.legoColorRgb : '#ccc' }"
-                  :title="bp.legoColorName ?? ''"
-                ></span>
+        <!-- Grouped view: type → size, both collapsible. -->
+        <template v-if="grouped">
+          <template v-for="g in groupedRows" :key="g.key">
+            <tr class="group-row group-type" @click="toggleGroup(g.key)">
+              <td :colspan="SIZE_COLSPAN">
+                <span class="group-caret">{{ collapsedGroups[g.key] ? '▸' : '▾' }}</span>
+                <span class="bp-type-badge" :class="g.type.toLowerCase()">{{ g.type }}</span>
+                <span class="group-count">{{ g.count }} row(s)</span>
+                <span class="group-total">{{ g.total }}</span>
+              </td>
+            </tr>
+            <template v-if="!collapsedGroups[g.key]">
+              <template v-for="sg in g.sizes" :key="sg.key">
+                <tr class="group-row group-size" @click="toggleGroup(sg.key)">
+                  <td :colspan="SIZE_COLSPAN">
+                    <span class="group-caret">{{ collapsedGroups[sg.key] ? '▸' : '▾' }}</span>
+                    <span class="group-size-label">{{ sg.label }}</span>
+                    <span class="group-count">{{ sg.items.length }} row(s)</span>
+                    <span class="group-total">{{ sg.total }}</span>
+                  </td>
+                </tr>
+                <template v-if="!collapsedGroups[sg.key]">
+                  <BaseplateRow
+                    v-for="bp in sg.items"
+                    :key="bp.id"
+                    :bp="bp"
+                    :expanded="expanded"
+                    :row-locked="rowLocked"
+                    :get-image-url="getBaseplateImageUrl"
+                    :bp-pending-file="bpPendingFile"
+                    :handlers="rowHandlers"
+                  />
+                </template>
               </template>
-              <template v-else>
-                <img
-                  v-if="bp.imageCached || (bp.type === 'Custom' && bp.linkedSetId)"
-                  :src="getBaseplateImageUrl(bp.id)"
-                  class="bp-thumb"
-                  :alt="bp.name"
-                  @error="e => e.target.style.display = 'none'"
-                />
-                <label class="bp-upload-label" :title="bp.imageCached ? 'Replace image' : 'Upload image'">
-                  <input type="file" accept="image/*" style="display:none" @change="e => onBpFileChange(e, bp.id)" />
-                  <span class="bp-upload-link">{{ bp.imageCached ? 'Replace' : 'Upload' }}</span>
-                </label>
-                <button v-if="bpPendingFile[bp.id]" class="primary small" @click="saveBpImage(bp.id)">Save</button>
-                <button
-                  v-if="bp.imageCached"
-                  class="remove-img-btn"
-                  title="Remove the uploaded preview"
-                  @click="removeBpImage(bp.id)"
-                >Remove</button>
-              </template>
-            </td>
-            <td>
-              <span class="bp-type-badge" :class="bp.type.toLowerCase()">{{ bp.type }}</span>
-              <span v-if="bp.needsReview" class="review-badge" title="To review">⚠ To review</span>
-              <span
-                v-if="bp.overReserved"
-                class="over-badge"
-                :title="`${bp.reservedQuantity} reserved by MOCs, but only ${bp.quantity} owned — update the quantity`"
-              >⚠ Over-reserved</span>
-            </td>
-            <td class="id-col">{{ bp.partNum || '—' }}</td>
-            <td>{{ bp.name }}</td>
-            <td>{{ bp.widthStuds }}×{{ bp.depthStuds }}</td>
-            <td>
-              <template v-if="bp.type === 'Standard'">
-                <span class="swatch" :style="{ background: bp.legoColorRgb ? '#' + bp.legoColorRgb : '#ccc' }"></span>
-                <span>{{ bp.legoColorName ?? '—' }}</span>
-              </template>
-              <span v-else class="muted">—</span>
-            </td>
-            <td class="num-col">
-              <div class="stepper">
-                <button class="step-btn" :disabled="rowLocked(bp) || (bp.quantity ?? 0) <= 0" @click="saveQuantity(bp, (bp.quantity ?? 0) - 1)">−</button>
-                <input
-                  class="step-input"
-                  type="number"
-                  min="0"
-                  :value="bp.quantity ?? 0"
-                  :disabled="rowLocked(bp)"
-                  @change="e => saveQuantity(bp, e.target.value)"
-                />
-                <button class="step-btn" :disabled="rowLocked(bp)" @click="saveQuantity(bp, (bp.quantity ?? 0) + 1)">+</button>
-              </div>
-            </td>
-            <td class="num-col" :class="{ 'zero': (bp.availableQuantity ?? 0) === 0 }">{{ bp.availableQuantity ?? 0 }}</td>
-            <td>
-              <span v-if="bp.type === 'Road'">{{ bp.roadShape || '—' }}</span>
-              <span v-else class="muted">—</span>
-            </td>
-            <td class="actions-col">
-              <button class="import-btn" :disabled="rowLocked(bp)" @click="openEdit(bp)">Edit</button>
-              <button v-if="bp.needsReview" class="import-btn confirm-btn" :disabled="rowLocked(bp)" @click="confirmRow(bp)">Confirm</button>
-              <button class="import-btn danger-btn" :disabled="rowLocked(bp)" @click="removeRow(bp)">Delete</button>
-            </td>
-          </tr>
-
-          <!-- Reserved by -->
-          <tr v-if="expanded[bp.id]" :key="bp.id + '-res'" class="res-row">
-            <td></td>
-            <td colspan="10">
-              <div class="res-panel">
-                <div class="res-header">
-                  <span class="res-stat">
-                    <strong>Reserved by MOC</strong>
-                    <span class="res-stat-value">{{ bp.reservedQuantity ?? 0 }}</span>
-                  </span>
-                </div>
-
-                <ul v-if="(bp.reservations?.length ?? 0) > 0" class="res-list">
-                  <li v-for="r in bp.reservations" :key="r.setId" class="res-item">
-                    <span class="res-desc">{{ r.setDescription || r.setId }}</span>
-                    <span class="res-qty">×{{ r.quantity }}</span>
-                    <button class="import-btn danger-btn small-btn" :disabled="rowLocked(bp)" @click="removeMoc(bp, r.setId)">Remove</button>
-                  </li>
-                </ul>
-                <p v-else class="muted res-empty">No reservations.</p>
-
-                <div class="add-moc">
-                  <div class="search-wrap">
-                    <input
-                      class="search-input"
-                      placeholder="+ Add MOC (search set…)"
-                      :value="mocDraft[bp.id]?.query ?? ''"
-                      :disabled="rowLocked(bp)"
-                      @input="onMocQuery(bp.id, $event.target.value)"
-                    />
-                    <ul v-if="mocResults(bp.id).length > 0" class="dropdown">
-                      <li
-                        v-for="s in mocResults(bp.id)"
-                        :key="s.id"
-                        class="dropdown-item"
-                        @click="selectMocSet(bp.id, s)"
-                      >{{ s.setNumber ? s.setNumber + ' — ' : '' }}{{ s.description }}{{ s.isMoc ? ' (MOC)' : '' }}</li>
-                    </ul>
-                  </div>
-                  <label class="qty-label">qty
-                    <input
-                      class="step-input"
-                      type="number"
-                      min="1"
-                      :value="mocDraft[bp.id]?.quantity ?? 1"
-                      :disabled="rowLocked(bp)"
-                      @input="onMocQty(bp.id, $event.target.value)"
-                    />
-                  </label>
-                  <button
-                    class="primary small"
-                    :disabled="!mocDraft[bp.id]?.setId || rowLocked(bp)"
-                    @click="confirmAddMoc(bp)"
-                  >Add</button>
-                </div>
-              </div>
-            </td>
-          </tr>
+            </template>
+          </template>
         </template>
+
+        <!-- Flat view (default). -->
+        <BaseplateRow
+          v-else
+          v-for="bp in filtered"
+          :key="bp.id"
+          :bp="bp"
+          :expanded="expanded"
+          :row-locked="rowLocked"
+          :get-image-url="getBaseplateImageUrl"
+          :bp-pending-file="bpPendingFile"
+          :handlers="rowHandlers"
+        />
       </tbody>
     </table>
   </div>
@@ -525,6 +441,8 @@
 <script setup>
 import { ref, reactive, computed, watch, onMounted } from 'vue'
 import ColorSelect from '../../components/ColorSelect.vue'
+import BaseplateRow from '../../components/BaseplateRow.vue'
+import '../../components/baseplateRows.css'
 import { useSettings } from '../../composables/useSettings.js'
 import { searchArchivePartsBaseplates, getColorsList } from '../../api/archives.js'
 import { getAllSets } from '../../api/sets.js'
@@ -605,6 +523,15 @@ const overReservedCount = computed(() => placeableBaseplates.value.filter(b => b
 // The warning chips disappear once there is nothing left to review: clear the corresponding
 // filter too, otherwise the list would stay filtered with no visible way out.
 watch(needsReviewCount, (n) => { if (n === 0) onlyReview.value = false })
+
+// The type is edited through a plain v-model, so the previous value is captured here instead
+// of in an @change handler. `resetForm` and `openEdit` write `form.type` directly, so they
+// first set `suppressTypeChange` to avoid clearing fields they are about to populate.
+let suppressTypeChange = false
+watch(() => form.type, (next, prev) => {
+  if (suppressTypeChange) return
+  onTypeChange(prev)
+})
 watch(overReservedCount, (n) => { if (n === 0) onlyOverReserved.value = false })
 
 const filtered = computed(() => {
@@ -625,6 +552,65 @@ const filtered = computed(() => {
 })
 
 const filteredReviewCount = computed(() => filtered.value.filter(b => b.needsReview).length)
+
+// ── Grouping ─────────────────────────────────────────────────────────────────
+// Flat table by default: grouping is an opt-in reading of the same data, so it can be toggled
+// without losing the filters (which apply to `filtered` either way).
+const grouped = ref(false)
+// Collapsed keys, per level: `type:Standard`, `size:32x32`, `cell:Standard:32x32`. Default is
+// expanded, so only what the user collapsed is remembered.
+const collapsedGroups = ref({})
+
+function toggleGroup(key) {
+  collapsedGroups.value = { ...collapsedGroups.value, [key]: !collapsedGroups.value[key] }
+}
+
+const SIZE_COLSPAN = 11
+
+// Two levels: type first, then size. Every bucket carries its own quantity total, which is the
+// number that matters when reading an inventory (how many 32x32 Road plates are there?).
+const groupedRows = computed(() => {
+  const byType = new Map()
+  for (const bp of filtered.value) {
+    const t = bp.type ?? 'Unknown'
+    if (!byType.has(t)) byType.set(t, new Map())
+    const bySize = byType.get(t)
+    const s = sizeKey(bp)
+    if (!bySize.has(s)) bySize.set(s, [])
+    bySize.get(s).push(bp)
+  }
+
+  const typeOrder = ['Standard', 'Road', 'Custom']
+  return [...byType.entries()]
+    .sort((a, b) => {
+      const ia = typeOrder.indexOf(a[0]), ib = typeOrder.indexOf(b[0])
+      return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib) || a[0].localeCompare(b[0])
+    })
+    .map(([type, sizes]) => {
+      const sizeGroups = [...sizes.entries()]
+        .sort((a, b) => {
+          if (a[0] === 'unknown') return 1
+          if (b[0] === 'unknown') return -1
+          const area = (k) => { const [x, y] = k.split('x').map(Number); return x * y }
+          return area(b[0]) - area(a[0]) || a[0].localeCompare(b[0])
+        })
+        .map(([size, items]) => ({
+          key: `cell:${type}:${size}`,
+          size,
+          label: size === 'unknown' ? 'No size' : size,
+          total: items.reduce((sum, bp) => sum + (bp.quantity ?? 0), 0),
+          items,
+        }))
+
+      return {
+        key: `type:${type}`,
+        type,
+        total: sizeGroups.reduce((sum, g) => sum + g.total, 0),
+        count: sizeGroups.reduce((sum, g) => sum + g.items.length, 0),
+        sizes: sizeGroups,
+      }
+    })
+})
 
 const filterSize = ref('all')
 
@@ -1045,12 +1031,14 @@ async function removeBpImage(id) {
 // ── Form ─────────────────────────────────────────────────────────────────────
 function resetForm() {
   editingId.value = null
+  suppressTypeChange = true
   Object.assign(form, {
     type: 'Standard', partNum: '', name: '',
     widthStuds: null, depthStuds: null,
     colorUid: '', roadShape: '', quantity: 1,
     linkedSetId: null, notes: '', legoColorIdFallback: 0, version: 0,
   })
+  suppressTypeChange = false
   sizeInput.value = ''
   partQuery.value = ''
   partResults.value = []
@@ -1067,6 +1055,7 @@ function openAdd() {
 function openEdit(bp) {
   resetForm()
   editingId.value = bp.id
+  suppressTypeChange = true
   form.type = bp.type
   form.partNum = bp.partNum ?? ''
   form.name = bp.name ?? ''
@@ -1081,6 +1070,7 @@ function openEdit(bp) {
   const c = colors.value.find(col => col.id === bp.legoColorId)
   form.colorUid = c?.uniqueId ?? ''
   if (bp.widthStuds && bp.depthStuds) sizeInput.value = `${bp.widthStuds}x${bp.depthStuds}`
+  suppressTypeChange = false
   formOpen.value = true
 }
 
@@ -1096,16 +1086,18 @@ function rowLocked(bp) {
   return formOpen.value && editingId.value === bp.id
 }
 
-function onTypeChange() {
-  form.partNum = ''
-  form.name = ''
-  form.colorUid = ''
-  form.roadShape = ''
-  form.linkedSetId = null
-  partQuery.value = ''
-  partResults.value = []
-  setQuery.value = ''
-  setResults.value = []
+// Changing the type only clears what is specific to the type being left. Part number, name,
+// size, quantity and notes are shared by every type: wiping them here silently destroyed a
+// form the user had already filled in just because they fixed a wrong type.
+function onTypeChange(previousType) {
+  if (previousType === 'Custom') {
+    form.linkedSetId = null
+    setQuery.value = ''
+    setResults.value = []
+  }
+  if (previousType === 'Road') form.roadShape = ''
+  // The colour only applies to Standard plates, but keeping it means switching back restores
+  // the choice instead of forcing the user to pick the same colour again.
 }
 
 function applySizeInput() {
@@ -1200,6 +1192,28 @@ watch(setQuery, (q) => {
     )
     .slice(0, 8)
 })
+
+// The row component is presentational only: every mutation stays in this view, so there is a
+// single writer for the row state (`expanded`, `mocDraft`, `bpPendingFile`) whether the table
+// is rendered flat or grouped.
+const rowHandlers = {
+  toggleExpand,
+  saveQuantity,
+  confirmRow,
+  removeRow,
+  openEdit,
+  onMocQuery,
+  onMocQty,
+  mocResults,
+  selectMocSet,
+  confirmAddMoc,
+  removeMoc,
+  saveBpImage,
+  removeBpImage,
+  onBpFileChange,
+  mocDraft,
+  bpPendingFile,
+}
 </script>
 
 <style scoped>
@@ -1372,6 +1386,51 @@ h1 { margin: 0; }
 .size-table tfoot th,
 .size-table tfoot td { border-top: 2px solid #cfd6dd; }
 
+/* ── Grouped catalogue rows ── */
+.group-row td {
+  background: #eef2f6;
+  cursor: pointer;
+  user-select: none;
+}
+.group-row:hover td { background: #e3e9f0; }
+
+.group-type td {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #37474f;
+  border-top: 1px solid #cfd6dd;
+}
+
+.group-size td {
+  padding-left: 2.2rem;
+  font-size: 0.82rem;
+  color: #455a64;
+  background: #f7f9fb;
+}
+.group-size:hover td { background: #eef2f6; }
+
+.group-caret {
+  display: inline-block;
+  width: 1rem;
+  color: #607d8b;
+}
+
+.group-size-label { font-weight: 600; }
+
+.group-count {
+  margin-left: 0.5rem;
+  font-weight: 400;
+  font-size: 0.75rem;
+  color: #78909c;
+}
+
+.group-total {
+  float: right;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  color: #37474f;
+}
+
 /* ── Filters ── */
 .filters { margin-bottom: 1rem; }
 
@@ -1436,241 +1495,6 @@ h1 { margin: 0; }
   white-space: nowrap;
 }
 
-.data-table tr:hover td { background: #fafbfc; }
-
-.row-review td { background: #fffdf5; }
-.row-empty td { background: #fff5f5; }
-
-.num-col { text-align: right; }
-.zero { color: #c0392b; font-weight: 600; }
-.id-col { color: #64748b; font-size: 0.82rem; }
-.expand-col { width: 2rem; }
-
-.expand-btn {
-  background: none;
-  border: none;
-  cursor: pointer;
-  color: #64748b;
-  font-size: 0.85rem;
-  padding: 0.1rem 0.3rem;
-}
-
-.preview-col { white-space: nowrap; }
-
-.swatch {
-  display: inline-block;
-  width: 1rem;
-  height: 1rem;
-  border-radius: 2px;
-  border: 1px solid rgba(0, 0, 0, 0.15);
-  vertical-align: middle;
-  margin-right: 0.35rem;
-}
-
-.bp-thumb {
-  width: 36px;
-  height: 24px;
-  object-fit: cover;
-  border-radius: 2px;
-  border: 1px solid #e2e8f0;
-  vertical-align: middle;
-}
-
-.bp-upload-label { cursor: pointer; margin-left: 0.3rem; }
-.bp-upload-link { font-size: 0.85rem; color: #3b82f6; }
-
-.remove-img-btn {
-  margin-left: 0.4rem;
-  font-size: 0.8rem;
-  padding: 0.2rem 0.5rem;
-  background: #fff;
-  color: #b91c1c;
-  border: 1px solid #fca5a5;
-  border-radius: 4px;
-  cursor: pointer;
-}
-.remove-img-btn:hover { background: #fef2f2; }
-
-.bp-type-badge {
-  display: inline-block;
-  font-size: 0.72rem;
-  padding: 0.1rem 0.45rem;
-  border-radius: 10px;
-  font-weight: 500;
-  white-space: nowrap;
-}
-.bp-type-badge.standard { background: #e3f0e8; color: #2a7a3a; }
-.bp-type-badge.road     { background: #e8eaf6; color: #3949ab; }
-.bp-type-badge.custom   { background: #fff3e0; color: #e65100; }
-
-.review-badge {
-  display: inline-block;
-  margin-left: 0.35rem;
-  font-size: 0.7rem;
-  padding: 0.1rem 0.4rem;
-  border-radius: 10px;
-  background: #fef3c7;
-  color: #92400e;
-  white-space: nowrap;
-}
-
-.over-badge {
-  display: inline-block;
-  margin-left: 0.35rem;
-  font-size: 0.7rem;
-  padding: 0.1rem 0.4rem;
-  border-radius: 10px;
-  background: #fee2e2;
-  color: #b91c1c;
-  white-space: nowrap;
-}
-
-.stepper {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.15rem;
-}
-
-.step-btn {
-  background: #f1f5f9;
-  border: 1px solid #cbd5e1;
-  border-radius: 4px;
-  width: 22px;
-  height: 22px;
-  line-height: 1;
-  cursor: pointer;
-  color: #475569;
-}
-.step-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-
-.step-input {
-  width: 48px;
-  padding: 0.15rem 0.25rem;
-  border: 1px solid #cbd5e1;
-  border-radius: 4px;
-  font-size: 0.82rem;
-  text-align: center;
-}
-
-.actions-col { white-space: nowrap; text-align: right; }
-
-.import-btn {
-  background: none;
-  border: 1px solid #cbd5e1;
-  border-radius: 4px;
-  padding: 0.25rem 0.5rem;
-  font-size: 0.78rem;
-  color: #475569;
-  cursor: pointer;
-  white-space: nowrap;
-  margin-left: 0.25rem;
-}
-.import-btn:hover { background: #f1f5f9; border-color: #94a3b8; color: #1e293b; }
-.import-btn.small-btn { padding: 0.15rem 0.4rem; font-size: 0.72rem; }
-.confirm-btn { color: #92400e; border-color: #fcd34d; }
-.confirm-btn:hover { background: #fef3c7; }
-.danger-btn { color: #c0392b; border-color: #fca5a5; }
-.danger-btn:hover { background: #fef2f2; border-color: #c0392b; }
-
-.primary.small {
-  background: #3a6ea5;
-  color: #fff;
-  border: none;
-  border-radius: 4px;
-  padding: 0.3rem 0.7rem;
-  font-size: 0.8rem;
-  cursor: pointer;
-}
-.primary.small:hover:not(:disabled) { background: #2e5a8a; }
-.primary.small:disabled { opacity: 0.5; cursor: not-allowed; }
-
-/* ── Reservation panel ── */
-.res-row td { background: #f8fafc; border-bottom: 1px solid #e2e8f0; }
-
-.res-panel {
-  padding: 0.6rem 0.75rem 0.9rem;
-  background: #f8fafc;
-}
-
-.res-header {
-  display: flex;
-  align-items: baseline;
-  gap: 1.25rem;
-  margin-bottom: 0.5rem;
-  font-size: 0.85rem;
-  padding-bottom: 0.4rem;
-  border-bottom: 1px solid #e2e8f0;
-}
-
-/* Two separate figures: reservations (a real commitment) and placements in layouts
-   (informational only — layouts never consume availability). */
-.res-stat {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 0.35rem;
-}
-
-.res-stat-value {
-  font-weight: 700;
-  color: #1e293b;
-}
-
-.res-list { list-style: none; margin: 0 0 0.5rem; padding: 0; }
-
-.res-item {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  padding: 0.25rem 0;
-  border-bottom: 1px solid #eef2f7;
-  font-size: 0.85rem;
-}
-.res-item:last-child { border-bottom: none; }
-
-.res-desc { flex: 1; }
-.res-qty { color: #475569; font-weight: 600; }
-.res-empty { margin: 0 0 0.5rem; }
-
-.add-moc {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  flex-wrap: wrap;
-}
-
-.qty-label {
-  display: flex;
-  align-items: center;
-  gap: 0.3rem;
-  font-size: 0.8rem;
-  color: #475569;
-}
-
-.search-wrap { position: relative; }
-
-.dropdown {
-  position: absolute;
-  top: 100%;
-  left: 0;
-  z-index: 200;
-  background: #fff;
-  border: 1px solid #cbd5e1;
-  border-radius: 4px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  min-width: 320px;
-  max-height: 220px;
-  overflow-y: auto;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
-}
-
-.dropdown-item {
-  padding: 0.35rem 0.65rem;
-  font-size: 0.85rem;
-  cursor: pointer;
-}
-.dropdown-item:hover { background: #f0f5ff; }
 
 /* ── Form ── */
 .bp-form {
