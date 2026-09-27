@@ -8,6 +8,12 @@
 
 No test projects.
 
+## Conventions
+
+- **Commit messages and code comments are in English.** Releases are tagged on `master` as
+  `vMAJOR.MINOR.PATCH` (minor for a feature, patch for a fix) and pushed to both remotes,
+  `origin` (Forgejo) and `github`.
+
 ## Architecture
 
 Layered .NET 10 backend + Vue 3/Vite SPA. All projects: `net10.0`, `Nullable=enable`, `ImplicitUsings=enable`.
