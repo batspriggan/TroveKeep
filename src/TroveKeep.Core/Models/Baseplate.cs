@@ -1,5 +1,15 @@
 namespace TroveKeep.Core.Models;
 
+/// <summary>
+/// Kind of baseplate row.
+///
+/// <para>
+/// <see cref="Custom"/> is <b>legacy and not creatable</b>: it meant "a MOC stored as a fake
+/// baseplate row", a concept replaced by reservations on real plates. It is kept in the enum
+/// because <c>Migration_005</c> and the quarantine wizard must still recognise such rows on an
+/// installation that has not migrated yet. The API refuses to create or update a row with it.
+/// </para>
+/// </summary>
 public enum BaseplateType { Standard, Road, Custom }
 
 public class Baseplate

@@ -126,6 +126,8 @@ public class BaseplateService : IBaseplateService
             BaseplateType.Road =>
                 bp.WidthStuds <= 0 || bp.DepthStuds <= 0,
             BaseplateType.Custom =>
+                // Legacy-only: new Custom rows are rejected by the API, but a row still awaiting
+                // reconciliation keeps being validated so it is visibly flagged until resolved.
                 bp.WidthStuds <= 0 || bp.DepthStuds <= 0 || string.IsNullOrWhiteSpace(bp.Name),
             _ => true,
         };

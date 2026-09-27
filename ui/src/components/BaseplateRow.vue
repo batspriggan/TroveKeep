@@ -15,7 +15,7 @@
     </template>
     <template v-else>
       <img
-        v-if="bp.imageCached || (bp.type === 'Custom' && bp.linkedSetId)"
+        v-if="bp.imageCached"
         :src="getImageUrl(bp.id)"
         class="bp-thumb"
         :alt="bp.name"

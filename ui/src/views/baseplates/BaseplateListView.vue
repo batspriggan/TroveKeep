@@ -137,7 +137,6 @@
       <div class="type-totals">
         <span class="type-chip standard">Standard {{ summary.byType.Standard }}</span>
         <span class="type-chip road">Road {{ summary.byType.Road }}</span>
-        <span class="type-chip custom">Custom {{ summary.byType.Custom }}</span>
       </div>
 
       <!-- Catalogue breakdown: what is owned, not what is free. -->
@@ -202,7 +201,7 @@
       <div class="filter-row">
         <span class="filter-label">Type</span>
         <button
-          v-for="t in ['all', 'Standard', 'Road', 'Custom']"
+          v-for="t in ['all', 'Standard', 'Road']"
           :key="t"
           class="chip"
           :class="{ active: filterType === t }"
@@ -254,12 +253,11 @@
           <select v-model="form.type">
             <option>Standard</option>
             <option>Road</option>
-            <option>Custom</option>
           </select>
         </label>
 
-        <!-- Part search (Standard / Road) -->
-        <div v-if="form.type !== 'Custom'" class="field search-field">
+        <!-- Part search: the archive is already filtered to baseplates. -->
+        <div class="field search-field">
           <span>Part</span>
           <div class="search-wrap">
             <input v-model="partQuery" class="search-input wide" placeholder="Search part archive…" />
@@ -270,22 +268,6 @@
                 class="dropdown-item"
                 @click="selectPart(r)"
               >{{ r.partNum }} — {{ r.name }}</li>
-            </ul>
-          </div>
-        </div>
-
-        <!-- Set typeahead (Custom) -->
-        <div v-else class="field search-field">
-          <span>Linked set</span>
-          <div class="search-wrap">
-            <input v-model="setQuery" class="search-input wide" placeholder="Search your sets…" />
-            <ul v-if="setResults.length > 0" class="dropdown">
-              <li
-                v-for="s in setResults"
-                :key="s.id"
-                class="dropdown-item"
-                @click="selectSet(s)"
-              >{{ s.setNumber ? s.setNumber + ' — ' : '' }}{{ s.description }}{{ s.isMoc ? ' (MOC)' : '' }}</li>
             </ul>
           </div>
         </div>
@@ -488,8 +470,6 @@ const formError = ref('')
 const sizeInput = ref('')
 const partQuery = ref('')
 const partResults = ref([])
-const setQuery = ref('')
-const setResults = ref([])
 const bpPendingFile = ref({})
 const confirmingAll = ref(false)
 
@@ -580,7 +560,7 @@ const groupedRows = computed(() => {
     bySize.get(s).push(bp)
   }
 
-  const typeOrder = ['Standard', 'Road', 'Custom']
+  const typeOrder = ['Standard', 'Road']
   return [...byType.entries()]
     .sort((a, b) => {
       const ia = typeOrder.indexOf(a[0]), ib = typeOrder.indexOf(b[0])
@@ -720,7 +700,7 @@ function clearSizeColorFilters() {
 
 const summary = computed(() => {
   let totalQty = 0, reserved = 0, free = 0, studs2 = 0
-  const byType = { Standard: 0, Road: 0, Custom: 0 }
+  const byType = { Standard: 0, Road: 0 }
   for (const bp of placeableBaseplates.value) {
     const q = bp.quantity ?? 0
     totalQty += q
@@ -1042,8 +1022,6 @@ function resetForm() {
   sizeInput.value = ''
   partQuery.value = ''
   partResults.value = []
-  setQuery.value = ''
-  setResults.value = []
   formError.value = ''
 }
 
@@ -1090,11 +1068,6 @@ function rowLocked(bp) {
 // size, quantity and notes are shared by every type: wiping them here silently destroyed a
 // form the user had already filled in just because they fixed a wrong type.
 function onTypeChange(previousType) {
-  if (previousType === 'Custom') {
-    form.linkedSetId = null
-    setQuery.value = ''
-    setResults.value = []
-  }
   if (previousType === 'Road') form.roadShape = ''
   // The colour only applies to Standard plates, but keeping it means switching back restores
   // the choice instead of forcing the user to pick the same colour again.
@@ -1121,26 +1094,10 @@ function selectPart(r) {
   partQuery.value = ''
 }
 
-function selectSet(s) {
-  form.linkedSetId = s.id
-  // The set number is NOT a part number. Copying it into `partNum` would poison the
-  // business key (Type + PartNum + colour + size) and make the row unmatchable in the
-  // part archive. A linked set is identified by `linkedSetId`; `partNum` stays what the
-  // user typed (or empty for a custom module).
-  form.partNum = ''
-  form.name = s.description ?? ''
-  setResults.value = []
-  setQuery.value = ''
-}
-
 async function submitForm() {
   formError.value = ''
-  if (form.type !== 'Custom' && !form.partNum && !form.name) {
+  if (!form.partNum && !form.name) {
     formError.value = 'Select a part from the archive first.'
-    return
-  }
-  if (form.type === 'Custom' && !form.name) {
-    formError.value = 'Select a set or enter a name.'
     return
   }
   const matchedColor = colors.value.find(c => c.uniqueId === form.colorUid)
@@ -1156,7 +1113,8 @@ async function submitForm() {
     widthStuds: Number(form.widthStuds) || 0,
     depthStuds: Number(form.depthStuds) || 0,
     legoColorId,
-    linkedSetId: form.type === 'Custom' ? (form.linkedSetId ?? null) : null,
+    // `linkedSetId` is no longer settable from the form: it only survives on legacy rows being
+    // reconciled. Existing values are preserved by the service, so the field is simply omitted.
     roadShape: form.type === 'Road' ? (form.roadShape || null) : null,
     quantity: Math.max(0, Number(form.quantity) || 0),
     notes: form.notes || null,
@@ -1180,17 +1138,6 @@ async function submitForm() {
 watch(partQuery, async (q) => {
   if (q && q.length >= 2) partResults.value = await searchArchivePartsBaseplates(q, 10)
   else partResults.value = []
-})
-
-watch(setQuery, (q) => {
-  if (!q) { setResults.value = []; return }
-  const lq = q.toLowerCase()
-  setResults.value = allSets.value
-    .filter(s =>
-      (s.setNumber ?? '').toLowerCase().includes(lq) ||
-      (s.description ?? '').toLowerCase().includes(lq)
-    )
-    .slice(0, 8)
 })
 
 // The row component is presentational only: every mutation stays in this view, so there is a
@@ -1295,7 +1242,6 @@ h1 { margin: 0; }
 }
 .type-chip.standard { background: #e3f0e8; color: #2a7a3a; }
 .type-chip.road     { background: #e8eaf6; color: #3949ab; }
-.type-chip.custom   { background: #fff3e0; color: #e65100; }
 
 .size-table-wrap {
   margin-top: 0.85rem;

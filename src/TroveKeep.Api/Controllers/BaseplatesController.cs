@@ -404,10 +404,23 @@ public class BaseplatesController : ControllerBase
         return false;
     }
 
+    /// <summary>
+    /// Only <see cref="BaseplateType.Standard"/> and <see cref="BaseplateType.Road"/> can be chosen.
+    ///
+    /// <see cref="BaseplateType.Custom"/> is deliberately rejected: it was the "fake MOC row"
+    /// concept that <c>Migration_005</c> dissolved into reservations, so no new row may use it.
+    /// The enum value survives only so the migration and the quarantine wizard can still read
+    /// (and finish converting) legacy rows on installations that have not migrated yet.
+    /// </summary>
     private static BaseplateType ParseType(string type)
     {
         if (!Enum.TryParse<BaseplateType>(type, ignoreCase: true, out var parsed))
             throw new InvalidOperationException($"Unknown baseplate type '{type}'.");
+
+        if (parsed == BaseplateType.Custom)
+            throw new InvalidOperationException(
+                "The 'Custom' type is no longer supported: link a set with a reservation instead.");
+
         return parsed;
     }
 

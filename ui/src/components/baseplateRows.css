@@ -63,7 +63,6 @@
 }
 .bp-type-badge.standard { background: #e3f0e8; color: #2a7a3a; }
 .bp-type-badge.road     { background: #e8eaf6; color: #3949ab; }
-.bp-type-badge.custom   { background: #fff3e0; color: #e65100; }
 
 .review-badge {
   display: inline-block;
