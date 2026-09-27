@@ -13,6 +13,7 @@ public class RoomDocument
     public string Name { get; set; } = string.Empty;
     public int WidthCm { get; set; }
     public int DepthCm { get; set; }
+    public bool Obsolete { get; set; }
     public List<PlacedTableDocument> Layout { get; set; } = [];
     public List<AggregateSelectionDocument> AggregateSelections { get; set; } = [];
     public List<AggregateBpLayoutDocument> AggregateBpLayouts { get; set; } = [];

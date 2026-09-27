@@ -16,7 +16,8 @@ const quarantinedPlates = ref([])
 
 onMounted(async () => {
   const [r, t, bps] = await Promise.all([getAllRooms(), getAllTemplates(), getAllBaseplates()])
-  rooms.value = r
+  // Archived rooms are not planned any more, so they do not appear here either.
+  rooms.value = (r ?? []).filter(room => !room.obsolete)
   templates.value = t
   quarantinedPlates.value = bps.filter(b => b.quarantined === true)
   blocked.value = quarantinedPlates.value.length > 0

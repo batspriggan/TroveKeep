@@ -1,9 +1,9 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   getAllRooms, createRoom, updateRoom, deleteRoom,
-  exportRoom, importRoom,
+  exportRoom, importRoom, duplicateRoom, setRoomObsolete,
 } from '../api/tableplanner.js'
 
 const router = useRouter()
@@ -16,8 +16,35 @@ const importError = ref('')
 const importSuccess = ref('')
 const importFileRef = ref(null)
 
+// Archived rooms are hidden by default: they are kept for reference but no longer planned.
+const showObsolete = ref(false)
+
+const visibleRooms = computed(() =>
+  showObsolete.value ? rooms.value : rooms.value.filter(r => !r.obsolete),
+)
+const obsoleteCount = computed(() => rooms.value.filter(r => r.obsolete).length)
+
 async function loadRooms() {
   rooms.value = await getAllRooms()
+}
+
+async function toggleObsolete(room) {
+  try {
+    await setRoomObsolete(room.id, !room.obsolete, room.version)
+    await loadRooms()
+  } catch (e) {
+    roomError.value = e.message
+  }
+}
+
+async function copyRoom(room) {
+  roomError.value = ''
+  try {
+    await duplicateRoom(room.id)
+    await loadRooms()
+  } catch (e) {
+    roomError.value = e.message
+  }
 }
 
 async function submitRoom() {
@@ -87,8 +114,19 @@ onMounted(() => loadRooms())
       <p v-if="importSuccess" class="form-success">{{ importSuccess }}</p>
 
       <p v-if="rooms.length === 0" class="empty-hint">No rooms yet.</p>
+      <p v-else-if="visibleRooms.length === 0" class="empty-hint">
+        No active rooms — every room is archived.
+      </p>
 
-      <table v-else class="data-table">
+      <div v-if="obsoleteCount > 0" class="obsolete-toggle">
+        <button
+          class="small"
+          :class="{ active: showObsolete }"
+          @click="showObsolete = !showObsolete"
+        >{{ showObsolete ? 'Hide archived' : `Show archived (${obsoleteCount})` }}</button>
+      </div>
+
+      <table v-if="visibleRooms.length > 0" class="data-table">
         <thead>
           <tr>
             <th>Name</th>
@@ -99,14 +137,21 @@ onMounted(() => loadRooms())
           </tr>
         </thead>
         <tbody>
-          <tr v-for="r in rooms" :key="r.id">
-            <td>{{ r.name }}</td>
+          <tr v-for="r in visibleRooms" :key="r.id" :class="{ 'row-obsolete': r.obsolete }">
+            <td>
+              {{ r.name }}
+              <span v-if="r.obsolete" class="obsolete-badge" title="Archived room">archived</span>
+            </td>
             <td>{{ (r.widthCm / 100).toFixed(2) }}</td>
             <td>{{ (r.depthCm / 100).toFixed(2) }}</td>
             <td>{{ r.layout.length }}</td>
             <td class="actions">
               <button class="primary small" @click="openRoom(r.id)">Open</button>
+              <button class="small" @click="copyRoom(r)" title="Copy this room, layout included">Duplicate</button>
               <button class="small" @click="exportRoom(r.id)">Export</button>
+              <button class="small" @click="toggleObsolete(r)">
+                {{ r.obsolete ? 'Restore' : 'Archive' }}
+              </button>
               <button class="danger small" @click="removeRoom(r.id)">Delete</button>
             </td>
           </tr>
@@ -205,6 +250,32 @@ h1 { margin: 0 0 1rem; }
 .empty-hint {
   color: #888;
   font-size: 0.9rem;
+}
+
+.obsolete-toggle {
+  margin-bottom: 0.6rem;
+}
+
+.obsolete-toggle button.active {
+  background: #e8eaf6;
+  border-color: #9fa8da;
+  color: #3949ab;
+}
+
+.row-obsolete td {
+  color: #90a4ae;
+  background: #fafafa;
+}
+
+.obsolete-badge {
+  display: inline-block;
+  margin-left: 0.45rem;
+  padding: 0.05rem 0.4rem;
+  font-size: 0.7rem;
+  border-radius: 8px;
+  background: #eceff1;
+  color: #607d8b;
+  border: 1px solid #cfd8dc;
 }
 
 .data-table {

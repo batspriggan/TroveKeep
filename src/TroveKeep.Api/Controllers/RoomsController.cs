@@ -25,7 +25,7 @@ public class RoomsController : ControllerBase
     public async Task<IActionResult> GetAll()
     {
         var rooms = await _service.GetAllAsync();
-        return Ok(rooms.Select(MapToResponse));
+        return Ok(await Task.WhenAll(rooms.Select(MapToResponseAsync)));
     }
 
     [HttpGet("{id:guid}")]
@@ -35,7 +35,7 @@ public class RoomsController : ControllerBase
     {
         var room = await _service.GetByIdAsync(id);
         if (room is null) return NotFound();
-        return Ok(MapToResponse(room));
+        return Ok(await MapToResponseAsync(room));
     }
 
     [HttpPost]
@@ -50,12 +50,13 @@ public class RoomsController : ControllerBase
             DepthCm = request.DepthCm,
         };
         var created = await _service.CreateAsync(model);
-        return CreatedAtAction(nameof(GetById), new { id = created.Id }, MapToResponse(created));
+        return CreatedAtAction(nameof(GetById), new { id = created.Id }, await MapToResponseAsync(created));
     }
 
     [HttpPut("{id:guid}")]
     [ProducesResponseType(typeof(RoomResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<IActionResult> Update(Guid id, [FromBody] UpdateRoomRequest request)
     {
@@ -67,11 +68,71 @@ public class RoomsController : ControllerBase
                 Name = request.Name,
                 WidthCm = request.WidthCm,
                 DepthCm = request.DepthCm,
+                Obsolete = request.Obsolete,
                 Version = request.Version,
             };
             var updated = await _service.UpdateAsync(model);
             if (updated is null) return NotFound();
-            return Ok(MapToResponse(updated));
+            return Ok(await MapToResponseAsync(updated));
+        }
+        catch (InvalidOperationException ex)
+        {
+            // Room too small for its layout: the client should block this before submitting.
+            return BadRequest(new { error = ex.Message });
+        }
+        catch (ConcurrencyException ex)
+        {
+            return Conflict(new { error = ex.Message });
+        }
+    }
+
+    /// <summary>Shifts the layout to the origin and resizes the room to its exact footprint.</summary>
+    [HttpPost("{id:guid}/fit")]
+    [ProducesResponseType(typeof(RoomResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> FitToLayout(Guid id, [FromBody] FitRoomRequest? request)
+    {
+        try
+        {
+            var updated = await _service.FitToLayoutAsync(id, request?.Version ?? 0);
+            if (updated is null) return NotFound();
+            return Ok(await MapToResponseAsync(updated));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+        catch (ConcurrencyException ex)
+        {
+            return Conflict(new { error = ex.Message });
+        }
+    }
+
+    /// <summary>Copies a room, layout included, into a new one.</summary>
+    [HttpPost("{id:guid}/duplicate")]
+    [ProducesResponseType(typeof(RoomResponse), StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> Duplicate(Guid id, [FromBody] DuplicateRoomRequest? request)
+    {
+        var copy = await _service.DuplicateAsync(id, request?.Name);
+        if (copy is null) return NotFound();
+        return CreatedAtAction(nameof(GetById), new { id = copy.Id }, await MapToResponseAsync(copy));
+    }
+
+    /// <summary>Archives or unarchives a room. Archived rooms are hidden from the room list.</summary>
+    [HttpPost("{id:guid}/obsolete")]
+    [ProducesResponseType(typeof(RoomResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> SetObsolete(Guid id, [FromBody] SetRoomObsoleteRequest request)
+    {
+        try
+        {
+            var updated = await _service.SetObsoleteAsync(id, request.Obsolete, request.Version);
+            if (updated is null) return NotFound();
+            return Ok(await MapToResponseAsync(updated));
         }
         catch (ConcurrencyException ex)
         {
@@ -102,7 +163,7 @@ public class RoomsController : ControllerBase
             });
             var updated = await _service.SaveLayoutAsync(id, layout, selections, request.Version);
             if (updated is null) return NotFound();
-            return Ok(MapToResponse(updated));
+            return Ok(await MapToResponseAsync(updated));
         }
         catch (ConcurrencyException ex)
         {
@@ -127,7 +188,7 @@ public class RoomsController : ControllerBase
         });
         var updated = await _service.SaveAggregateBpLayoutAsync(id, representativeId, plates);
         if (updated is null) return NotFound();
-        return Ok(MapToResponse(updated));
+        return Ok(await MapToResponseAsync(updated));
     }
 
     [HttpDelete("{id:guid}")]
@@ -163,17 +224,24 @@ public class RoomsController : ControllerBase
         try
         {
             var room = await _exportService.ImportRoomAsync(file.OpenReadStream());
-            return CreatedAtAction(nameof(GetById), new { id = room.Id }, MapToResponse(room));
+            return CreatedAtAction(nameof(GetById), new { id = room.Id }, await MapToResponseAsync(room));
         }
         catch (InvalidOperationException ex) { return BadRequest(new { error = ex.Message }); }
     }
 
-    private static RoomResponse MapToResponse(Room r) =>
-        new(r.Id, r.Name, r.WidthCm, r.DepthCm,
+    private async Task<RoomResponse> MapToResponseAsync(Room r)
+    {
+        // The minimum is the layout's bounding box: sending it with the room lets the client
+        // block an input that could never be saved, instead of failing on submit.
+        var minimum = await _service.ComputeMinimumAsync(r.Layout);
+
+        return new RoomResponse(
+            r.Id, r.Name, r.WidthCm, r.DepthCm, r.Obsolete, minimum.WidthCm, minimum.DepthCm,
             r.Layout.Select(p => new PlacedTableResponse(p.InstanceId, p.TemplateId, p.XCm, p.YCm, p.Rotation)),
             r.AggregateSelections.Select(s => new AggregateSelectionResponse(s.RepresentativeId, s.BpKey)),
             r.AggregateBpLayouts.Select(l => new AggregateBpLayoutResponse(l.RepresentativeId,
                 l.PlacedBaseplates.Select(p => new PlacedBaseplateResponse(p.InstanceId, p.BaseplateId, p.XMm, p.YMm, p.Rotation, p.SourceSetId, p.PlacementId)),
                 l.LayoutVersion)),
             r.CreatedAt, r.UpdatedAt, r.Version);
+    }
 }

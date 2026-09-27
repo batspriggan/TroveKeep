@@ -15,6 +15,16 @@ export const getRoom = (id) => get(`${ROOMS}/${id}`)
 export const createRoom = (body) => post(ROOMS, body)
 export const updateRoom = (id, body) => put(`${ROOMS}/${id}`, body)
 export const saveRoomLayout = (id, layout, aggregateSelections, version = 0) => put(`${ROOMS}/${id}/layout`, { layout, aggregateSelections, version })
+
+// Auto-dimensioning: shifts the layout to the origin and resizes the room to its exact footprint.
+export const fitRoomToLayout = (id, version = 0) => post(`${ROOMS}/${id}/fit`, { version })
+
+// Copies a room, layout included, into a new one.
+export const duplicateRoom = (id, name = null) => post(`${ROOMS}/${id}/duplicate`, { name })
+
+// Archives (or restores) a room. Archived rooms are hidden from the room list.
+export const setRoomObsolete = (id, obsolete, version = 0) =>
+  post(`${ROOMS}/${id}/obsolete`, { obsolete, version })
 export const saveAggregateBpLayout = (roomId, representativeId, placedBaseplates) =>
   put(`${ROOMS}/${roomId}/aggregate-bp-layouts/${representativeId}`, {
     // `sourceSetId` is optional in the model (null for plates placed individually);

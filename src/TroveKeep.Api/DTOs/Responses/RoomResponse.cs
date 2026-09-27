@@ -13,6 +13,10 @@ public record RoomResponse(
     string Name,
     int WidthCm,
     int DepthCm,
+    bool Obsolete,
+    /// <summary>Smallest size that still contains the layout, so the UI can block smaller input.</summary>
+    int MinWidthCm,
+    int MinDepthCm,
     IEnumerable<PlacedTableResponse> Layout,
     IEnumerable<AggregateSelectionResponse> AggregateSelections,
     IEnumerable<AggregateBpLayoutResponse> AggregateBpLayouts,

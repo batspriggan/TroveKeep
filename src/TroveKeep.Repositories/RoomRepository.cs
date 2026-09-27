@@ -185,6 +185,7 @@ public class RoomRepository : IRoomRepository
         Name = doc.Name,
         WidthCm = doc.WidthCm,
         DepthCm = doc.DepthCm,
+        Obsolete = doc.Obsolete,
         Layout = doc.Layout.Select(p => new PlacedTable
         {
             InstanceId = p.InstanceId,
@@ -224,6 +225,7 @@ public class RoomRepository : IRoomRepository
         Name = model.Name,
         WidthCm = model.WidthCm,
         DepthCm = model.DepthCm,
+        Obsolete = model.Obsolete,
         Layout = model.Layout.Select(p => new PlacedTableDocument
         {
             InstanceId = p.InstanceId,

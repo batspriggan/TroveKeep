@@ -1,7 +1,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { getRoom, getAllTemplates, saveRoomLayout, updateRoom } from '../../api/tableplanner.js'
+import { getRoom, getAllTemplates, saveRoomLayout, updateRoom, fitRoomToLayout } from '../../api/tableplanner.js'
 import { getAllBaseplates } from '../../api/baseplates.js'
 import { generateRoomPdf } from '../../utils/roomPdf.js'
 
@@ -27,6 +27,14 @@ const loading = ref(true)
 const renameMode = ref(false)
 const renameInput = ref('')
 const renameError = ref('')
+
+// Room dimensions are edited in place. `room.minWidthCm`/`minDepthCm` (computed server-side from
+// the layout's bounding box) are the hard floor: a smaller room would leave tables outside the
+// walls, so the input is blocked rather than accepted and rejected on save.
+const sizeMode = ref(false)
+const sizeInput = ref({ widthM: 0, depthM: 0 })
+const sizeError = ref('')
+const fitting = ref(false)
 
 const showGrid = ref(true)
 const zoom = ref(1)
@@ -674,6 +682,8 @@ async function saveRename() {
       name: renameInput.value.trim(),
       widthCm: room.value.widthCm,
       depthCm: room.value.depthCm,
+      // Preserved explicitly: omitting it would silently un-archive the room.
+      obsolete: room.value.obsolete ?? false,
       version: room.value.version,
     })
     room.value.name = updated.name
@@ -681,6 +691,81 @@ async function saveRename() {
     renameMode.value = false
   } catch (err) {
     renameError.value = err.message
+  }
+}
+
+// ── Room size ─────────────────────────────────────────────────────────────────
+const minWidthM = computed(() => (room.value?.minWidthCm ?? 100) / 100)
+const minDepthM = computed(() => (room.value?.minDepthCm ?? 100) / 100)
+
+function startSizeEdit() {
+  sizeInput.value = {
+    widthM: +(room.value.widthCm / 100).toFixed(2),
+    depthM: +(room.value.depthCm / 100).toFixed(2),
+  }
+  sizeError.value = ''
+  sizeMode.value = true
+}
+
+function cancelSizeEdit() {
+  sizeMode.value = false
+  sizeError.value = ''
+}
+
+// Live validation: the input disappears (and the save stays disabled) as soon as a value drops
+// below the layout's footprint, so the user sees the limit while typing instead of on submit.
+function sizeIsValid() {
+  const w = Number(sizeInput.value.widthM)
+  const d = Number(sizeInput.value.depthM)
+  return w >= minWidthM.value && d >= minDepthM.value && w > 0 && d > 0
+}
+
+async function saveSize() {
+  sizeError.value = ''
+  if (!sizeIsValid()) {
+    sizeError.value = `Minimum is ${minWidthM.value.toFixed(2)} x ${minDepthM.value.toFixed(2)} m `
+      + `(the tables need that much space).`
+    return
+  }
+  try {
+    const updated = await updateRoom(roomId, {
+      name: room.value.name,
+      widthCm: Math.round(Number(sizeInput.value.widthM) * 100),
+      depthCm: Math.round(Number(sizeInput.value.depthM) * 100),
+      obsolete: room.value.obsolete ?? false,
+      version: room.value.version,
+    })
+    room.value.widthCm = updated.widthCm
+    room.value.depthCm = updated.depthCm
+    room.value.minWidthCm = updated.minWidthCm
+    room.value.minDepthCm = updated.minDepthCm
+    room.value.version = updated.version
+    sizeMode.value = false
+  } catch (err) {
+    sizeError.value = err.message
+  }
+}
+
+// Auto-dimensioning: the server shifts the layout to the origin and resizes the room to the
+// tables' exact footprint, so the layout has to be reloaded afterwards.
+async function fitToTables() {
+  sizeError.value = ''
+  fitting.value = true
+  try {
+    const updated = await fitRoomToLayout(roomId, room.value.version)
+    room.value = updated
+    placedTables.value = (updated.layout ?? []).map(p => ({
+      instanceId: p.instanceId,
+      templateId: p.templateId,
+      xCm: p.xCm,
+      yCm: p.yCm,
+      rotation: p.rotation,
+    }))
+    savedLayoutJson.value = JSON.stringify(placedTables.value.map(serialise))
+  } catch (err) {
+    sizeError.value = err.message
+  } finally {
+    fitting.value = false
   }
 }
 
@@ -721,6 +806,48 @@ async function saveLayout() {
           <h1>{{ room.name }}</h1>
           <button class="rename-btn" @click="startRename" title="Rename room">✎</button>
         </template>
+
+        <!-- Room size: editable, floored at the layout's footprint. -->
+        <template v-if="sizeMode">
+          <span class="size-edit">
+            <input
+              v-model.number="sizeInput.widthM"
+              type="number"
+              :min="minWidthM"
+              step="0.1"
+              class="size-input"
+              :class="{ invalid: sizeInput.widthM < minWidthM }"
+            />
+            ×
+            <input
+              v-model.number="sizeInput.depthM"
+              type="number"
+              :min="minDepthM"
+              step="0.1"
+              class="size-input"
+              :class="{ invalid: sizeInput.depthM < minDepthM }"
+            />
+            m
+            <button class="small-btn" :disabled="!sizeIsValid()" @click="saveSize">Save</button>
+            <button class="small-btn" @click="cancelSizeEdit">Cancel</button>
+            <span class="size-min">min {{ minWidthM.toFixed(2) }} × {{ minDepthM.toFixed(2) }} m</span>
+          </span>
+        </template>
+        <template v-else>
+          <button
+            class="size-badge"
+            @click="startSizeEdit"
+            title="Change room size"
+          >{{ (room.widthCm / 100).toFixed(2) }} × {{ (room.depthCm / 100).toFixed(2) }} m ✎</button>
+          <button
+            class="small-btn"
+            :disabled="fitting || placedTables.length === 0"
+            title="Move the tables to the origin and resize the room to their exact footprint"
+            @click="fitToTables"
+          >{{ fitting ? 'Fitting…' : 'Fit to tables' }}</button>
+        </template>
+
+        <span v-if="sizeError" class="rename-error">{{ sizeError }}</span>
       </template>
       <div class="header-right">
         <button class="toggle-btn" :class="{ active: showGrid }" @click="showGrid = !showGrid" title="Toggle grid">Grid</button>
@@ -1266,6 +1393,46 @@ async function saveLayout() {
 }
 
 .small-btn:hover { background: #e0e0e0; }
+.small-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ── Room size controls ──────────────────────────────────────────────────── */
+.size-badge {
+  background: #eef2f7;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  padding: 0.15rem 0.55rem;
+  font-size: 0.8rem;
+  color: #475569;
+  cursor: pointer;
+}
+.size-badge:hover { background: #e2e8f0; }
+
+.size-edit {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.82rem;
+  color: #555;
+}
+
+.size-input {
+  width: 72px;
+  padding: 0.15rem 0.35rem;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 0.82rem;
+}
+
+/* Below the layout's footprint the value can never be saved: flag it while typing. */
+.size-input.invalid {
+  border-color: #c0392b;
+  background: #fff5f5;
+}
+
+.size-min {
+  font-size: 0.72rem;
+  color: #90a4ae;
+}
 
 /* ── Aggregate bounding-box overlay ──────────────────────────────────────── */
 .agg-bbox {

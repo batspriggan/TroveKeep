@@ -18,7 +18,9 @@ const result = ref(null)
 onMounted(async () => {
   try {
     const [r, t] = await Promise.all([getAllRooms(), getAllTemplates()])
-    rooms.value = r
+    // Archived rooms are excluded from the check: they are no longer planned, and counting
+    // their layouts would inflate the requirement against the same baseplate stock.
+    rooms.value = (r ?? []).filter(room => !room.obsolete)
     templates.value = t
   } catch (e) {
     error.value = e.message ?? 'Failed to load rooms.'
