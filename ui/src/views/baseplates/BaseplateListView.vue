@@ -1000,7 +1000,11 @@ function selectPart(r) {
 
 function selectSet(s) {
   form.linkedSetId = s.id
-  form.partNum = s.setNumber ?? ''
+  // The set number is NOT a part number. Copying it into `partNum` would poison the
+  // business key (Type + PartNum + colour + size) and make the row unmatchable in the
+  // part archive. A linked set is identified by `linkedSetId`; `partNum` stays what the
+  // user typed (or empty for a custom module).
+  form.partNum = ''
   form.name = s.description ?? ''
   setResults.value = []
   setQuery.value = ''
