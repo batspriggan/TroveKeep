@@ -62,6 +62,34 @@ public class RoomRepository : IRoomRepository
         return ToModel(doc);
     }
 
+    /// <summary>
+    /// Writes name, dimensions and the layout, then bumps the version. Unlike
+    /// <see cref="UpdateAsync"/> (which deliberately preserves the layout, because a rename or a
+    /// resize must not move the tables), this is the "layout is part of the change" path used by
+    /// the auto-dimensioning, where the placements have just been shifted server-side.
+    /// </summary>
+    public async Task<Room?> UpdateWithLayoutAsync(Room room)
+    {
+        var existing = await _rooms.Find(x => x.Id == room.Id).FirstOrDefaultAsync();
+        if (existing is null) return null;
+
+        var doc = ToDocument(room);
+        doc.CreatedAt = existing.CreatedAt;
+        doc.UpdatedAt = DateTime.UtcNow;
+        doc.Version = existing.Version + 1;
+        // The layout comes from the caller (already shifted); the aggregate data is untouched.
+        doc.AggregateSelections = existing.AggregateSelections;
+        doc.AggregateBpLayouts = existing.AggregateBpLayouts;
+
+        var result = await _rooms.ReplaceOneAsync(
+            x => x.Id == room.Id && x.Version == room.Version, doc);
+
+        if (result.ModifiedCount == 0)
+            throw new ConcurrencyException($"Room {room.Id} was modified by someone else. Please refresh and try again.");
+
+        return ToModel(doc);
+    }
+
     public async Task<Room?> SaveLayoutAsync(Guid id, IEnumerable<PlacedTable> layout, IEnumerable<AggregateSelection> aggregateSelections, int expectedVersion)
     {
         var layoutDocs = layout.Select(p => new PlacedTableDocument

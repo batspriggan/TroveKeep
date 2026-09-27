@@ -66,6 +66,8 @@ function effH(p) {
 const canvasWidth = computed(() => room.value ? room.value.widthCm * SCALE : 0)
 const canvasHeight = computed(() => room.value ? room.value.depthCm * SCALE : 0)
 
+const overlappingCount = computed(() => placedTables.value.filter(p => p.overlapping).length)
+
 const isDirty = computed(() =>
   JSON.stringify(placedTables.value.map(serialise)) !== savedLayoutJson.value ||
   JSON.stringify(buildAggSelectionsForSave()) !== savedAggSelectionsJson.value
@@ -747,9 +749,19 @@ async function saveSize() {
 }
 
 // Auto-dimensioning: the server shifts the layout to the origin and resizes the room to the
-// tables' exact footprint, so the layout has to be reloaded afterwards.
+// tables' exact footprint.
+//
+// If the canvas has unsaved edits it first asks to save them: the fit runs on the *stored*
+// layout, so fitting right away would resize the room around the saved tables and then reload
+// them, silently discarding whatever was on screen.
 async function fitToTables() {
   sizeError.value = ''
+  if (isDirty.value) {
+    if (!confirm('You have unsaved changes. Save them before fitting the room to the tables?')) return
+    await saveLayout()
+    if (isDirty.value) return // the save failed; `sizeError`/`saveSuccess` already reported it
+  }
+
   fitting.value = true
   try {
     const updated = await fitRoomToLayout(roomId, room.value.version)
@@ -760,6 +772,7 @@ async function fitToTables() {
       xCm: p.xCm,
       yCm: p.yCm,
       rotation: p.rotation,
+      overlapping: false,
     }))
     savedLayoutJson.value = JSON.stringify(placedTables.value.map(serialise))
   } catch (err) {
@@ -979,13 +992,20 @@ async function saveLayout() {
               title="Rotate group 90°"
             >⟳</button>
           </div>
+        </div>
+        </div>
+      </div>
 
-          <div class="scale-bar">
-            <div class="scale-line"></div>
-            <span>1 m</span>
-          </div>
-        </div>
-        </div>
+      <!-- Legend: outside the canvas, so it never covers a placeable area. -->
+      <div class="legend">
+        <span class="legend-title">1 m</span>
+        <span class="legend-line"></span>
+        <span v-if="selectedAggregateBBox" class="legend-item">
+          <span class="legend-swatch agg"></span> selected group
+        </span>
+        <span v-if="overlappingCount > 0" class="legend-item">
+          <span class="legend-swatch overlap"></span> overlapping ({{ overlappingCount }})
+        </span>
       </div>
     </template>
   </div>
@@ -1205,7 +1225,7 @@ async function saveLayout() {
   border: 1px solid #ccc;
   border-radius: 6px;
   background: #e8ecf0;
-  margin-bottom: 1rem;
+  margin-bottom: 0.4rem;
 }
 
 .canvas-zoom-container {
@@ -1313,26 +1333,44 @@ async function saveLayout() {
 .remove-btn:hover { background: rgba(200,30,30,0.75); }
 
 /* ── Scale bar ────────────────────────────────────────────────────────────── */
-.scale-bar {
-  position: absolute;
-  bottom: 14px;
-  right: 18px;
+.legend {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 2px;
-  font-size: 0.7rem;
+  gap: 0.9rem;
+  padding: 0.2rem 0 0.5rem;
+  font-size: 0.75rem;
   color: #555;
-  pointer-events: none;
+  flex-shrink: 0;
 }
 
-.scale-line {
-  width: 100px;
+.legend-title {
+  font-weight: 600;
+  color: #37474f;
+}
+
+.legend-line {
+  display: inline-block;
+  width: 60px;
   height: 3px;
   background: #555;
   border-left: 2px solid #555;
   border-right: 2px solid #555;
 }
+
+.legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.legend-swatch {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+}
+.legend-swatch.agg { border: 2px dashed #7e57c2; background: rgba(126, 87, 194, 0.12); }
+.legend-swatch.overlap { background: rgba(192, 57, 43, 0.35); border: 1px solid #c0392b; }
 
 /* ── Rotate button ────────────────────────────────────────────────────────── */
 .rotate-btn {

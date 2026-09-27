@@ -8,6 +8,13 @@ public interface IRoomRepository
     Task<Room?> GetByIdAsync(Guid id);
     Task<Room> CreateAsync(Room room);
     Task<Room?> UpdateAsync(Room room);
+
+    /// <summary>
+    /// Writes name, dimensions <b>and layout</b>, bumping the version. Used by the
+    /// auto-dimensioning, whose placements were just shifted server-side; a plain update would
+    /// preserve the stored layout and silently discard the shift.
+    /// </summary>
+    Task<Room?> UpdateWithLayoutAsync(Room room);
     Task<Room?> SaveLayoutAsync(Guid id, IEnumerable<PlacedTable> layout, IEnumerable<AggregateSelection> aggregateSelections, int expectedVersion);
     Task<Room?> SaveAggregateBpLayoutAsync(Guid id, string representativeId, IEnumerable<PlacedBaseplate> placedBaseplates);
 

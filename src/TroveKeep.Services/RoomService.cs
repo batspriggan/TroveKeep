@@ -132,9 +132,13 @@ public class RoomService : IRoomService
         var depth = Math.Max(MinRoomCm, (int)Math.Ceiling(maxY - minY));
 
         existing.WidthCm = width;
-        existing.DepthCm = depth;        existing.Version = expectedVersion;
+        existing.DepthCm = depth;
+        existing.Version = expectedVersion;
 
-        return await _repo.UpdateAsync(existing);
+        // Must be UpdateWithLayoutAsync: the plain UpdateAsync exists to preserve the stored
+        // layout (so a rename or resize never moves tables), which would throw away the shift
+        // applied just above and leave the tables where they were.
+        return await _repo.UpdateWithLayoutAsync(existing);
     }
 
     /// <summary>
