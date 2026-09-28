@@ -44,7 +44,7 @@
 >   sizes has no single correct rectangle: the UI labels it *mixed sizes* and you reconcile the
 >   layout yourself. Existing placements are always preserved either way.
 
-A self-hosted inventory manager for Lego collections. Track sets and bulk pieces, organise them across boxes and drawer units, import Rebrickable colour and set data, and back up / restore your collection as a single JSON file.
+A self-hosted inventory manager for LEGO™ collections. Track sets and bulk pieces, organise them across boxes and drawer units, import Rebrickable colour and set data, and back up / restore your collection as a single JSON file.
 
 ## Scope, audience and security
 
@@ -60,15 +60,15 @@ Because of this, **do not expose TroveKeep to the public internet** (no port-for
 
 ## Features
 
-- **Sets** — catalogue Lego sets with set number, description, photo URL, and quantity; download and cache box-art images from Rebrickable
-- **Bulk pieces** — catalogue loose parts by Lego part ID, colour (resolved from the Rebrickable colour archive), and quantity
+- **Sets** — catalogue LEGO™ sets with set number, description, photo URL, and quantity; download and cache box-art images from Rebrickable
+- **Bulk pieces** — catalogue loose parts by LEGO™ part ID, colour (resolved from the Rebrickable colour archive), and quantity
 - **Storage** — assign sets and pieces to boxes or individual drawers; one item can span multiple storage locations
 - **Search** — full-text search across sets and bulk pieces, with client-side filtering in list views
 - **QR scanner** — scan the QR codes printed on storage labels with the device camera to jump straight to a box, drawer, or piece
 - **Label printing** — generate QR labels for boxes, drawer containers, drawers, and bulk pieces (single or as a `.zip` batch) and hand them to a `label-tool` watch folder for printing; parts can carry a per-colour image next to the QR
 - **Archives** — import the Rebrickable colours, sets, parts, and part-categories CSV archives for colour resolution, set typeahead, and part search
-- **Table Planner** — drag-and-drop room layout editor; define table templates, place them on a canvas with snap-to-grid and edge magnetism, and calculate how many LEGO baseplates cover a selected table group
-- **Baseplates** — a top-level library for the baseplates that underpin a Lego city layout: type (Standard / Road / Custom), stud dimensions, colour, **quantity owned per type and colour**, road shape, image, and **MOC reservations** (a MOC or set can hold N baseplates of a type, removing them from the freely usable pool). Rows imported from the Rebrickable part archive, merged by a migration, or awaiting reconciliation are flagged with a warning badge in the navigation
+- **Table Planner** — drag-and-drop room layout editor; define table templates, place them on a canvas with snap-to-grid and edge magnetism, and calculate how many LEGO™ baseplates cover a selected table group
+- **Baseplates** — a top-level library for the baseplates that underpin a LEGO™ city layout: type (Standard / Road / Custom), stud dimensions, colour, **quantity owned per type and colour**, road shape, image, and **MOC reservations** (a MOC or set can hold N baseplates of a type, removing them from the freely usable pool). Rows imported from the Rebrickable part archive, merged by a migration, or awaiting reconciliation are flagged with a warning badge in the navigation
 - **Build Check** — inside the Table Planner, select any set of table aggregates (configurations) and check the **combined baseplate requirement** against what you own, per baseplate type; layouts deliberately do **not** consume availability, since the same plates can serve different layouts on different occasions
 - **Backup / Restore** — export the full inventory to a JSON file and restore it on any instance; individual rooms can also be exported and imported as ZIP files
 
