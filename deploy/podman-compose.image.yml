@@ -14,10 +14,14 @@ services:
     restart: unless-stopped
     ports:
       - "8080:8080"
+    volumes:
+      # host-visible: the runner refuses to migrate unless it can write its backup here
+      - ./migration-backups:/migration-backups
     environment:
       - ASPNETCORE_ENVIRONMENT=Production
       - MongoDb__ConnectionString=mongodb://admin:password@mongo:27017 # change if you need to connect to a different MongoDB instance
       - MongoDb__DatabaseName=trovekeep
+      - Migration__BackupDir=/migration-backups
     depends_on:
       - mongo
 

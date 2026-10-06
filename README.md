@@ -190,7 +190,7 @@ It expects the following Forgejo configuration under *Settings → Actions*:
 | `ASPNETCORE_ENVIRONMENT` | `Production` | ASP.NET Core environment |
 | `MongoDb__ConnectionString` | `mongodb://admin:password@mongo:27017` | MongoDB connection string |
 | `MongoDb__DatabaseName` | `trovekeep` | MongoDB database name |
-| `Migration__BackupDir` | *(empty)* | Directory (host-visible) where an automatic full backup is written before any pending migration runs. **Required** when there are pending migrations — if unset or the backup fails, startup aborts and no migration runs. Must align with the backup volume mount (e.g. `./data:/data` + `Migration__BackupDir=/data/migrations`). |
+| `Migration__BackupDir` | *(empty)* | Directory (host-visible) where an automatic full backup is written before any pending migration runs. **Required** when there are pending migrations — if unset or the backup fails, startup aborts and no migration runs. Must align with the backup volume mount (e.g. `./migration-backups:/migration-backups` + `Migration__BackupDir=/migration-backups`). Both `deploy/docker-compose.*.yml` and `deploy/podman-compose.*.yml` already wire this up. |
 | `LabelTool__PublicBaseUrl` | *(empty)* | Public base URL of the API (no trailing slash) used to build the absolute image URL embedded in a label (label-tool downloads the image from this URL). Labels fall back to QR-only when this is unset. |
 
 > **Note:** Change the default MongoDB credentials before exposing the instance to a network.
@@ -205,18 +205,18 @@ Fail-fast guarantees:
 - If `Migration__BackupDir` is **not configured** or the backup write **fails** → startup **aborts** and **no migration runs** (the database is untouched).
 - If a **migration fails** → startup stops immediately: that migration is **not** marked as applied (`schema_version` unchanged) and no subsequent migration runs.
 
-**Deploying with pending migrations:**
+**Deploying with pending migrations:** the shipped compose files (both Docker and Podman, `build` and `image` variants) already mount a host directory and point `Migration__BackupDir` at it, so backups are visible on the host and survive container recreation:
 
 ```yaml
 services:
   api:
     volumes:
-      - ./data:/data          # makes the backups visible/hosted on disk
+      - ./migration-backups:/migration-backups   # relative to deploy/, where the compose file lives
     environment:
-      - Migration__BackupDir=/data/migrations
+      - Migration__BackupDir=/migration-backups
 ```
 
-On startup the runner writes `auto-backup-v{currentVersion}-*.json.gz` into `./data/migrations/` (host), then applies the pending migration(s).
+On startup the runner writes `auto-backup-v{currentVersion}-*.json.gz` into `deploy/migration-backups/` (host), then applies the pending migration(s). The mount is required: without it the directory is not host-visible, and an unset/unwritable `Migration__BackupDir` aborts startup.
 
 ## Rollback
 
@@ -226,7 +226,7 @@ To roll back a collection to its pre-migration state from the host shell:
 
 ```bash
 # 1. Locate the snapshot you want (pre-migration).
-ls -la ./data/migrations/                    # e.g. auto-backup-v1-2026-08-25_15-54-30.json.gz
+ls -la ./migration-backups/                  # e.g. auto-backup-v1-2026-08-25_15-54-30.json.gz
 
 # 2. Unpack it on the host (or in the container) to a plain .json.
 gunzip -c auto-backup-v1-2026-08-25_15-54-30.json.gz > backup.json
