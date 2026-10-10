@@ -28,8 +28,8 @@
           Single-user mode: there is no login and everyone operates as the technical administrator.
           Accounts, roles and collection permissions are ignored until multi-user is enabled.
         </p>
-        <button class="primary" type="button" @click="router.push('/setup')">
-          Abilita multiutente
+        <button class="primary" type="button" @click="router.push('/admin/users')">
+          Gestisci modalità utenti
         </button>
       </template>
     </section>

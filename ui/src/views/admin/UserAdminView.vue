@@ -19,7 +19,7 @@
         type="button"
         class="mode-toggle"
         :disabled="switchingMode"
-        @click="requestModeSwitch(!appMode.isSingleUser)"
+        @click="requestModeSwitch(appMode.isSingleUser)"
       >
         {{ switchingMode ? 'Cambio…' : (appMode.isSingleUser ? 'Passa a multiutente' : 'Passa a mono-utente') }}
       </button>
