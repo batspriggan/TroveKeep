@@ -10,8 +10,13 @@ namespace TroveKeep.Repositories;
 public class RoomExportService : IRoomExportService
 {
     private readonly IMongoDatabase _db;
+    private readonly ICollectionScope _scope;
 
-    public RoomExportService(IMongoDatabase db) => _db = db;
+    public RoomExportService(IMongoDatabase db, ICollectionScope? scope = null)
+    {
+        _db = db;
+        _scope = scope ?? UnscopedCollectionScope.Instance;
+    }
 
     private static readonly JsonSerializerOptions ExportOptions = new()
     {
@@ -25,15 +30,22 @@ public class RoomExportService : IRoomExportService
 
     public async Task<(byte[] Data, string FileName)> ExportRoomAsync(Guid roomId)
     {
+        // This service talks to IMongoDatabase directly (it has no repository dependency), so the
+        // collection filter has to be applied here too: a room outside the caller's scope must not
+        // be exported.
+        var roomFilter = _scope.ScopedTo<RoomDocument>(d => d.CollectionId,
+            Builders<RoomDocument>.Filter.Eq(x => x.Id, roomId));
         var room = await _db.GetCollection<RoomDocument>("rooms")
-            .Find(x => x.Id == roomId)
+            .Find(roomFilter)
             .FirstOrDefaultAsync()
             ?? throw new KeyNotFoundException($"Room {roomId} not found");
 
         var templateIds = room.Layout.Select(p => p.TemplateId).Distinct().ToHashSet();
 
+        var templateFilter = _scope.ScopedTo<TableTemplateDocument>(d => d.CollectionId,
+            Builders<TableTemplateDocument>.Filter.In(x => x.Id, templateIds));
         var allTemplates = await _db.GetCollection<TableTemplateDocument>("table_templates")
-            .Find(x => templateIds.Contains(x.Id))
+            .Find(templateFilter)
             .ToListAsync();
 
         var roomData = new RoomData(
@@ -101,6 +113,7 @@ public class RoomExportService : IRoomExportService
         }
 
         var templatesCollection = _db.GetCollection<TableTemplateDocument>("table_templates");
+        var collectionId = _scope.ResolveCreateCollectionId(Guid.Empty);
         foreach (var t in templateData)
         {
             var existing = await templatesCollection.Find(x => x.Id == t.Id).FirstOrDefaultAsync();
@@ -109,6 +122,7 @@ public class RoomExportService : IRoomExportService
                 await templatesCollection.InsertOneAsync(new TableTemplateDocument
                 {
                     Id = t.Id,
+                    CollectionId = collectionId,
                     Description = t.Description,
                     WidthCm = t.WidthCm,
                     DepthCm = t.DepthCm,
@@ -122,6 +136,7 @@ public class RoomExportService : IRoomExportService
         var newRoom = new RoomDocument
         {
             Id = Guid.NewGuid(),
+            CollectionId = collectionId,
             Name = roomData.Name,
             WidthCm = roomData.WidthCm,
             DepthCm = roomData.DepthCm,
@@ -142,6 +157,7 @@ public class RoomExportService : IRoomExportService
         return new Room
         {
             Id = newRoom.Id,
+            CollectionId = newRoom.CollectionId,
             Name = newRoom.Name,
             WidthCm = newRoom.WidthCm,
             DepthCm = newRoom.DepthCm,

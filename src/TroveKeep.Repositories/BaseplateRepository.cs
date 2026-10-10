@@ -1,6 +1,7 @@
 using MongoDB.Driver;
 using TroveKeep.Core.Exceptions;
 using TroveKeep.Core.Interfaces.Repositories;
+using TroveKeep.Core.Interfaces.Services;
 using TroveKeep.Core.Models;
 using TroveKeep.Repositories.Documents;
 
@@ -11,26 +12,33 @@ public class BaseplateRepository : IBaseplateRepository
     private const int MaxReservationRetries = 5;
 
     private readonly IMongoCollection<BaseplateDocument> _baseplates;
+    private readonly ICollectionScope _scope;
 
-    public BaseplateRepository(IMongoDatabase database)
+    public BaseplateRepository(IMongoDatabase database, ICollectionScope? scope = null)
     {
         _baseplates = database.GetCollection<BaseplateDocument>("baseplates");
+        _scope = scope ?? UnscopedCollectionScope.Instance;
     }
 
     public async Task<IEnumerable<Baseplate>> GetAllAsync()
     {
-        var docs = await _baseplates.Find(_ => true).ToListAsync();
+        var docs = await _baseplates
+            .Find(_scope.ScopedTo<BaseplateDocument>(d => d.CollectionId))
+            .ToListAsync();
         return docs.Select(ToModel);
     }
 
     public async Task<Baseplate?> GetByIdAsync(Guid id)
     {
-        var doc = await _baseplates.Find(d => d.Id == id).FirstOrDefaultAsync();
+        var filter = _scope.ScopedTo<BaseplateDocument>(d => d.CollectionId,
+            Builders<BaseplateDocument>.Filter.Eq(x => x.Id, id));
+        var doc = await _baseplates.Find(filter).FirstOrDefaultAsync();
         return doc is null ? null : ToModel(doc);
     }
 
     public async Task<Baseplate> CreateAsync(Baseplate baseplate)
     {
+        baseplate.CollectionId = _scope.ResolveCreateCollectionId(baseplate.CollectionId);
         var doc = ToDocument(baseplate);
         doc.Id = Guid.NewGuid();
         var now = DateTime.UtcNow;
@@ -43,29 +51,39 @@ public class BaseplateRepository : IBaseplateRepository
 
     public async Task UpdateImageCachedAsync(Guid id, bool cached)
     {
+        var filter = _scope.ScopedTo<BaseplateDocument>(d => d.CollectionId,
+            Builders<BaseplateDocument>.Filter.Eq(x => x.Id, id));
         var update = Builders<BaseplateDocument>.Update
             .Set(d => d.ImageCached, cached)
             .Set(d => d.UpdatedAt, DateTime.UtcNow)
             .Inc(d => d.Version, 1);
-        await _baseplates.UpdateOneAsync(d => d.Id == id, update);
+        await _baseplates.UpdateOneAsync(filter, update);
     }
 
     public async Task DeleteAsync(Guid id)
     {
-        await _baseplates.DeleteOneAsync(d => d.Id == id);
+        var filter = _scope.ScopedTo<BaseplateDocument>(d => d.CollectionId,
+            Builders<BaseplateDocument>.Filter.Eq(x => x.Id, id));
+        await _baseplates.DeleteOneAsync(filter);
     }
 
     public async Task DeleteByLinkedSetIdAsync(Guid setId)
     {
-        await _baseplates.DeleteManyAsync(d => d.LinkedSetId == setId);
+        var filter = _scope.ScopedTo<BaseplateDocument>(d => d.CollectionId,
+            Builders<BaseplateDocument>.Filter.Eq(d => d.LinkedSetId, setId));
+        await _baseplates.DeleteManyAsync(filter);
     }
 
     public async Task<Baseplate?> UpdateAsync(Baseplate baseplate)
     {
-        var existing = await _baseplates.Find(d => d.Id == baseplate.Id).FirstOrDefaultAsync();
+        var scopeFilter = _scope.ScopedTo<BaseplateDocument>(d => d.CollectionId,
+            Builders<BaseplateDocument>.Filter.Eq(x => x.Id, baseplate.Id));
+        var existing = await _baseplates.Find(scopeFilter).FirstOrDefaultAsync();
         if (existing is null) return null;
 
         var doc = ToDocument(baseplate);
+        // A write never moves a row across the isolation boundary.
+        doc.CollectionId = existing.CollectionId;
         doc.CreatedAt = existing.CreatedAt;
         doc.ImageCached = existing.ImageCached;
         // No field is silently preserved here: the service owns preserve-on-null semantics
@@ -90,9 +108,11 @@ public class BaseplateRepository : IBaseplateRepository
     public async Task<Baseplate?> AddOrIncrementReservationAsync(Guid baseplateId, Guid setId, int quantity)
     {
         // find + guarded replace with optimistic Version retry (allowed alternative to $push/$inc).
+        var scopeFilter = _scope.ScopedTo<BaseplateDocument>(d => d.CollectionId,
+            Builders<BaseplateDocument>.Filter.Eq(x => x.Id, baseplateId));
         for (var attempt = 0; attempt < MaxReservationRetries; attempt++)
         {
-            var doc = await _baseplates.Find(d => d.Id == baseplateId).FirstOrDefaultAsync();
+            var doc = await _baseplates.Find(scopeFilter).FirstOrDefaultAsync();
             if (doc is null) return null;
 
             // Reservations are allowed to exceed the owned quantity: an over-reservation is a
@@ -126,18 +146,21 @@ public class BaseplateRepository : IBaseplateRepository
 
     public async Task<bool> RemoveReservationAsync(Guid baseplateId, Guid setId)
     {
+        var filter = _scope.ScopedTo<BaseplateDocument>(d => d.CollectionId,
+            Builders<BaseplateDocument>.Filter.Eq(x => x.Id, baseplateId));
         var update = Builders<BaseplateDocument>.Update
             .PullFilter(d => d.Reservations, r => r.SetId == setId)
             .Set(d => d.UpdatedAt, DateTime.UtcNow)
             .Inc(d => d.Version, 1);
-        var result = await _baseplates.UpdateOneAsync(d => d.Id == baseplateId, update);
+        var result = await _baseplates.UpdateOneAsync(filter, update);
         return result.ModifiedCount > 0;
     }
 
     public async Task RemoveReservationsBySetIdAsync(Guid setId)
     {
-        var filter = Builders<BaseplateDocument>.Filter
-            .ElemMatch(d => d.Reservations, r => r.SetId == setId);
+        var filter = _scope.ScopedTo<BaseplateDocument>(d => d.CollectionId,
+            Builders<BaseplateDocument>.Filter
+                .ElemMatch(d => d.Reservations, r => r.SetId == setId));
         var update = Builders<BaseplateDocument>.Update
             .PullFilter(d => d.Reservations, r => r.SetId == setId)
             .Set(d => d.UpdatedAt, DateTime.UtcNow)

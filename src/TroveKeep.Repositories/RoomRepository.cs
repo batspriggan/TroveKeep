@@ -1,6 +1,7 @@
 using MongoDB.Driver;
 using TroveKeep.Core.Exceptions;
 using TroveKeep.Core.Interfaces.Repositories;
+using TroveKeep.Core.Interfaces.Services;
 using TroveKeep.Core.Models;
 using TroveKeep.Repositories.Documents;
 
@@ -9,26 +10,33 @@ namespace TroveKeep.Repositories;
 public class RoomRepository : IRoomRepository
 {
     private readonly IMongoCollection<RoomDocument> _rooms;
+    private readonly ICollectionScope _scope;
 
-    public RoomRepository(IMongoDatabase database)
+    public RoomRepository(IMongoDatabase database, ICollectionScope? scope = null)
     {
         _rooms = database.GetCollection<RoomDocument>("rooms");
+        _scope = scope ?? UnscopedCollectionScope.Instance;
     }
 
     public async Task<IEnumerable<Room>> GetAllAsync()
     {
-        var docs = await _rooms.Find(_ => true).ToListAsync();
+        var docs = await _rooms
+            .Find(_scope.ScopedTo<RoomDocument>(d => d.CollectionId))
+            .ToListAsync();
         return docs.Select(ToModel);
     }
 
     public async Task<Room?> GetByIdAsync(Guid id)
     {
-        var doc = await _rooms.Find(x => x.Id == id).FirstOrDefaultAsync();
+        var filter = _scope.ScopedTo<RoomDocument>(d => d.CollectionId,
+            Builders<RoomDocument>.Filter.Eq(x => x.Id, id));
+        var doc = await _rooms.Find(filter).FirstOrDefaultAsync();
         return doc is null ? null : ToModel(doc);
     }
 
     public async Task<Room> CreateAsync(Room room)
     {
+        room.CollectionId = _scope.ResolveCreateCollectionId(room.CollectionId);
         var doc = ToDocument(room);
         doc.Id = Guid.NewGuid();
         var now = DateTime.UtcNow;
@@ -41,10 +49,14 @@ public class RoomRepository : IRoomRepository
 
     public async Task<Room?> UpdateAsync(Room room)
     {
-        var existing = await _rooms.Find(x => x.Id == room.Id).FirstOrDefaultAsync();
+        var scopeFilter = _scope.ScopedTo<RoomDocument>(d => d.CollectionId,
+            Builders<RoomDocument>.Filter.Eq(x => x.Id, room.Id));
+        var existing = await _rooms.Find(scopeFilter).FirstOrDefaultAsync();
         if (existing is null) return null;
 
         var doc = ToDocument(room);
+        // A write never moves a row across the isolation boundary.
+        doc.CollectionId = existing.CollectionId;
         doc.CreatedAt = existing.CreatedAt;
         doc.UpdatedAt = DateTime.UtcNow;
         doc.Version = existing.Version + 1;
@@ -70,10 +82,14 @@ public class RoomRepository : IRoomRepository
     /// </summary>
     public async Task<Room?> UpdateWithLayoutAsync(Room room)
     {
-        var existing = await _rooms.Find(x => x.Id == room.Id).FirstOrDefaultAsync();
+        var scopeFilter = _scope.ScopedTo<RoomDocument>(d => d.CollectionId,
+            Builders<RoomDocument>.Filter.Eq(x => x.Id, room.Id));
+        var existing = await _rooms.Find(scopeFilter).FirstOrDefaultAsync();
         if (existing is null) return null;
 
         var doc = ToDocument(room);
+        // A write never moves a row across the isolation boundary.
+        doc.CollectionId = existing.CollectionId;
         doc.CreatedAt = existing.CreatedAt;
         doc.UpdatedAt = DateTime.UtcNow;
         doc.Version = existing.Version + 1;
@@ -114,14 +130,18 @@ public class RoomRepository : IRoomRepository
             .Inc(r => r.Version, 1);
 
         var result = await _rooms.FindOneAndUpdateAsync(
-            x => x.Id == id && x.Version == expectedVersion,
+            _scope.ScopedTo<RoomDocument>(d => d.CollectionId,
+                Builders<RoomDocument>.Filter.Where(x => x.Id == id && x.Version == expectedVersion)),
             update,
             new FindOneAndUpdateOptions<RoomDocument> { ReturnDocument = ReturnDocument.After });
 
         if (result is null)
         {
             // Check if room exists at all; if yes it's a concurrency conflict
-            var exists = await _rooms.Find(x => x.Id == id).AnyAsync();
+            var exists = await _rooms
+                .Find(_scope.ScopedTo<RoomDocument>(d => d.CollectionId,
+                    Builders<RoomDocument>.Filter.Eq(x => x.Id, id)))
+                .AnyAsync();
             if (exists)
                 throw new ConcurrencyException($"Room {id} layout was saved by someone else. Please refresh and try again.");
             return null;
@@ -132,7 +152,9 @@ public class RoomRepository : IRoomRepository
 
     public async Task<Room?> SaveAggregateBpLayoutAsync(Guid id, string representativeId, IEnumerable<PlacedBaseplate> placedBaseplates)
     {
-        var existing = await _rooms.Find(x => x.Id == id).FirstOrDefaultAsync();
+        var scopeFilter = _scope.ScopedTo<RoomDocument>(d => d.CollectionId,
+            Builders<RoomDocument>.Filter.Eq(x => x.Id, id));
+        var existing = await _rooms.Find(scopeFilter).FirstOrDefaultAsync();
         if (existing is null) return null;
 
         var previous = existing.AggregateBpLayouts.FirstOrDefault(l => l.RepresentativeId == representativeId);
@@ -173,13 +195,15 @@ public class RoomRepository : IRoomRepository
             .Set(r => r.UpdatedAt, DateTime.UtcNow)
             .Inc(r => r.Version, 1);
 
-        var result = await _rooms.UpdateOneAsync(x => x.Id == id, update);
+        var filter = _scope.ScopedTo<RoomDocument>(d => d.CollectionId,
+            Builders<RoomDocument>.Filter.Eq(x => x.Id, id));
+        var result = await _rooms.UpdateOneAsync(filter, update);
         return result.ModifiedCount > 0;
     }
 
     public async Task RemoveBaseplateReferencesAsync(Guid baseplateId)
     {
-        var rooms = await _rooms.Find(_ => true).ToListAsync();
+        var rooms = await _rooms.Find(_scope.ScopedTo<RoomDocument>(d => d.CollectionId)).ToListAsync();
 
         foreach (var room in rooms)
         {
@@ -203,7 +227,9 @@ public class RoomRepository : IRoomRepository
 
     public async Task<bool> DeleteAsync(Guid id)
     {
-        var result = await _rooms.DeleteOneAsync(x => x.Id == id);
+        var filter = _scope.ScopedTo<RoomDocument>(d => d.CollectionId,
+            Builders<RoomDocument>.Filter.Eq(x => x.Id, id));
+        var result = await _rooms.DeleteOneAsync(filter);
         return result.DeletedCount > 0;
     }
 

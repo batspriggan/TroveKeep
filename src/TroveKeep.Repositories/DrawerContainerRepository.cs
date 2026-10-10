@@ -1,6 +1,7 @@
 using MongoDB.Driver;
 using TroveKeep.Core.Exceptions;
 using TroveKeep.Core.Interfaces.Repositories;
+using TroveKeep.Core.Interfaces.Services;
 using TroveKeep.Core.Models;
 using TroveKeep.Repositories.Documents;
 
@@ -9,21 +10,27 @@ namespace TroveKeep.Repositories;
 public class DrawerContainerRepository : IDrawerContainerRepository
 {
     private readonly IMongoCollection<DrawerContainerDocument> _containers;
+    private readonly ICollectionScope _scope;
 
-    public DrawerContainerRepository(IMongoDatabase database)
+    public DrawerContainerRepository(IMongoDatabase database, ICollectionScope? scope = null)
     {
         _containers = database.GetCollection<DrawerContainerDocument>("drawercontainers");
+        _scope = scope ?? UnscopedCollectionScope.Instance;
     }
 
     public async Task<IEnumerable<DrawerContainer>> GetAllAsync()
     {
-        var docs = await _containers.Find(_ => true).ToListAsync();
+        var docs = await _containers
+            .Find(_scope.ScopedTo<DrawerContainerDocument>(d => d.CollectionId))
+            .ToListAsync();
         return docs.Select(ToModel);
     }
 
     public async Task<DrawerContainer?> GetByIdAsync(Guid id)
     {
-        var doc = await _containers.Find(x => x.Id == id).FirstOrDefaultAsync();
+        var filter = _scope.ScopedTo<DrawerContainerDocument>(d => d.CollectionId,
+            Builders<DrawerContainerDocument>.Filter.Eq(x => x.Id, id));
+        var doc = await _containers.Find(filter).FirstOrDefaultAsync();
         return doc is null ? null : ToModel(doc);
     }
 
@@ -34,6 +41,7 @@ public class DrawerContainerRepository : IDrawerContainerRepository
 
     public async Task<DrawerContainer> CreateAsync(DrawerContainer drawerContainer)
     {
+        drawerContainer.CollectionId = _scope.ResolveCreateCollectionId(drawerContainer.CollectionId);
         var now = DateTime.UtcNow;
         var doc = new DrawerContainerDocument
         {
@@ -58,12 +66,15 @@ public class DrawerContainerRepository : IDrawerContainerRepository
 
     public async Task<DrawerContainer?> UpdateAsync(DrawerContainer drawerContainer)
     {
-        var existing = await _containers.Find(x => x.Id == drawerContainer.Id).FirstOrDefaultAsync();
+        var scopeFilter = _scope.ScopedTo<DrawerContainerDocument>(d => d.CollectionId,
+            Builders<DrawerContainerDocument>.Filter.Eq(x => x.Id, drawerContainer.Id));
+        var existing = await _containers.Find(scopeFilter).FirstOrDefaultAsync();
         if (existing is null) return null;
 
         var doc = new DrawerContainerDocument
         {
             Id = drawerContainer.Id,
+            // A write never moves a row across the isolation boundary.
             CollectionId = existing.CollectionId,
             Name = drawerContainer.Name,
             Description = drawerContainer.Description,
@@ -85,13 +96,17 @@ public class DrawerContainerRepository : IDrawerContainerRepository
 
     public async Task UpdateImageCachedAsync(Guid id, bool cached)
     {
+        var filter = _scope.ScopedTo<DrawerContainerDocument>(d => d.CollectionId,
+            Builders<DrawerContainerDocument>.Filter.Eq(x => x.Id, id));
         var update = Builders<DrawerContainerDocument>.Update.Set(x => x.ImageCached, cached);
-        await _containers.UpdateOneAsync(x => x.Id == id, update);
+        await _containers.UpdateOneAsync(filter, update);
     }
 
     public async Task<bool> DeleteAsync(Guid id)
     {
-        var result = await _containers.DeleteOneAsync(x => x.Id == id);
+        var filter = _scope.ScopedTo<DrawerContainerDocument>(d => d.CollectionId,
+            Builders<DrawerContainerDocument>.Filter.Eq(x => x.Id, id));
+        var result = await _containers.DeleteOneAsync(filter);
         return result.DeletedCount > 0;
     }
 
@@ -99,7 +114,9 @@ public class DrawerContainerRepository : IDrawerContainerRepository
     {
         var idList = ids.ToList();
         if (idList.Count == 0) return [];
-        var docs = await _containers.Find(x => idList.Contains(x.Id)).ToListAsync();
+        var filter = _scope.ScopedTo<DrawerContainerDocument>(d => d.CollectionId,
+            Builders<DrawerContainerDocument>.Filter.In(x => x.Id, idList));
+        var docs = await _containers.Find(filter).ToListAsync();
         return docs.Select(ToModel);
     }
 

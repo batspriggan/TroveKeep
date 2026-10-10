@@ -86,6 +86,7 @@ builder.Services.AddScoped<IBaseplateRepository, BaseplateRepository>();
 
 // Services
 builder.Services.AddScoped<ICurrentUser, CurrentUser>();
+builder.Services.AddScoped<ICollectionScope, CollectionScope>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<ICollectionService, CollectionService>();
