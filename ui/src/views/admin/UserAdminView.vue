@@ -2,6 +2,17 @@
   <div class="admin-page">
     <h1>Users</h1>
 
+    <!-- Single-user: accounts exist in the database but are never evaluated, so warn before the
+         operator wastes time on roles that will not apply. -->
+    <div v-if="appMode.isSingleUser" class="mode-warning">
+      <strong>Single-user mode</strong>
+      <span>
+        Accounts, roles and collection permissions are <strong>not applied</strong> right now:
+        every request is served as the technical administrator. They take effect once multi-user
+        is enabled (Settings → Abilita multiutente).
+      </span>
+    </div>
+
     <p v-if="error" class="error">{{ error }}</p>
     <p v-if="notice" class="success">{{ notice }}</p>
 
@@ -125,6 +136,7 @@
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
 import ConfirmDialog from '../../components/ConfirmDialog.vue'
+import { useAppMode } from '../../composables/useAppMode.js'
 import {
   getAllUsers,
   createUser,
@@ -132,6 +144,8 @@ import {
   setUserPassword,
   deleteUser,
 } from '../../api/users.js'
+
+const appMode = useAppMode()
 
 const roles = ['Admin', 'User', 'Guest']
 
@@ -264,6 +278,19 @@ onMounted(load)
 <style scoped>
 .admin-page {
   font-family: var(--font-body);
+}
+
+.mode-warning {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  background: #fff3cd;
+  border: 1px solid #ffc107;
+  border-radius: 6px;
+  padding: var(--space-3) var(--space-4);
+  margin-bottom: var(--space-4);
+  font-size: var(--text-sm);
+  color: #664d03;
 }
 
 .success {

@@ -34,11 +34,13 @@
 import { onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuth } from '../composables/useAuth.js'
+import { useAppMode } from '../composables/useAppMode.js'
 import { getProviders } from '../api/auth.js'
 
 const route = useRoute()
 const router = useRouter()
 const auth = useAuth()
+const appMode = useAppMode()
 
 const email = ref('')
 const password = ref('')
@@ -48,6 +50,17 @@ const loading = ref(false)
 const oidcEnabled = ref(false)
 
 onMounted(async () => {
+  // Login does not exist in single-user mode (the backend answers 404) and is meaningless before
+  // the first-run setup: leave instead of showing a form that cannot work.
+  if (!appMode.initialized) {
+    router.replace('/setup')
+    return
+  }
+  if (!appMode.multiUserEnabled) {
+    router.replace('/')
+    return
+  }
+
   try {
     const providers = await getProviders()
     oidcEnabled.value = providers?.oidc === true

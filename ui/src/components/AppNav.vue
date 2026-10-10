@@ -18,8 +18,12 @@
            on mobile too (the other mobile-hide links are hidden inside the hamburger). -->
       <RouterLink v-if="settings.tablePlannerEnabled" to="/table-planner" :class="{ 'mobile-hide': !auth.isGuest }">Table Planner</RouterLink>
       <span class="user-block">
-        <span class="user-name">{{ auth.state.user?.displayName }}</span>
-        <button class="logout" @click="onLogout" title="Logout">Esci</button>
+        <span class="user-name">
+          {{ auth.state.user?.displayName }}
+          <span v-if="appMode.isSingleUser" class="mode-badge">single-user</span>
+        </span>
+        <!-- No session to end in single-user mode: the button would bounce straight back. -->
+        <button v-if="!appMode.isSingleUser" class="logout" @click="onLogout" title="Logout">Esci</button>
       </span>
     </div>
   </nav>
@@ -30,12 +34,14 @@ import { ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useSettings } from '../composables/useSettings.js'
 import { useAuth } from '../composables/useAuth.js'
+import { useAppMode } from '../composables/useAppMode.js'
 
 const open = ref(false)
 const route = useRoute()
 const router = useRouter()
 const settings = useSettings()
 const auth = useAuth()
+const appMode = useAppMode()
 const version = import.meta.env.VITE_APP_VERSION
 
 watch(route, () => { open.value = false })
@@ -100,6 +106,18 @@ nav {
 .user-name {
   font-size: 0.8rem;
   color: #94a3b8;
+}
+
+.mode-badge {
+  display: inline-block;
+  margin-left: 0.35rem;
+  padding: 0 0.35rem;
+  border-radius: 3px;
+  background: #334155;
+  color: #cbd5e1;
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
 .logout {

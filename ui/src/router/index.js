@@ -1,8 +1,10 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useSettings } from '../composables/useSettings.js'
 import { useAuth } from '../composables/useAuth.js'
+import { useAppMode } from '../composables/useAppMode.js'
 
 import LoginView from '../views/LoginView.vue'
+import SetupView from '../views/SetupView.vue'
 
 import SetList from '../views/sets/SetList.vue'
 import SetDetail from '../views/sets/SetDetail.vue'
@@ -28,6 +30,7 @@ import BuildCheckView from '../views/tableplanner/BuildCheckView.vue'
 
 const routes = [
   { path: '/login', component: LoginView, meta: { public: true } },
+  { path: '/setup', component: SetupView, meta: { public: true } },
   { path: '/', redirect: '/sets' },
   { path: '/sets', component: SetList },
   { path: '/sets/:id', component: SetDetail },
@@ -58,21 +61,38 @@ const router = createRouter({
 })
 
 router.beforeEach((to) => {
+  const appMode = useAppMode()
   const auth = useAuth()
   const settings = useSettings()
 
-  // Authentication gate: everything except /login requires a session.
-  if (!to.meta.public && !auth.isAuthenticated) {
+  // First run: nothing is reachable until the instance is configured, setup included.
+  if (appMode.needsSetup) {
+    return to.path === '/setup' ? true : { path: '/setup' }
+  }
+
+  // /setup only makes sense while single-user (the way back to multi-user). An already
+  // multi-user instance must not expose it.
+  if (to.path === '/setup') {
+    return appMode.multiUserEnabled ? '/' : true
+  }
+
+  const singleUser = appMode.isSingleUser
+
+  // Authentication gate: everything except /login requires a session. Single-user has no session
+  // to establish — the backend serves every request as the technical admin — so it is skipped.
+  if (!singleUser && !to.meta.public && !auth.isAuthenticated) {
     return { path: '/login', query: to.fullPath === '/' ? {} : { redirect: to.fullPath } }
   }
-  // An authenticated user has no business on the login page.
-  if (to.meta.public && auth.isAuthenticated) return '/'
+  // An authenticated user has no business on the login page. In single-user login does not exist
+  // at all, so /login always bounces home.
+  if (to.meta.public && (auth.isAuthenticated || singleUser)) return '/'
 
   // Role gate (step 3/5 expands this): a Guest only reaches the Table Planner.
   if (auth.isGuest && !to.path.startsWith('/table-planner')) return '/table-planner'
 
   // Admin gate: the user/collection administration pages are off limits to everyone else.
-  if (to.meta.admin && !auth.isAdmin) return '/'
+  // Single-user runs as the technical admin, so it passes even before fetchMe settles.
+  if (to.meta.admin && !auth.isAdmin && !singleUser) return '/'
 
   if (to.path.startsWith('/table-planner') && !settings.tablePlannerEnabled) return '/'
   if ((to.path.startsWith('/bulkpieces') || to.path.startsWith('/drawercontainers') || to.path.startsWith('/drawers')) && !settings.bulkPiecesEnabled) return '/'

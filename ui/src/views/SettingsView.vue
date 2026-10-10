@@ -19,6 +19,22 @@
     </section>
 
     <section class="card">
+      <h2>User Mode</h2>
+      <template v-if="appMode.multiUserEnabled">
+        <p class="muted">Multi-user mode is active: accounts, roles and per-collection permissions apply.</p>
+      </template>
+      <template v-else>
+        <p class="muted">
+          Single-user mode: there is no login and everyone operates as the technical administrator.
+          Accounts, roles and collection permissions are ignored until multi-user is enabled.
+        </p>
+        <button class="primary" type="button" @click="router.push('/setup')">
+          Abilita multiutente
+        </button>
+      </template>
+    </section>
+
+    <section class="card">
       <h2>Change Password</h2>
       <form @submit.prevent="changePassword">
         <div class="field-row">
@@ -144,15 +160,19 @@
 
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
 import { downloadBackup, uploadRestore } from '../api/settings.js'
 import { changePassword as changePasswordApi } from '../api/account.js'
 import { useSettings } from '../composables/useSettings.js'
 import { useAuth } from '../composables/useAuth.js'
+import { useAppMode } from '../composables/useAppMode.js'
 import { getLabelConfig, updateLabelConfig, getServerHealth } from '../api/labels.js'
 
 const settings = useSettings()
 const auth = useAuth()
+const appMode = useAppMode()
+const router = useRouter()
 
 // ---- Profile / password ----
 const pwd = reactive({ current: '', next: '', confirm: '' })

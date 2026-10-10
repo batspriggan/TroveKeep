@@ -37,7 +37,10 @@ async function request(path, options = {}) {
     } catch {
       // non-JSON error body
     }
-    throw new Error(message || `HTTP ${res.status}`)
+    const error = new Error(message || `HTTP ${res.status}`)
+    // Callers that react differently per status (e.g. the setup form on 403/409) need it.
+    error.status = res.status
+    throw error
   }
   return res.json()
 }
