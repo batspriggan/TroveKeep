@@ -2,16 +2,28 @@
   <div class="admin-page">
     <h1>Users</h1>
 
-    <!-- Single-user: accounts exist in the database but are never evaluated, so warn before the
-         operator wastes time on roles that will not apply. -->
-    <div v-if="appMode.isSingleUser" class="mode-warning">
-      <strong>Single-user mode</strong>
-      <span>
-        Accounts, roles and collection permissions are <strong>not applied</strong> right now:
-        every request is served as the technical administrator. They take effect once multi-user
-        is enabled (Settings → Abilita multiutente).
-      </span>
-    </div>
+    <!-- Application mode. Both modes keep the user list below visible: in single-user it is merely
+         not applied. The switch is explicit because it changes who can reach the instance. -->
+    <section class="mode-panel" :class="appMode.isSingleUser ? 'mode-single' : 'mode-multi'">
+      <div class="mode-info">
+        <strong>{{ appMode.isSingleUser ? 'Mono-utente attivo' : 'Multiutente attivo' }}</strong>
+        <span v-if="appMode.isSingleUser">
+          Il login è disabilitato: chiunque raggiunga il server opera come amministratore, senza
+          credenziali. Account, ruoli e permessi per collezione <strong>non vengono applicati</strong>.
+        </span>
+        <span v-else>
+          Login, ruoli e permessi per collezione sono attivi.
+        </span>
+      </div>
+      <button
+        type="button"
+        class="mode-toggle"
+        :disabled="switchingMode"
+        @click="requestModeSwitch(!appMode.isSingleUser)"
+      >
+        {{ switchingMode ? 'Cambio…' : (appMode.isSingleUser ? 'Passa a multiutente' : 'Passa a mono-utente') }}
+      </button>
+    </section>
 
     <p v-if="error" class="error">{{ error }}</p>
     <p v-if="notice" class="success">{{ notice }}</p>
@@ -130,13 +142,24 @@
       @confirm="doDelete"
       @cancel="deleteTarget = null"
     />
+
+    <ConfirmDialog
+      :open="pendingMode !== null"
+      :message="modeConfirmMessage"
+      :confirm-label="pendingMode === false ? 'Passa a mono' : 'Passa a multi'"
+      @confirm="applyModeSwitch"
+      @cancel="pendingMode = null"
+    />
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import ConfirmDialog from '../../components/ConfirmDialog.vue'
 import { useAppMode } from '../../composables/useAppMode.js'
+import { useAuth } from '../../composables/useAuth.js'
+import { setMultiUserMode } from '../../api/appmode.js'
 import {
   getAllUsers,
   createUser,
@@ -146,6 +169,8 @@ import {
 } from '../../api/users.js'
 
 const appMode = useAppMode()
+const auth = useAuth()
+const router = useRouter()
 
 const roles = ['Admin', 'User', 'Guest']
 
@@ -166,6 +191,18 @@ const newPassword = ref('')
 const savingPassword = ref(false)
 
 const deleteTarget = ref(null)
+
+const pendingMode = ref(null)
+const switchingMode = ref(false)
+
+const modeConfirmMessage = computed(() =>
+  pendingMode.value === false
+    ? 'Passare a mono-utente? Il login viene disabilitato: chiunque raggiunga il server opera ' +
+      'come amministratore, senza credenziali e senza isolamento. La lista utenti resta ' +
+      'consultabile ma non viene applicata.'
+    : 'Passare a multiutente? Login, ruoli e permessi per collezione tornano attivi: per operare ' +
+      'servirà un account.',
+)
 
 function clearMessages() {
   error.value = ''
@@ -272,6 +309,34 @@ async function doDelete() {
   }
 }
 
+function requestModeSwitch(multiUserEnabled) {
+  clearMessages()
+  pendingMode.value = multiUserEnabled
+}
+
+async function applyModeSwitch() {
+  const target = pendingMode.value
+  pendingMode.value = null
+  switchingMode.value = true
+  try {
+    await setMultiUserMode(target)
+    // Re-read the mode and the session: in single-user the cookie may be absent, and moving back
+    // to multi-user re-enables the login (and the router guard that depends on it).
+    await appMode.refresh()
+    await auth.fetchMe()
+    if (appMode.multiUserEnabled && !auth.isAuthenticated) {
+      router.push({ path: '/login', query: { redirect: '/admin/users' } })
+      return
+    }
+    notice.value = target ? 'Multiutente attivato.' : 'Mono-utente attivato.'
+    await load()
+  } catch (e) {
+    error.value = e.message
+  } finally {
+    switchingMode.value = false
+  }
+}
+
 onMounted(load)
 </script>
 
@@ -280,17 +345,38 @@ onMounted(load)
   font-family: var(--font-body);
 }
 
-.mode-warning {
+.mode-panel {
   display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-  background: #fff3cd;
-  border: 1px solid #ffc107;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
   border-radius: 6px;
   padding: var(--space-3) var(--space-4);
   margin-bottom: var(--space-4);
   font-size: var(--text-sm);
+}
+
+.mode-panel.mode-single {
+  background: #fff3cd;
+  border: 1px solid #ffc107;
   color: #664d03;
+}
+
+.mode-panel.mode-multi {
+  background: #e7f6ed;
+  border: 1px solid #34a853;
+  color: #1e5b32;
+}
+
+.mode-info {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.mode-toggle {
+  flex: 0 0 auto;
+  white-space: nowrap;
 }
 
 .success {

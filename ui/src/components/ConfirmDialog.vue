@@ -4,7 +4,7 @@
       <p>{{ message }}</p>
       <div class="btns">
         <button @click="$emit('cancel')">Cancel</button>
-        <button class="danger" @click="$emit('confirm')">Delete</button>
+        <button class="danger" @click="$emit('confirm')">{{ confirmLabel }}</button>
       </div>
     </div>
   </div>
@@ -14,6 +14,7 @@
 defineProps({
   open: Boolean,
   message: { type: String, default: 'Are you sure you want to delete this item?' },
+  confirmLabel: { type: String, default: 'Delete' },
 })
 defineEmits(['confirm', 'cancel'])
 </script>
