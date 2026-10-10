@@ -22,7 +22,7 @@ public class MigrationRunner
         "archive_meta", "meta",
     ];
 
-    public MigrationRunner(IMongoDatabase db, string? backupDir = null)
+    public MigrationRunner(IMongoDatabase db, string? backupDir = null, string? defaultCollectionName = null)
     {
         _db = db;
         _backupDir = string.IsNullOrWhiteSpace(backupDir) ? null : backupDir;
@@ -32,7 +32,7 @@ public class MigrationRunner
             new Migration_003_PartImagesByColor(),
             new Migration_004_LabelTargetsIndex(),
             new Migration_005_BaseplateQuantity(),
-            new Migration_006_CollectionsAndUsers(),
+            new Migration_006_CollectionsAndUsers(defaultCollectionName ?? "Casa"),
         ];
     }
 

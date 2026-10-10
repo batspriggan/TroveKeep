@@ -29,6 +29,14 @@ public class User
 
     public bool Active { get; set; } = true;
 
+    /// <summary>
+    /// Technical account created by migration 006 to own the default collection before the first
+    /// run is configured. It is never loggable (<see cref="PasswordHash"/> is null and
+    /// <see cref="Active"/> is false) and exists so that single-user mode has an owner to operate
+    /// as. The first-run setup overwrites it (and clears this flag) when multi-user is enabled.
+    /// </summary>
+    public bool IsSystem { get; set; }
+
     /// <summary>External identity provider name (e.g. <c>"oidc"</c>), null for local-only accounts.</summary>
     public string? ExternalProvider { get; set; }
 

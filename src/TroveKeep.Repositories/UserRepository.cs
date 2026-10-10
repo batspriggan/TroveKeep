@@ -27,6 +27,12 @@ public class UserRepository : IUserRepository
         return doc is null ? null : ToModel(doc);
     }
 
+    public async Task<User?> GetSystemUserAsync()
+    {
+        var doc = await _users.Find(x => x.IsSystem).FirstOrDefaultAsync();
+        return doc is null ? null : ToModel(doc);
+    }
+
     public async Task<IEnumerable<User>> GetAllAsync()
     {
         var docs = await _users.Find(_ => true).SortBy(x => x.Email).ToListAsync();
@@ -79,6 +85,7 @@ public class UserRepository : IUserRepository
         PasswordHash = doc.PasswordHash,
         Role = (UserRole)doc.Role,
         Active = doc.Active,
+        IsSystem = doc.IsSystem,
         ExternalProvider = doc.ExternalProvider,
         ExternalSubject = doc.ExternalSubject,
         CreatedAt = new DateTimeOffset(DateTime.SpecifyKind(doc.CreatedAt, DateTimeKind.Utc)),
@@ -93,6 +100,7 @@ public class UserRepository : IUserRepository
         PasswordHash = model.PasswordHash,
         Role = (int)model.Role,
         Active = model.Active,
+        IsSystem = model.IsSystem,
         ExternalProvider = model.ExternalProvider,
         ExternalSubject = model.ExternalSubject,
         CreatedAt = model.CreatedAt.UtcDateTime,

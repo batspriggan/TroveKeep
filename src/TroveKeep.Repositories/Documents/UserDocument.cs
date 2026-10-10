@@ -15,6 +15,7 @@ public class UserDocument
     public string? PasswordHash { get; set; }
     public int Role { get; set; }
     public bool Active { get; set; } = true;
+    public bool IsSystem { get; set; }
     public string? ExternalProvider { get; set; }
     public string? ExternalSubject { get; set; }
     public DateTime CreatedAt { get; set; }

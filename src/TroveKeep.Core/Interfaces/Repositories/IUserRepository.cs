@@ -9,6 +9,9 @@ public interface IUserRepository
 
     Task<User?> GetByIdAsync(Guid id);
 
+    /// <summary>The technical (system) account created by migration 006, if any.</summary>
+    Task<User?> GetSystemUserAsync();
+
     Task<IEnumerable<User>> GetAllAsync();
 
     Task<User> CreateAsync(User user);

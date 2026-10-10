@@ -175,7 +175,6 @@ builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<ICollectionService, CollectionService>();
 builder.Services.AddScoped<AuthCookieFactory>();
-builder.Services.AddScoped<BootstrapService>();
 builder.Services.AddScoped<ILegoSetService, LegoSetService>();
 builder.Services.AddScoped<IBulkPieceService, BulkPieceService>();
 builder.Services.AddScoped<IBoxService, BoxService>();
@@ -196,6 +195,11 @@ builder.Services.AddScoped<IMocReconciliationService, MocReconciliationService>(
 builder.Services.AddHttpClient("SetImages");
 builder.Services.AddHttpClient("LabelServer");
 
+// Application mode (first-run setup) is process-wide state kept in meta/_id="app_config"; the
+// technical principal of single-user mode is likewise built once and cached.
+builder.Services.AddSingleton<IAppStateService, AppStateService>();
+builder.Services.AddSingleton<TechnicalUserProvider>();
+
 // Label printing (client download vs remote label-tool server)
 var labelPrintSettings = builder.Configuration.GetSection("LabelTool").Get<LabelPrintSettings>() ?? new LabelPrintSettings();
 builder.Services.AddSingleton(labelPrintSettings);
@@ -213,16 +217,22 @@ var app = builder.Build();
 Console.WriteLine("Running database migrations...");
 await new MigrationRunner(
     app.Services.GetRequiredService<IMongoDatabase>(),
-    builder.Configuration["Migration:BackupDir"]
+    builder.Configuration["Migration:BackupDir"],
+    builder.Configuration["Migration:DefaultCollectionName"]
 ).RunAsync();
 Console.WriteLine("Database migrations completed.");
 
-// First-run provisioning: create the admin and its default collection membership (see
-// BootstrapService). No-op once at least one user exists. Resolved from an explicit scope:
-// it depends on scoped repositories, which cannot be resolved from the root provider.
-using (var scope = app.Services.CreateScope())
+// First-run provisioning is migration 006's job (default collection + non-loggable technical
+// account). Here we only decide the application mode and, while the instance still needs to be
+// configured, print the one-shot setup token the operator must pass to POST /api/setup.
+var appState = app.Services.GetRequiredService<IAppStateService>();
+var initialState = await appState.GetAsync();
+if (!initialState.Initialized || !initialState.MultiUserEnabled)
 {
-    await scope.ServiceProvider.GetRequiredService<BootstrapService>().RunAsync();
+    var setupToken = appState.EnsureSetupToken();
+    app.Logger.LogWarning(
+        "TroveKeep setup token: {Token} (required by POST /api/setup while the instance is not configured)",
+        setupToken);
 }
 
 if (app.Environment.IsDevelopment())
@@ -234,6 +244,9 @@ if (app.Environment.IsDevelopment())
 app.UseDefaultFiles();
 app.UseStaticFiles();
 app.UseAuthentication();
+// Must sit between authentication and authorization: it may reject an uninitialized instance or
+// replace the principal with the technical account of single-user mode.
+app.UseMiddleware<AppModeMiddleware>();
 app.UseAuthorization();
 app.MapControllers();
 // Serves index.html for every non-API path (including /login), so the SPA router takes over.
