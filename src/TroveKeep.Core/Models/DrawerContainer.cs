@@ -3,6 +3,10 @@ namespace TroveKeep.Core.Models;
 public class DrawerContainer
 {
     public Guid Id { get; set; }
+
+    /// <summary>Isolation boundary: the collection this container belongs to.</summary>
+    public Guid CollectionId { get; set; }
+
     public string Name { get; set; } = string.Empty;
     public string? Description { get; set; }
     public bool ImageCached { get; set; }

@@ -3,6 +3,10 @@ namespace TroveKeep.Core.Models;
 public class BulkPiece
 {
     public Guid Id { get; set; }
+
+    /// <summary>Isolation boundary: the collection this piece belongs to.</summary>
+    public Guid CollectionId { get; set; }
+
     public string LegoId { get; set; } = string.Empty;
     public int LegoColorId { get; set; }
     public string Description { get; set; } = string.Empty;

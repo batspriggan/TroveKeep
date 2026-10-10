@@ -109,6 +109,7 @@ public class LegoSetRepository : ILegoSetRepository
     private static LegoSet ToModel(LegoSetDocument doc) => new()
     {
         Id = doc.Id,
+        CollectionId = doc.CollectionId,
         SetNumber = doc.SetNumber,
         Description = doc.Description,
         Quantity = doc.Quantity,
@@ -122,6 +123,7 @@ public class LegoSetRepository : ILegoSetRepository
     private static LegoSetDocument ToDocument(LegoSet model) => new()
     {
         Id = model.Id,
+        CollectionId = model.CollectionId,
         SetNumber = model.SetNumber,
         Description = model.Description,
         Quantity = model.Quantity,

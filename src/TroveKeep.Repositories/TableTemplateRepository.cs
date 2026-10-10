@@ -67,6 +67,7 @@ public class TableTemplateRepository : ITableTemplateRepository
     private static TableTemplate ToModel(TableTemplateDocument doc) => new()
     {
         Id = doc.Id,
+        CollectionId = doc.CollectionId,
         Description = doc.Description,
         WidthCm = doc.WidthCm,
         DepthCm = doc.DepthCm,
@@ -79,6 +80,7 @@ public class TableTemplateRepository : ITableTemplateRepository
     private static TableTemplateDocument ToDocument(TableTemplate model) => new()
     {
         Id = model.Id,
+        CollectionId = model.CollectionId,
         Description = model.Description,
         WidthCm = model.WidthCm,
         DepthCm = model.DepthCm,

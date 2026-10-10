@@ -15,6 +15,10 @@ public enum BaseplateType { Standard, Road, Custom }
 public class Baseplate
 {
     public Guid Id { get; set; }
+
+    /// <summary>Isolation boundary: the collection this baseplate belongs to.</summary>
+    public Guid CollectionId { get; set; }
+
     public BaseplateType Type { get; set; } = BaseplateType.Standard;
     public string PartNum { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;

@@ -1,0 +1,127 @@
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using TroveKeep.Api.Auth;
+using TroveKeep.Api.DTOs.Requests;
+using TroveKeep.Api.DTOs.Responses;
+using TroveKeep.Core.Interfaces.Repositories;
+using TroveKeep.Core.Interfaces.Services;
+using TroveKeep.Core.Models;
+
+namespace TroveKeep.Api.Controllers;
+
+[ApiController]
+[Route("api/auth")]
+public class AuthController : ControllerBase
+{
+    private readonly IAuthService _auth;
+    private readonly IUserRepository _users;
+    private readonly ICollectionMemberRepository _members;
+    private readonly ICollectionRepository _collections;
+    private readonly AuthCookieFactory _cookies;
+
+    public AuthController(
+        IAuthService auth,
+        IUserRepository users,
+        ICollectionMemberRepository members,
+        ICollectionRepository collections,
+        AuthCookieFactory cookies)
+    {
+        _auth = auth;
+        _users = users;
+        _members = members;
+        _collections = collections;
+        _cookies = cookies;
+    }
+
+    [HttpPost("login")]
+    [AllowAnonymous]
+    [ProducesResponseType(typeof(MeResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> Login([FromBody] LoginRequest request)
+    {
+        var result = await _auth.ValidateCredentialsAsync(request.Email, request.Password);
+        if (!result.Success || result.User is null)
+            return Unauthorized(new { error = result.Error });
+
+        await _cookies.SignInAsync(HttpContext, result.User);
+        return Ok(await BuildMeAsync(result.User));
+    }
+
+    [HttpPost("logout")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    public async Task<IActionResult> Logout()
+    {
+        await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+        return NoContent();
+    }
+
+    [HttpGet("me")]
+    [ProducesResponseType(typeof(MeResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> Me()
+    {
+        var user = await CurrentUserAsync();
+        if (user is null) return Unauthorized();
+        return Ok(await BuildMeAsync(user));
+    }
+
+    [HttpPost("change-password")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequest request)
+    {
+        var userId = CurrentUserId();
+        if (userId is null) return Unauthorized();
+
+        if (string.IsNullOrWhiteSpace(request.NewPassword) || request.NewPassword.Length < 8)
+            return BadRequest(new { error = "New password must be at least 8 characters long." });
+
+        var changed = await _auth.ChangePasswordAsync(userId.Value, request.CurrentPassword, request.NewPassword);
+        if (!changed) return BadRequest(new { error = "Current password is incorrect." });
+
+        // Re-issue the cookie so the session stays valid and claims are fresh.
+        var user = await _users.GetByIdAsync(userId.Value);
+        if (user is not null) await _cookies.RefreshAsync(HttpContext, user);
+
+        return NoContent();
+    }
+
+    private Guid? CurrentUserId()
+    {
+        var raw = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        return Guid.TryParse(raw, out var id) ? id : null;
+    }
+
+    private Task<User?> CurrentUserAsync()
+    {
+        var id = CurrentUserId();
+        return id is null ? Task.FromResult<User?>(null) : _users.GetByIdAsync(id.Value);
+    }
+
+    private async Task<MeResponse> BuildMeAsync(User user)
+    {
+        var memberships = (await _members.GetByUserIdAsync(user.Id)).ToList();
+        var byCollection = memberships.ToDictionary(m => m.CollectionId, m => m.Access);
+
+        // An admin may act on every collection, so they see all of them; a regular user only theirs.
+        var all = await _collections.GetAllAsync();
+        var visible = user.Role == UserRole.Admin
+            ? all
+            : all.Where(c => byCollection.ContainsKey(c.Id));
+
+        var collections = visible
+            .Select(c => new CollectionSummaryResponse(
+                c.Id,
+                c.Name,
+                user.Role == UserRole.Admin && !byCollection.ContainsKey(c.Id)
+                    ? "Admin"
+                    : byCollection[c.Id].ToString()))
+            .OrderBy(c => c.Name)
+            .ToList();
+
+        return new MeResponse(user.Id, user.Email, user.DisplayName, user.Role.ToString(), collections);
+    }
+}

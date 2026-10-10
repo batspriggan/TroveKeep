@@ -118,6 +118,7 @@ public class BulkPieceRepository : IBulkPieceRepository
     private static BulkPiece ToModel(BulkPieceDocument doc) => new()
     {
         Id = doc.Id,
+        CollectionId = doc.CollectionId,
         LegoId = doc.LegoId,
         LegoColorId = doc.LegoColorId,
         Description = doc.Description,
@@ -131,6 +132,7 @@ public class BulkPieceRepository : IBulkPieceRepository
     private static BulkPieceDocument ToDocument(BulkPiece model) => new()
     {
         Id = model.Id,
+        CollectionId = model.CollectionId,
         LegoId = model.LegoId,
         LegoColorId = model.LegoColorId,
         Description = model.Description,

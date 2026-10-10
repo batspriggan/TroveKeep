@@ -3,6 +3,10 @@ namespace TroveKeep.Core.Models;
 public class TableTemplate
 {
     public Guid Id { get; set; }
+
+    /// <summary>Isolation boundary: the collection this table template belongs to.</summary>
+    public Guid CollectionId { get; set; }
+
     public string Description { get; set; } = string.Empty;
     public int WidthCm { get; set; }
     public int DepthCm { get; set; }

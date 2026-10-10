@@ -13,21 +13,33 @@
       <RouterLink to="/baseplates">Baseplates</RouterLink>
       <RouterLink to="/settings">Settings</RouterLink>
       <RouterLink v-if="settings.tablePlannerEnabled" to="/table-planner" class="mobile-hide">Table Planner</RouterLink>
+      <span class="user-block">
+        <span class="user-name">{{ auth.state.user?.displayName }}</span>
+        <button class="logout" @click="onLogout" title="Logout">Esci</button>
+      </span>
     </div>
   </nav>
 </template>
 
 <script setup>
 import { ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useSettings } from '../composables/useSettings.js'
+import { useAuth } from '../composables/useAuth.js'
 
 const open = ref(false)
 const route = useRoute()
+const router = useRouter()
 const settings = useSettings()
+const auth = useAuth()
 const version = import.meta.env.VITE_APP_VERSION
 
 watch(route, () => { open.value = false })
+
+async function onLogout() {
+  await auth.logout()
+  router.replace('/login')
+}
 </script>
 
 <style scoped>
@@ -72,6 +84,28 @@ nav {
   display: flex;
   gap: 1.5rem;
   align-items: center;
+}
+
+.user-block {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-left: auto;
+}
+
+.user-name {
+  font-size: 0.8rem;
+  color: #94a3b8;
+}
+
+.logout {
+  background: none;
+  border: 1px solid #475569;
+  color: #cbd5e1;
+  border-radius: 4px;
+  padding: 0.2rem 0.6rem;
+  font-size: 0.8rem;
+  min-height: unset;
 }
 
 a {

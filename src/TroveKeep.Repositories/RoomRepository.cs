@@ -210,6 +210,7 @@ public class RoomRepository : IRoomRepository
     private static Room ToModel(RoomDocument doc) => new()
     {
         Id = doc.Id,
+        CollectionId = doc.CollectionId,
         Name = doc.Name,
         WidthCm = doc.WidthCm,
         DepthCm = doc.DepthCm,
@@ -250,6 +251,7 @@ public class RoomRepository : IRoomRepository
     private static RoomDocument ToDocument(Room model) => new()
     {
         Id = model.Id,
+        CollectionId = model.CollectionId,
         Name = model.Name,
         WidthCm = model.WidthCm,
         DepthCm = model.DepthCm,

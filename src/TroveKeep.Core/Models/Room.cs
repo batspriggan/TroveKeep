@@ -3,6 +3,10 @@ namespace TroveKeep.Core.Models;
 public class Room
 {
     public Guid Id { get; set; }
+
+    /// <summary>Isolation boundary: the collection this room belongs to.</summary>
+    public Guid CollectionId { get; set; }
+
     public string Name { get; set; } = string.Empty;
     public int WidthCm { get; set; }
     public int DepthCm { get; set; }

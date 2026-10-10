@@ -10,6 +10,10 @@ public class BulkPieceDocument
     [BsonGuidRepresentation(GuidRepresentation.Standard)]
     public Guid Id { get; set; }
 
+    /// <summary>Isolation boundary. Nullable only for rows written before migration 006.</summary>
+    [BsonGuidRepresentation(GuidRepresentation.Standard)]
+    public Guid CollectionId { get; set; }
+
     required public string LegoId { get; set; }
     public int LegoColorId { get; set; }
     required public string Description { get; set; }

@@ -148,6 +148,7 @@ public class BaseplateRepository : IBaseplateRepository
     private static Baseplate ToModel(BaseplateDocument doc) => new()
     {
         Id = doc.Id,
+        CollectionId = doc.CollectionId,
         Type = doc.Type,
         PartNum = doc.PartNum,
         Name = doc.Name,
@@ -176,6 +177,7 @@ public class BaseplateRepository : IBaseplateRepository
     private static BaseplateDocument ToDocument(Baseplate model) => new()
     {
         Id = model.Id,
+        CollectionId = model.CollectionId,
         Type = model.Type,
         PartNum = model.PartNum,
         Name = model.Name,

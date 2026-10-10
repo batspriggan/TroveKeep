@@ -16,6 +16,7 @@ public class MigrationRunner
         "legosets", "bulkpieces", "boxes", "drawercontainers", "drawers",
         "table_templates", "rooms", "baseplates", "set_photos",
         "storage_allocations", "set_images",
+        "users", "collections", "collection_members",
         "rebrickable_colors", "rebrickable_sets", "rebrickable_parts",
         "rebrickable_part_categories", "rebrickable_parts_inventory",
         "archive_meta", "meta",
@@ -31,6 +32,7 @@ public class MigrationRunner
             new Migration_003_PartImagesByColor(),
             new Migration_004_LabelTargetsIndex(),
             new Migration_005_BaseplateQuantity(),
+            new Migration_006_CollectionsAndUsers(),
         ];
     }
 

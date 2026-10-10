@@ -1,5 +1,8 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useSettings } from '../composables/useSettings.js'
+import { useAuth } from '../composables/useAuth.js'
+
+import LoginView from '../views/LoginView.vue'
 
 import SetList from '../views/sets/SetList.vue'
 import SetDetail from '../views/sets/SetDetail.vue'
@@ -22,6 +25,7 @@ import AggregateBpPlannerView from '../views/tableplanner/AggregateBpPlannerView
 import BuildCheckView from '../views/tableplanner/BuildCheckView.vue'
 
 const routes = [
+  { path: '/login', component: LoginView, meta: { public: true } },
   { path: '/', redirect: '/sets' },
   { path: '/sets', component: SetList },
   { path: '/sets/:id', component: SetDetail },
@@ -50,7 +54,19 @@ const router = createRouter({
 })
 
 router.beforeEach((to) => {
+  const auth = useAuth()
   const settings = useSettings()
+
+  // Authentication gate: everything except /login requires a session.
+  if (!to.meta.public && !auth.isAuthenticated) {
+    return { path: '/login', query: to.fullPath === '/' ? {} : { redirect: to.fullPath } }
+  }
+  // An authenticated user has no business on the login page.
+  if (to.meta.public && auth.isAuthenticated) return '/'
+
+  // Role gate (step 3/5 expands this): a Guest only reaches the Table Planner.
+  if (auth.isGuest && !to.path.startsWith('/table-planner')) return '/table-planner'
+
   if (to.path.startsWith('/table-planner') && !settings.tablePlannerEnabled) return '/'
   if ((to.path.startsWith('/bulkpieces') || to.path.startsWith('/drawercontainers') || to.path.startsWith('/drawers')) && !settings.bulkPiecesEnabled) return '/'
 })

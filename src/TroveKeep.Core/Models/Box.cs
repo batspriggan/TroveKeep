@@ -3,6 +3,10 @@ namespace TroveKeep.Core.Models;
 public class Box
 {
     public Guid Id { get; set; }
+
+    /// <summary>Isolation boundary: the collection this box belongs to.</summary>
+    public Guid CollectionId { get; set; }
+
     public string Name { get; set; } = string.Empty;
     public bool ImageCached { get; set; }
     public ICollection<LegoSet> Sets { get; set; } = new List<LegoSet>();

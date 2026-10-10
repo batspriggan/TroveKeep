@@ -1,0 +1,39 @@
+namespace TroveKeep.Api.DTOs.Responses;
+
+public record UserResponse(
+    Guid Id,
+    string Email,
+    string DisplayName,
+    string Role,
+    bool Active,
+    bool HasPassword,
+    string? ExternalProvider,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset UpdatedAt);
+
+/// <summary>
+/// The caller's own identity plus the collections they can act on. This is what the SPA uses to
+/// drive navigation and role gating.
+/// </summary>
+public record MeResponse(
+    Guid Id,
+    string Email,
+    string DisplayName,
+    string Role,
+    IReadOnlyList<CollectionSummaryResponse> Collections);
+
+public record CollectionSummaryResponse(Guid Id, string Name, string Access);
+
+public record CollectionResponse(
+    Guid Id,
+    string Name,
+    string? Description,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset UpdatedAt);
+
+public record CollectionMemberResponse(
+    Guid UserId,
+    string Email,
+    string DisplayName,
+    string Access,
+    DateTimeOffset AddedAt);

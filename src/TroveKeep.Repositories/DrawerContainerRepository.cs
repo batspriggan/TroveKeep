@@ -38,6 +38,7 @@ public class DrawerContainerRepository : IDrawerContainerRepository
         var doc = new DrawerContainerDocument
         {
             Id = Guid.NewGuid(),
+            CollectionId = drawerContainer.CollectionId,
             Name = drawerContainer.Name,
             Description = drawerContainer.Description,
             Drawers = drawerContainer.Drawers.Select(d => new DrawerDocument
@@ -63,6 +64,7 @@ public class DrawerContainerRepository : IDrawerContainerRepository
         var doc = new DrawerContainerDocument
         {
             Id = drawerContainer.Id,
+            CollectionId = existing.CollectionId,
             Name = drawerContainer.Name,
             Description = drawerContainer.Description,
             ImageCached = existing.ImageCached,
@@ -104,6 +106,7 @@ public class DrawerContainerRepository : IDrawerContainerRepository
     private static DrawerContainer ToModel(DrawerContainerDocument doc) => new()
     {
         Id = doc.Id,
+        CollectionId = doc.CollectionId,
         Name = doc.Name,
         Description = doc.Description,
         ImageCached = doc.ImageCached,

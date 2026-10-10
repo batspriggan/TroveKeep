@@ -1,17 +1,21 @@
 <template>
-  <AppNav />
-  <main :class="{ fullscreen: route.meta.fullscreen }">
+  <AppNav v-if="!isLoginPage" />
+  <main :class="{ fullscreen: route.meta.fullscreen && !isLoginPage }">
     <RouterView />
   </main>
-  <BottomNav />
+  <BottomNav v-if="!isLoginPage" />
 </template>
 
 <script setup>
+import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 import AppNav from './components/AppNav.vue'
 import BottomNav from './components/BottomNav.vue'
 
 const route = useRoute()
+
+// The login page is a full-bleed screen: no chrome around it.
+const isLoginPage = computed(() => route.path === '/login')
 </script>
 
 <style>

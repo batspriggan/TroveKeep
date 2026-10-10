@@ -10,6 +10,10 @@ public class LegoSetDocument
     [BsonGuidRepresentation(GuidRepresentation.Standard)]
     public Guid Id { get; set; }
 
+    /// <summary>Isolation boundary. Nullable only for rows written before migration 006.</summary>
+    [BsonGuidRepresentation(GuidRepresentation.Standard)]
+    public Guid CollectionId { get; set; }
+
     public string SetNumber { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;
     public int Quantity { get; set; } = 1;
