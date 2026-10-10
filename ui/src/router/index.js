@@ -18,6 +18,8 @@ import ScannerView from '../views/ScannerView.vue'
 import ArchivesView from '../views/ArchivesView.vue'
 import SettingsView from '../views/SettingsView.vue'
 import BaseplateListView from '../views/baseplates/BaseplateListView.vue'
+import UserAdminView from '../views/admin/UserAdminView.vue'
+import CollectionAdminView from '../views/admin/CollectionAdminView.vue'
 import TablePlannerView from '../views/TablePlannerView.vue'
 import RoomPlannerView from '../views/tableplanner/RoomPlannerView.vue'
 import AggregatePlannerListView from '../views/tableplanner/AggregatePlannerListView.vue'
@@ -40,6 +42,8 @@ const routes = [
   { path: '/scanner', component: ScannerView },
   { path: '/archives', component: ArchivesView },
   { path: '/settings', component: SettingsView },
+  { path: '/admin/users', component: UserAdminView, meta: { admin: true } },
+  { path: '/admin/collections', component: CollectionAdminView, meta: { admin: true } },
   { path: '/baseplates', component: BaseplateListView },
   { path: '/table-planner', component: TablePlannerView },
   { path: '/table-planner/rooms/:id', component: RoomPlannerView, meta: { fullscreen: true } },
@@ -66,6 +70,9 @@ router.beforeEach((to) => {
 
   // Role gate (step 3/5 expands this): a Guest only reaches the Table Planner.
   if (auth.isGuest && !to.path.startsWith('/table-planner')) return '/table-planner'
+
+  // Admin gate: the user/collection administration pages are off limits to everyone else.
+  if (to.meta.admin && !auth.isAdmin) return '/'
 
   if (to.path.startsWith('/table-planner') && !settings.tablePlannerEnabled) return '/'
   if ((to.path.startsWith('/bulkpieces') || to.path.startsWith('/drawercontainers') || to.path.startsWith('/drawers')) && !settings.bulkPiecesEnabled) return '/'

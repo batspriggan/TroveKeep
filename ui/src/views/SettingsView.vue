@@ -3,6 +3,45 @@
     <h1>Settings</h1>
 
     <section class="card">
+      <h2>Profile</h2>
+      <div class="profile-row">
+        <span class="profile-label">Name</span>
+        <span>{{ auth.state.user?.displayName }}</span>
+      </div>
+      <div class="profile-row">
+        <span class="profile-label">Email</span>
+        <span>{{ auth.state.user?.email }}</span>
+      </div>
+      <div class="profile-row">
+        <span class="profile-label">Role</span>
+        <span>{{ auth.state.user?.role }}</span>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Change Password</h2>
+      <form @submit.prevent="changePassword">
+        <div class="field-row">
+          <label>Current password</label>
+          <input v-model="pwd.current" type="password" autocomplete="current-password" required />
+        </div>
+        <div class="field-row">
+          <label>New password (min 8 characters)</label>
+          <input v-model="pwd.next" type="password" autocomplete="new-password" minlength="8" required />
+        </div>
+        <div class="field-row">
+          <label>Confirm new password</label>
+          <input v-model="pwd.confirm" type="password" autocomplete="new-password" minlength="8" required />
+        </div>
+        <p v-if="pwdError" class="error">{{ pwdError }}</p>
+        <p v-if="pwdSuccess" class="success">{{ pwdSuccess }}</p>
+        <button class="primary" type="submit" :disabled="pwdSaving">
+          {{ pwdSaving ? 'Saving…' : 'Change password' }}
+        </button>
+      </form>
+    </section>
+
+    <section class="card">
       <h2>Features</h2>
       <div class="feature-row">
         <label class="toggle-label">
@@ -107,10 +146,40 @@
 import { ref, reactive, onMounted } from 'vue'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
 import { downloadBackup, uploadRestore } from '../api/settings.js'
+import { changePassword as changePasswordApi } from '../api/account.js'
 import { useSettings } from '../composables/useSettings.js'
+import { useAuth } from '../composables/useAuth.js'
 import { getLabelConfig, updateLabelConfig, getServerHealth } from '../api/labels.js'
 
 const settings = useSettings()
+const auth = useAuth()
+
+// ---- Profile / password ----
+const pwd = reactive({ current: '', next: '', confirm: '' })
+const pwdSaving = ref(false)
+const pwdError = ref('')
+const pwdSuccess = ref('')
+
+async function changePassword() {
+  pwdError.value = ''
+  pwdSuccess.value = ''
+  if (pwd.next !== pwd.confirm) {
+    pwdError.value = 'The new passwords do not match.'
+    return
+  }
+  pwdSaving.value = true
+  try {
+    await changePasswordApi(pwd.current, pwd.next)
+    pwd.current = ''
+    pwd.next = ''
+    pwd.confirm = ''
+    pwdSuccess.value = 'Password changed.'
+  } catch (e) {
+    pwdError.value = e.message
+  } finally {
+    pwdSaving.value = false
+  }
+}
 
 // ---- Label printing ----
 const config = reactive({ mode: 'client', serverUrl: null, hasServerToken: false })
@@ -245,6 +314,18 @@ h2 {
   color: #64748b;
   font-size: 0.875rem;
   margin-bottom: 1rem;
+}
+
+.profile-row {
+  display: flex;
+  gap: 0.75rem;
+  font-size: 0.9rem;
+  padding: 0.2rem 0;
+}
+
+.profile-label {
+  flex: 0 0 90px;
+  color: #64748b;
 }
 
 .feature-row {
