@@ -39,6 +39,13 @@
             </div>
           </template>
 
+          <div v-if="needsCollectionChoice" class="form-field add-collection-field">
+            <label>Collection *</label>
+            <select v-model="collectionId">
+              <option v-for="c in collections" :key="c.id" :value="c.id">{{ c.name }}</option>
+            </select>
+          </div>
+
           <div class="add-submit-row">
             <div class="form-field add-qty-field">
               <label>Qty *</label>
@@ -64,6 +71,7 @@
           <button type="button" class="type-btn" :class="{ active: typeFilter === 'official' }" @click="typeFilter = 'official'">Official</button>
           <button type="button" class="type-btn" :class="{ active: typeFilter === 'moc' }" @click="typeFilter = 'moc'">MOC</button>
         </div>
+        <CollectionFilter @change="onCollectionChange" />
         <span class="total-count">{{ total }} set{{ total !== 1 ? 's' : '' }}</span>
       </div>
 
@@ -158,6 +166,8 @@ import { useRoute, useRouter } from 'vue-router'
 import { getAllSets, createSet, deleteSet } from '../../api/sets.js'
 import ConfirmDialog from '../../components/ConfirmDialog.vue'
 import SetArchiveTypeahead from '../../components/SetArchiveTypeahead.vue'
+import CollectionFilter from '../../components/CollectionFilter.vue'
+import { useCollectionCreate } from '../../composables/useCollectionCreate.js'
 
 const route = useRoute()
 const router = useRouter()
@@ -178,6 +188,7 @@ const error = ref('')
 const deleteTarget = ref(null)
 const form = ref({ setNumber: '', description: '', quantity: 1, isMoc: false })
 const selectedArchiveSet = ref(null)
+const { collections, needsCollectionChoice, collectionId, withCollection } = useCollectionCreate()
 
 let debounceTimer = null
 function onQueryInput(e) {
@@ -222,16 +233,21 @@ async function load() {
   }
 }
 
+async function onCollectionChange() {
+  page.value = 1
+  await load()
+}
+
 async function submit() {
   error.value = ''
   try {
-    await createSet({
+    await withCollection(() => createSet({
       setNumber: form.value.setNumber || null,
       description: form.value.description,
       photoUrl: form.value.photoUrl || null, // still passed for auto-download trigger
       quantity: form.value.quantity,
       isMoc: form.value.isMoc,
-    })
+    }))
     form.value = { setNumber: '', description: '', quantity: 1, isMoc: false }
     selectedArchiveSet.value = null
     await load()

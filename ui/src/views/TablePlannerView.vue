@@ -5,8 +5,11 @@ import {
   getAllRooms, createRoom, updateRoom, deleteRoom,
   exportRoom, importRoom, duplicateRoom, setRoomObsolete,
 } from '../api/tableplanner.js'
+import CollectionFilter from '../components/CollectionFilter.vue'
+import { useCollectionCreate } from '../composables/useCollectionCreate.js'
 
 const router = useRouter()
+const { collections, needsCollectionChoice, collectionId, withCollection } = useCollectionCreate()
 
 // ── Rooms ────────────────────────────────────────────────────────────────────
 const rooms = ref([])
@@ -26,6 +29,10 @@ const obsoleteCount = computed(() => rooms.value.filter(r => r.obsolete).length)
 
 async function loadRooms() {
   rooms.value = await getAllRooms()
+}
+
+async function onCollectionChange() {
+  await loadRooms()
 }
 
 async function toggleObsolete(room) {
@@ -50,7 +57,7 @@ async function copyRoom(room) {
 async function submitRoom() {
   roomError.value = ''
   if (!roomForm.value.name.trim()) { roomError.value = 'Name is required.'; return }
-  await createRoom({ name: roomForm.value.name.trim(), widthCm: Math.round(roomForm.value.widthM * 100), depthCm: Math.round(roomForm.value.depthM * 100) })
+  await withCollection(() => createRoom({ name: roomForm.value.name.trim(), widthCm: Math.round(roomForm.value.widthM * 100), depthCm: Math.round(roomForm.value.depthM * 100) }))
   roomForm.value = { name: '', widthM: 10, depthM: 8 }
   await loadRooms()
 }
@@ -101,10 +108,19 @@ onMounted(() => loadRooms())
     <section class="section">
       <h2>Rooms</h2>
 
+      <div class="collection-row">
+        <CollectionFilter @change="onCollectionChange" />
+      </div>
+
       <form class="inline-form" @submit.prevent="submitRoom">
         <input v-model="roomForm.name" placeholder="Room name" />
         <label>W (m) <input v-model.number="roomForm.widthM" type="number" min="1" max="100" step="0.1" style="width:80px" /></label>
         <label>D (m) <input v-model.number="roomForm.depthM" type="number" min="1" max="100" step="0.1" style="width:80px" /></label>
+        <label v-if="needsCollectionChoice">Collection
+          <select v-model="collectionId">
+            <option v-for="c in collections" :key="c.id" :value="c.id">{{ c.name }}</option>
+          </select>
+        </label>
         <button class="primary" type="submit">+ Add Room</button>
         <button type="button" @click="triggerImport">Import Room</button>
         <input type="file" ref="importFileRef" accept=".zip" style="display:none" @change="handleImportFile" />
@@ -204,6 +220,11 @@ h1 { margin: 0 0 1rem; }
   font-size: 1.1rem;
   border-bottom: 1px solid #ddd;
   padding-bottom: 0.35rem;
+}
+
+.collection-row {
+  display: flex;
+  margin-bottom: 0.75rem;
 }
 
 .inline-form {

@@ -18,6 +18,12 @@
             <label>Description *</label>
             <input v-model="form.description" required placeholder="Description" />
           </div>
+          <div v-if="needsCollectionChoice" class="form-field add-collection-field">
+            <label>Collection *</label>
+            <select v-model="collectionId">
+              <option v-for="c in collections" :key="c.id" :value="c.id">{{ c.name }}</option>
+            </select>
+          </div>
           <div class="add-submit-row">
             <div class="form-field add-qty-field">
               <label>Qty *</label>
@@ -40,6 +46,7 @@
           <option :value="true">Assigned</option>
           <option :value="false">Unassigned</option>
         </select>
+        <CollectionFilter @change="onCollectionChange" />
         <span class="total-count">{{ total }} piece{{ total !== 1 ? 's' : '' }}</span>
       </div>
 
@@ -147,6 +154,8 @@ import { getColorsList } from '../../api/archives.js'
 import ConfirmDialog from '../../components/ConfirmDialog.vue'
 import ColorSelect from '../../components/ColorSelect.vue'
 import PartArchiveTypeahead from '../../components/PartArchiveTypeahead.vue'
+import CollectionFilter from '../../components/CollectionFilter.vue'
+import { useCollectionCreate } from '../../composables/useCollectionCreate.js'
 
 const route = useRoute()
 const router = useRouter()
@@ -162,6 +171,7 @@ const loading = ref(true)
 const error = ref('')
 const deleteTarget = ref(null)
 const form = ref({ legoId: '', legoColorUid: '', description: '', quantity: 1 })
+const { collections, needsCollectionChoice, collectionId, withCollection } = useCollectionCreate()
 
 let debounceTimer = null
 function onQueryInput(e) {
@@ -176,6 +186,11 @@ function onQueryInput(e) {
 function onFilterChange() {
   page.value = 1
   load()
+}
+
+async function onCollectionChange() {
+  page.value = 1
+  await load()
 }
 
 async function load() {
@@ -214,7 +229,7 @@ async function submit() {
   }
   const legoColorId = colors.value.find(c => c.uniqueId === form.value.legoColorUid)?.id
   try {
-    await createBulkPiece({ legoId: form.value.legoId, legoColorId, description: form.value.description, quantity: form.value.quantity })
+    await withCollection(() => createBulkPiece({ legoId: form.value.legoId, legoColorId, description: form.value.description, quantity: form.value.quantity }))
     form.value = { legoId: '', legoColorUid: '', description: '', quantity: 1 }
     await load()
   } catch (e) {

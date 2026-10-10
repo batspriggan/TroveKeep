@@ -61,6 +61,11 @@ export function setActiveCollection(id) {
   persist(next)
 }
 
+/** Drops the selection: no header is sent and the backend shows every membership again. */
+export function clearActiveCollection() {
+  setActiveCollection(null)
+}
+
 export function useActiveCollection() {
   const collections = computed(() => auth.collections)
   const activeCollectionId = computed(() => findCollection(auth.collections, storedId.value))
@@ -72,5 +77,8 @@ export function useActiveCollection() {
     () => activeCollectionId.value ?? auth.collections[0]?.id ?? null,
   )
 
-  return { collections, activeCollectionId, effectiveCollectionId, showSelector, setActiveCollection }
+  return {
+    collections, activeCollectionId, effectiveCollectionId, showSelector,
+    setActiveCollection, clearActiveCollection,
+  }
 }

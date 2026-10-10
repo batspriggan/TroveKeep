@@ -7,6 +7,12 @@
         <label>Name *</label>
         <input v-model="form.name" required placeholder="Box name" />
       </div>
+      <div v-if="needsCollectionChoice" class="form-field">
+        <label>Collection *</label>
+        <select v-model="collectionId">
+          <option v-for="c in collections" :key="c.id" :value="c.id">{{ c.name }}</option>
+        </select>
+      </div>
       <button class="primary" type="submit">Add Box</button>
     </form>
 
@@ -15,7 +21,10 @@
     <p v-if="loading">Loading…</p>
 
     <template v-else>
-    <input v-model="filterText" type="search" placeholder="Filter by box name…" style="margin: 0.5rem 0; width: 100%; max-width: 400px;" />
+    <div class="filter-bar">
+      <input v-model="filterText" type="search" placeholder="Filter by box name…" class="filter-input" />
+      <CollectionFilter @change="load" />
+    </div>
 
     <table>
       <thead>
@@ -60,9 +69,12 @@
 import { ref, computed, onMounted } from 'vue'
 import { getAllBoxes, createBox, deleteBox } from '../../api/boxes.js'
 import ConfirmDialog from '../../components/ConfirmDialog.vue'
+import CollectionFilter from '../../components/CollectionFilter.vue'
 import { useSettings } from '../../composables/useSettings.js'
+import { useCollectionCreate } from '../../composables/useCollectionCreate.js'
 
 const settings = useSettings()
+const { collections, needsCollectionChoice, collectionId, withCollection } = useCollectionCreate()
 
 const boxes = ref([])
 const filterText = ref('')
@@ -91,7 +103,7 @@ async function load() {
 async function submit() {
   error.value = ''
   try {
-    await createBox({ name: form.value.name })
+    await withCollection(() => createBox({ name: form.value.name }))
     form.value = { name: '' }
     await load()
   } catch (e) {
@@ -117,3 +129,21 @@ async function doDelete() {
 
 onMounted(load)
 </script>
+
+<style scoped>
+.filter-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  margin: 0.5rem 0;
+}
+
+.filter-input {
+  width: 100%;
+  max-width: 400px;
+  font-size: var(--text-sm);
+  border-color: var(--color-border);
+  background: var(--color-surface);
+}
+</style>

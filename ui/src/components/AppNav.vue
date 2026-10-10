@@ -18,15 +18,6 @@
            on mobile too (the other mobile-hide links are hidden inside the hamburger). -->
       <RouterLink v-if="settings.tablePlannerEnabled" to="/table-planner" :class="{ 'mobile-hide': !auth.isGuest }">Table Planner</RouterLink>
       <span class="user-block">
-        <select
-          v-if="showSelector"
-          class="collection-select"
-          aria-label="Active collection"
-          :value="effectiveCollectionId"
-          @change="onCollectionChange"
-        >
-          <option v-for="c in collections" :key="c.id" :value="c.id">{{ c.name }}</option>
-        </select>
         <span class="user-name">{{ auth.state.user?.displayName }}</span>
         <button class="logout" @click="onLogout" title="Logout">Esci</button>
       </span>
@@ -39,21 +30,15 @@ import { ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useSettings } from '../composables/useSettings.js'
 import { useAuth } from '../composables/useAuth.js'
-import { useActiveCollection } from '../composables/useActiveCollection.js'
 
 const open = ref(false)
 const route = useRoute()
 const router = useRouter()
 const settings = useSettings()
 const auth = useAuth()
-const { collections, effectiveCollectionId, showSelector, setActiveCollection } = useActiveCollection()
 const version = import.meta.env.VITE_APP_VERSION
 
 watch(route, () => { open.value = false })
-
-function onCollectionChange(e) {
-  setActiveCollection(e.target.value)
-}
 
 async function onLogout() {
   await auth.logout()
@@ -110,18 +95,6 @@ nav {
   align-items: center;
   gap: 0.75rem;
   margin-left: auto;
-}
-
-.collection-select {
-  width: auto;
-  max-width: 200px;
-  background: #0f172a;
-  color: #e2e8f0;
-  border: 1px solid #475569;
-  border-radius: 4px;
-  padding: 0.2rem 0.4rem;
-  font-size: 0.8rem;
-  min-height: unset;
 }
 
 .user-name {

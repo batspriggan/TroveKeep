@@ -207,6 +207,7 @@
           :class="{ active: filterType === t }"
           @click="filterType = t"
         >{{ t === 'all' ? 'All' : t }}</button>
+        <CollectionFilter @change="onCollectionChange" />
       </div>
 
       <div class="filter-row">
@@ -324,6 +325,13 @@
           </select>
         </label>
 
+        <label v-if="needsCollectionChoice && !editingId" class="field grow">
+          <span>Collection</span>
+          <select v-model="collectionId">
+            <option v-for="c in collections" :key="c.id" :value="c.id">{{ c.name }}</option>
+          </select>
+        </label>
+
         <label class="field grow">
           <span>Notes</span>
           <input v-model="form.notes" class="text-input" placeholder="optional" />
@@ -424,8 +432,10 @@
 import { ref, reactive, computed, watch, onMounted } from 'vue'
 import ColorSelect from '../../components/ColorSelect.vue'
 import BaseplateRow from '../../components/BaseplateRow.vue'
+import CollectionFilter from '../../components/CollectionFilter.vue'
 import '../../components/baseplateRows.css'
 import { useSettings } from '../../composables/useSettings.js'
+import { useCollectionCreate } from '../../composables/useCollectionCreate.js'
 import { searchArchivePartsBaseplates, getColorsList } from '../../api/archives.js'
 import { getAllSets } from '../../api/sets.js'
 import {
@@ -436,6 +446,7 @@ import {
 } from '../../api/baseplates.js'
 
 const settings = useSettings()
+const { collections, needsCollectionChoice, collectionId, withCollection } = useCollectionCreate()
 
 const ROAD_SHAPES = ['Straight', 'Curve', 'Junction', 'TJunction', 'Crossroad']
 const CANONICAL_SIZES = ['8x8', '8x16', '16x16', '16x32', '32x32', '32x48', '48x48']
@@ -715,6 +726,18 @@ const summary = computed(() => {
 // ── Data loading ─────────────────────────────────────────────────────────────
 async function loadBaseplates() {
   baseplates.value = await getAllBaseplates()
+}
+
+async function onCollectionChange() {
+  error.value = ''
+  try {
+    await loadBaseplates()
+    // Reservations are resolved against the sets of the same collection, so refresh those too.
+    const setsPage = await getAllSets(1, 1000)
+    allSets.value = setsPage.items ?? setsPage ?? []
+  } catch (e) {
+    error.value = e.message
+  }
 }
 
 onMounted(async () => {
@@ -1124,7 +1147,7 @@ async function submitForm() {
   try {
     const saved = editingId.value
       ? await updateBaseplate(editingId.value, body)
-      : await createBaseplate(body)
+      : await withCollection(() => createBaseplate(body))
     replaceRow(saved)
     closeForm()
   } catch (e) {

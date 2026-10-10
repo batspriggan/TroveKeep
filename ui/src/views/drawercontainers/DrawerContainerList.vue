@@ -15,6 +15,12 @@
         <label>Number of Drawers</label>
         <input v-model="form.drawerCount" type="number" min="1" placeholder="Number of drawers in container" />
       </div>
+      <div v-if="needsCollectionChoice" class="form-field">
+        <label>Collection *</label>
+        <select v-model="collectionId">
+          <option v-for="c in collections" :key="c.id" :value="c.id">{{ c.name }}</option>
+        </select>
+      </div>
       <button class="primary" type="submit">Add Container</button>
     </form>
 
@@ -23,7 +29,10 @@
     <p v-if="loading">Loading…</p>
 
     <template v-else>
-    <input v-model="filterText" type="search" placeholder="Filter by name or description…" style="margin: 0.5rem 0; width: 100%; max-width: 400px;" />
+    <div class="filter-bar">
+      <input v-model="filterText" type="search" placeholder="Filter by name or description…" class="filter-input" />
+      <CollectionFilter @change="load" />
+    </div>
 
     <table>
       <thead>
@@ -68,6 +77,8 @@
 import { ref, computed, onMounted } from 'vue'
 import { getAllDrawerContainers, createDrawerContainer, deleteDrawerContainer } from '../../api/drawercontainers.js'
 import ConfirmDialog from '../../components/ConfirmDialog.vue'
+import CollectionFilter from '../../components/CollectionFilter.vue'
+import { useCollectionCreate } from '../../composables/useCollectionCreate.js'
 
 const containers = ref([])
 const filterText = ref('')
@@ -83,6 +94,7 @@ const loading = ref(true)
 const error = ref('')
 const deleteTarget = ref(null)
 const form = ref({ name: '', description: '' })
+const { collections, needsCollectionChoice, collectionId, withCollection } = useCollectionCreate()
 
 async function load() {
   loading.value = true
@@ -99,7 +111,7 @@ async function load() {
 async function submit() {
   error.value = ''
   try {
-    await createDrawerContainer({ name: form.value.name, description: form.value.description || null, drawerCount: form.value.drawerCount || 0 })
+    await withCollection(() => createDrawerContainer({ name: form.value.name, description: form.value.description || null, drawerCount: form.value.drawerCount || 0 }))
     form.value = { name: '', description: '', drawerCount: 0 }
     await load()
   } catch (e) {
@@ -125,3 +137,21 @@ async function doDelete() {
 
 onMounted(load)
 </script>
+
+<style scoped>
+.filter-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  margin: 0.5rem 0;
+}
+
+.filter-input {
+  width: 100%;
+  max-width: 400px;
+  font-size: var(--text-sm);
+  border-color: var(--color-border);
+  background: var(--color-surface);
+}
+</style>

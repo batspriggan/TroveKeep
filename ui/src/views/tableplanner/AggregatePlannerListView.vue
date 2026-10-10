@@ -3,6 +3,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { getAllRooms, getAllTemplates } from '../../api/tableplanner.js'
 import { getAllBaseplates } from '../../api/baseplates.js'
+import CollectionFilter from '../../components/CollectionFilter.vue'
 
 const router = useRouter()
 const rooms = ref([])
@@ -14,7 +15,7 @@ const loading = ref(true)
 const blocked = ref(false)
 const quarantinedPlates = ref([])
 
-onMounted(async () => {
+async function load() {
   const [r, t, bps] = await Promise.all([getAllRooms(), getAllTemplates(), getAllBaseplates()])
   // Archived rooms are not planned any more, so they do not appear here either.
   rooms.value = (r ?? []).filter(room => !room.obsolete)
@@ -22,7 +23,13 @@ onMounted(async () => {
   quarantinedPlates.value = bps.filter(b => b.quarantined === true)
   blocked.value = quarantinedPlates.value.length > 0
   loading.value = false
-})
+}
+
+async function onCollectionChange() {
+  await load()
+}
+
+onMounted(load)
 
 const templateMap = computed(() => {
   const m = {}
@@ -132,6 +139,10 @@ const allAggregates = computed(() => {
       <button class="tab" @click="router.push('/table-planner/build-check')">Build Check</button>
     </div>
 
+    <div class="collection-row">
+      <CollectionFilter @change="onCollectionChange" />
+    </div>
+
     <div v-if="loading" class="loading">Loading…</div>
 
     <!-- ── Quarantine gate (contract §F) ──────────────────────────────── -->
@@ -226,6 +237,11 @@ h1 { margin: 0 0 1rem; }
 .loading, .empty {
   color: #888;
   padding: 1rem 0;
+}
+
+.collection-row {
+  display: flex;
+  margin-bottom: 0.75rem;
 }
 
 .agg-table {
