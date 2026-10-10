@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using TroveKeep.Api.DTOs.Requests;
 using TroveKeep.Api.DTOs.Responses;
@@ -8,6 +9,8 @@ using TroveKeep.Core.Models;
 
 namespace TroveKeep.Api.Controllers;
 
+// Any authenticated role (including Guest) may read the planner; only User and Admin may change it.
+[Authorize]
 [ApiController]
 [Route("api/baseplates")]
 public class BaseplatesController : ControllerBase
@@ -45,6 +48,7 @@ public class BaseplatesController : ControllerBase
         return Ok(baseplates.Select(b => MapToResponse(b, ctx)));
     }
 
+    [Authorize(Roles = "User,Admin")]
     [HttpPost]
     [ProducesResponseType(typeof(BaseplateResponse), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -76,6 +80,7 @@ public class BaseplatesController : ControllerBase
         }
     }
 
+    [Authorize(Roles = "User,Admin")]
     [HttpPut("{id:guid}")]
     [ProducesResponseType(typeof(BaseplateResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -108,6 +113,7 @@ public class BaseplatesController : ControllerBase
         catch (InvalidOperationException ex) { return BadRequest(new { error = ex.Message }); }
     }
 
+    [Authorize(Roles = "User,Admin")]
     [HttpPost("{id:guid}/confirm")]
     [ProducesResponseType(typeof(BaseplateResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -124,6 +130,7 @@ public class BaseplatesController : ControllerBase
         catch (ConcurrencyException ex) { return Conflict(new { error = ex.Message }); }
     }
 
+    [Authorize(Roles = "User,Admin")]
     [HttpPost("{id:guid}/reservations")]
     [ProducesResponseType(typeof(BaseplateResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -140,6 +147,7 @@ public class BaseplatesController : ControllerBase
         catch (InvalidOperationException ex) { return BadRequest(new { error = ex.Message }); }
     }
 
+    [Authorize(Roles = "User,Admin")]
     [HttpDelete("{id:guid}/reservations/{setId:guid}")]
     [ProducesResponseType(typeof(BaseplateResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -154,6 +162,7 @@ public class BaseplatesController : ControllerBase
         catch (KeyNotFoundException) { return NotFound(); }
     }
 
+    [Authorize(Roles = "User,Admin")]
     [HttpPost("feasibility")]
     [ProducesResponseType(typeof(FeasibilityResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -184,6 +193,7 @@ public class BaseplatesController : ControllerBase
     /// Dissolves a legacy MOC row into real plates of <see cref="ReconcileRequest.TargetBaseplateId"/>.
     /// When cols/rows are omitted they are derived from the two footprints (either orientation).
     /// </summary>
+    [Authorize(Roles = "User,Admin")]
     [HttpPost("{id:guid}/reconcile")]
     [ProducesResponseType(typeof(DissolveResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -215,6 +225,7 @@ public class BaseplatesController : ControllerBase
         catch (KeyNotFoundException) { return NotFound(); }
     }
 
+    [Authorize(Roles = "User,Admin")]
     [HttpPost("{id:guid}/unquarantine")]
     [ProducesResponseType(typeof(BaseplateResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -342,6 +353,7 @@ public class BaseplatesController : ControllerBase
         return NotFound();
     }
 
+    [Authorize(Roles = "User,Admin")]
     [HttpPost("{id:guid}/image")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -359,6 +371,7 @@ public class BaseplatesController : ControllerBase
         return NoContent();
     }
 
+    [Authorize(Roles = "User,Admin")]
     [HttpDelete("{id:guid}/image")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -372,6 +385,7 @@ public class BaseplatesController : ControllerBase
         return NoContent();
     }
 
+    [Authorize(Roles = "User,Admin")]
     [HttpDelete("{id:guid}")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     public async Task<IActionResult> Delete(Guid id)

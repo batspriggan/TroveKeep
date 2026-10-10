@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using TroveKeep.Api.DTOs.Requests;
 using TroveKeep.Api.DTOs.Responses;
@@ -7,6 +8,8 @@ using TroveKeep.Core.Models;
 
 namespace TroveKeep.Api.Controllers;
 
+// Any authenticated role (including Guest) may read the planner; only User and Admin may change it.
+[Authorize]
 [ApiController]
 [Route("api/rooms")]
 public class RoomsController : ControllerBase
@@ -38,6 +41,7 @@ public class RoomsController : ControllerBase
         return Ok(await MapToResponseAsync(room));
     }
 
+    [Authorize(Roles = "User,Admin")]
     [HttpPost]
     [ProducesResponseType(typeof(RoomResponse), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -53,6 +57,7 @@ public class RoomsController : ControllerBase
         return CreatedAtAction(nameof(GetById), new { id = created.Id }, await MapToResponseAsync(created));
     }
 
+    [Authorize(Roles = "User,Admin")]
     [HttpPut("{id:guid}")]
     [ProducesResponseType(typeof(RoomResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -87,6 +92,7 @@ public class RoomsController : ControllerBase
     }
 
     /// <summary>Shifts the layout to the origin and resizes the room to its exact footprint.</summary>
+    [Authorize(Roles = "User,Admin")]
     [HttpPost("{id:guid}/fit")]
     [ProducesResponseType(typeof(RoomResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -111,6 +117,7 @@ public class RoomsController : ControllerBase
     }
 
     /// <summary>Copies a room, layout included, into a new one.</summary>
+    [Authorize(Roles = "User,Admin")]
     [HttpPost("{id:guid}/duplicate")]
     [ProducesResponseType(typeof(RoomResponse), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -122,6 +129,7 @@ public class RoomsController : ControllerBase
     }
 
     /// <summary>Archives or unarchives a room. Archived rooms are hidden from the room list.</summary>
+    [Authorize(Roles = "User,Admin")]
     [HttpPost("{id:guid}/obsolete")]
     [ProducesResponseType(typeof(RoomResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -140,6 +148,7 @@ public class RoomsController : ControllerBase
         }
     }
 
+    [Authorize(Roles = "User,Admin")]
     [HttpPut("{id:guid}/layout")]
     [ProducesResponseType(typeof(RoomResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -171,6 +180,7 @@ public class RoomsController : ControllerBase
         }
     }
 
+    [Authorize(Roles = "User,Admin")]
     [HttpPut("{id:guid}/aggregate-bp-layouts/{representativeId}")]
     [ProducesResponseType(typeof(RoomResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -191,6 +201,7 @@ public class RoomsController : ControllerBase
         return Ok(await MapToResponseAsync(updated));
     }
 
+    [Authorize(Roles = "User,Admin")]
     [HttpDelete("{id:guid}")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -214,6 +225,7 @@ public class RoomsController : ControllerBase
         catch (KeyNotFoundException) { return NotFound(); }
     }
 
+    [Authorize(Roles = "User,Admin")]
     [HttpPost("import")]
     [RequestSizeLimit(10_000_000)]
     [RequestFormLimits(MultipartBodyLengthLimit = 10_000_000)]

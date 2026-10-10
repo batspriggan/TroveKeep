@@ -1,8 +1,11 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using TroveKeep.Core.Interfaces.Services;
 
 namespace TroveKeep.Api.Controllers;
 
+// Guests are authenticated but confined to the Table Planner: everything else requires User or Admin.
+[Authorize(Roles = "User,Admin")]
 [ApiController]
 [Route("api/settings")]
 public class SettingsController : ControllerBase

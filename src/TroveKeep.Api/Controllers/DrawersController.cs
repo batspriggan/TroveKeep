@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using TroveKeep.Api.DTOs.Requests;
 using TroveKeep.Api.DTOs.Responses;
@@ -7,6 +8,8 @@ using TroveKeep.Core.Models;
 
 namespace TroveKeep.Api.Controllers;
 
+// Guests are authenticated but confined to the Table Planner: everything else requires User or Admin.
+[Authorize(Roles = "User,Admin")]
 [ApiController]
 [Route("api/drawers")]
 public class DrawersController : ControllerBase

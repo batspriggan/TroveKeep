@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using TroveKeep.Api.DTOs.Requests;
 using TroveKeep.Api.DTOs.Responses;
@@ -12,6 +13,8 @@ namespace TroveKeep.Api.Controllers;
 /// endpoints on the entity controllers are still the way to fetch the files, while
 /// <c>POST /api/labels/print</c> reports back that the client sink is active.
 /// </summary>
+// Guests are authenticated but confined to the Table Planner: everything else requires User or Admin.
+[Authorize(Roles = "User,Admin")]
 [ApiController]
 [Route("api/labels")]
 public class LabelsController : ControllerBase

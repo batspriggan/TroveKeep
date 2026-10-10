@@ -1,4 +1,5 @@
 using System.IO.Compression;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.DependencyInjection;
 using TroveKeep.Api.DTOs.Requests;
@@ -11,6 +12,8 @@ using TroveKeep.Services;
 
 namespace TroveKeep.Api.Controllers;
 
+// Guests are authenticated but confined to the Table Planner: everything else requires User or Admin.
+[Authorize(Roles = "User,Admin")]
 [ApiController]
 [Route("api/bulkpieces")]
 public class BulkPiecesController : ControllerBase

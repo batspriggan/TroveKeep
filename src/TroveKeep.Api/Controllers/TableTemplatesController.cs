@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using TroveKeep.Api.DTOs.Requests;
 using TroveKeep.Api.DTOs.Responses;
@@ -7,6 +8,8 @@ using TroveKeep.Core.Models;
 
 namespace TroveKeep.Api.Controllers;
 
+// Any authenticated role (including Guest) may read the planner; only User and Admin may change it.
+[Authorize]
 [ApiController]
 [Route("api/table-templates")]
 public class TableTemplatesController : ControllerBase
@@ -26,6 +29,7 @@ public class TableTemplatesController : ControllerBase
         return Ok(templates.Select(MapToResponse));
     }
 
+    [Authorize(Roles = "User,Admin")]
     [HttpPost]
     [ProducesResponseType(typeof(TableTemplateResponse), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -42,6 +46,7 @@ public class TableTemplatesController : ControllerBase
         return StatusCode(StatusCodes.Status201Created, MapToResponse(created));
     }
 
+    [Authorize(Roles = "User,Admin")]
     [HttpPut("{id:guid}")]
     [ProducesResponseType(typeof(TableTemplateResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -69,6 +74,7 @@ public class TableTemplatesController : ControllerBase
         }
     }
 
+    [Authorize(Roles = "User,Admin")]
     [HttpDelete("{id:guid}")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]

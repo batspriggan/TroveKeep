@@ -5,6 +5,7 @@ using MongoDB.Bson.Serialization;
 using MongoDB.Bson.Serialization.Serializers;
 using MongoDB.Driver;
 using TroveKeep.Api.Auth;
+using TroveKeep.Api.Filters;
 using TroveKeep.Core.Interfaces.Repositories;
 using TroveKeep.Core.Interfaces.Services;
 using TroveKeep.Migrations;
@@ -16,7 +17,7 @@ BsonSerializer.RegisterSerializer(new GuidSerializer(GuidRepresentation.Standard
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddControllers();
+builder.Services.AddControllers(options => options.Filters.Add<ApiExceptionFilter>());
 builder.Services.AddOpenApi();
 
 // Multi-user auth: cookie sessions (not bearer tokens) because the SPA is served same-origin.

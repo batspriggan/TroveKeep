@@ -1,7 +1,14 @@
 <!-- Redesigned: 2026-03-06 — Sticky bottom navigation bar for mobile -->
 <template>
   <nav class="bottom-nav" aria-label="Main navigation">
-    <RouterLink to="/sets" class="nav-item">
+    <RouterLink v-if="auth.isGuest && settings.tablePlannerEnabled" to="/table-planner" class="nav-item">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M3 3h18v18H3z"/><path d="M3 9h18M9 9v12"/>
+      </svg>
+      <span>Planner</span>
+    </RouterLink>
+
+    <RouterLink v-if="!auth.isGuest" to="/sets" class="nav-item">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/>
         <rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>
@@ -9,7 +16,7 @@
       <span>Sets</span>
     </RouterLink>
 
-    <RouterLink v-if="settings.bulkPiecesEnabled" to="/bulkpieces" class="nav-item">
+    <RouterLink v-if="!auth.isGuest && settings.bulkPiecesEnabled" to="/bulkpieces" class="nav-item">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <circle cx="8" cy="8" r="2.5"/><circle cx="16" cy="8" r="2.5"/>
         <circle cx="8" cy="16" r="2.5"/><circle cx="16" cy="16" r="2.5"/>
@@ -17,14 +24,14 @@
       <span>Parts</span>
     </RouterLink>
 
-    <RouterLink to="/boxes" class="nav-item">
+    <RouterLink v-if="!auth.isGuest" to="/boxes" class="nav-item">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <path d="M21 8H3M21 8v11a1 1 0 01-1 1H4a1 1 0 01-1-1V8M21 8l-2-5H5L3 8M9 12h6"/>
       </svg>
       <span>Boxes</span>
     </RouterLink>
 
-    <RouterLink to="/baseplates" class="nav-item">
+    <RouterLink v-if="!auth.isGuest" to="/baseplates" class="nav-item">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <rect x="3" y="6" width="18" height="12" rx="1.5"/>
         <circle cx="7" cy="10" r="0.9"/><circle cx="12" cy="10" r="0.9"/><circle cx="17" cy="10" r="0.9"/>
@@ -33,21 +40,21 @@
       <span>Baseplates</span>
     </RouterLink>
 
-    <RouterLink v-if="settings.bulkPiecesEnabled" to="/drawercontainers" class="nav-item">
+    <RouterLink v-if="!auth.isGuest && settings.bulkPiecesEnabled" to="/drawercontainers" class="nav-item">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <path d="M12 3L2 8l10 5 10-5-10-5zM2 13l10 5 10-5M2 18l10 5 10-5"/>
       </svg>
       <span>Drawers</span>
     </RouterLink>
 
-    <RouterLink to="/search" class="nav-item">
+    <RouterLink v-if="!auth.isGuest" to="/search" class="nav-item">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <circle cx="11" cy="11" r="7"/><path d="M21 21l-4.35-4.35"/>
       </svg>
       <span>Search</span>
     </RouterLink>
 
-    <RouterLink to="/scanner" class="nav-item">
+    <RouterLink v-if="!auth.isGuest" to="/scanner" class="nav-item">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2M7 12h10"/>
       </svg>
@@ -58,8 +65,10 @@
 
 <script setup>
 import { useSettings } from '../composables/useSettings.js'
+import { useAuth } from '../composables/useAuth.js'
 
 const settings = useSettings()
+const auth = useAuth()
 </script>
 
 <style scoped>

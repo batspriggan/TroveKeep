@@ -3,16 +3,18 @@
     <span class="brand">TroveKeep <span class="version">{{ version }}</span></span>
     <button class="hamburger" @click="open = !open" aria-label="Toggle menu">☰</button>
     <div class="nav-links" :class="{ open }">
-      <RouterLink to="/sets" class="mobile-hide">Sets</RouterLink>
-      <RouterLink v-if="settings.bulkPiecesEnabled" to="/bulkpieces" class="mobile-hide">Bulk Pieces</RouterLink>
-      <RouterLink to="/boxes" class="mobile-hide">Boxes</RouterLink>
-      <RouterLink v-if="settings.bulkPiecesEnabled" to="/drawercontainers" class="mobile-hide">Drawer Containers</RouterLink>
-      <RouterLink to="/search" class="mobile-hide">Search</RouterLink>
-      <RouterLink to="/scanner" class="mobile-hide">Scanner</RouterLink>
-      <RouterLink to="/archives">Archives</RouterLink>
-      <RouterLink to="/baseplates">Baseplates</RouterLink>
-      <RouterLink to="/settings">Settings</RouterLink>
-      <RouterLink v-if="settings.tablePlannerEnabled" to="/table-planner" class="mobile-hide">Table Planner</RouterLink>
+      <RouterLink v-if="!auth.isGuest" to="/sets" class="mobile-hide">Sets</RouterLink>
+      <RouterLink v-if="!auth.isGuest && settings.bulkPiecesEnabled" to="/bulkpieces" class="mobile-hide">Bulk Pieces</RouterLink>
+      <RouterLink v-if="!auth.isGuest" to="/boxes" class="mobile-hide">Boxes</RouterLink>
+      <RouterLink v-if="!auth.isGuest && settings.bulkPiecesEnabled" to="/drawercontainers" class="mobile-hide">Drawer Containers</RouterLink>
+      <RouterLink v-if="!auth.isGuest" to="/search" class="mobile-hide">Search</RouterLink>
+      <RouterLink v-if="!auth.isGuest" to="/scanner" class="mobile-hide">Scanner</RouterLink>
+      <RouterLink v-if="!auth.isGuest" to="/archives">Archives</RouterLink>
+      <RouterLink v-if="!auth.isGuest" to="/baseplates">Baseplates</RouterLink>
+      <RouterLink v-if="!auth.isGuest" to="/settings">Settings</RouterLink>
+      <!-- A Guest has the Table Planner as their only destination, so the link stays visible
+           on mobile too (the other mobile-hide links are hidden inside the hamburger). -->
+      <RouterLink v-if="settings.tablePlannerEnabled" to="/table-planner" :class="{ 'mobile-hide': !auth.isGuest }">Table Planner</RouterLink>
       <span class="user-block">
         <span class="user-name">{{ auth.state.user?.displayName }}</span>
         <button class="logout" @click="onLogout" title="Logout">Esci</button>
