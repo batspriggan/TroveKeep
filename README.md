@@ -58,6 +58,8 @@ There is **no authentication and no authorisation** of any kind:
 
 Because of this, **do not expose TroveKeep to the public internet** (no port-forwarding, no public reverse proxy, no cloud hosting without putting your own authentication layer and TLS in front of it). Anyone who can reach the port can read, modify, and delete the entire inventory. Treat it like a household appliance on the home network, not like a multi-tenant web service.
 
+> **Authentication:** alongside local accounts, TroveKeep supports an optional OpenID Connect (Pangolin) login that maps an external identity to a local role. See [docs/oidc-pangolin.md](docs/oidc-pangolin.md) for setup and how it interacts with Pangolin.
+
 ## Features
 
 - **Sets** — catalogue LEGO™ sets with set number, description, photo URL, and quantity; download and cache box-art images from Rebrickable

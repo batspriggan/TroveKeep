@@ -12,6 +12,12 @@
       which is past the GHSA-v5pm-xwqc-g5wc fix (2.7.5).
     -->
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.12" />
+    <!--
+      Optional OIDC login (Pangolin). Version tracks the ASP.NET Core 10.0.x runtime so the
+      authentication handler and its Microsoft.IdentityModel.* dependencies stay in lockstep
+      with the shared framework.
+    -->
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.OpenIdConnect" Version="10.0.12" />
   </ItemGroup>
 
   <ItemGroup>

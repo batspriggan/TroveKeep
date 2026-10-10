@@ -20,19 +20,22 @@ public class AuthController : ControllerBase
     private readonly ICollectionMemberRepository _members;
     private readonly ICollectionRepository _collections;
     private readonly AuthCookieFactory _cookies;
+    private readonly OidcSettings _oidc;
 
     public AuthController(
         IAuthService auth,
         IUserRepository users,
         ICollectionMemberRepository members,
         ICollectionRepository collections,
-        AuthCookieFactory cookies)
+        AuthCookieFactory cookies,
+        OidcSettings oidc)
     {
         _auth = auth;
         _users = users;
         _members = members;
         _collections = collections;
         _cookies = cookies;
+        _oidc = oidc;
     }
 
     [HttpPost("login")]
@@ -55,6 +58,31 @@ public class AuthController : ControllerBase
     {
         await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
         return NoContent();
+    }
+
+    /// <summary>
+    /// Which login methods the SPA should offer. Anonymous so the login page can render before
+    /// any session exists. Local auth is always on.
+    /// </summary>
+    [HttpGet("providers")]
+    [AllowAnonymous]
+    [ProducesResponseType(typeof(ProvidersResponse), StatusCodes.Status200OK)]
+    public IActionResult Providers() => Ok(new ProvidersResponse(Local: true, Oidc: _oidc.IsEnabled));
+
+    /// <summary>
+    /// Kicks off the OIDC authorization-code flow. Returns 404 (not 500) when OIDC is disabled,
+    /// so a client that probes the endpoint gets an unambiguous "not available" answer.
+    /// </summary>
+    [HttpGet("oidc/challenge")]
+    [AllowAnonymous]
+    [ProducesResponseType(StatusCodes.Status302Found)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public IActionResult OidcChallenge()
+    {
+        if (!_oidc.IsEnabled)
+            return NotFound(new { error = "OIDC authentication is not enabled on this instance." });
+
+        return Challenge(new AuthenticationProperties { RedirectUri = "/" }, OidcSettings.Scheme);
     }
 
     [HttpGet("me")]

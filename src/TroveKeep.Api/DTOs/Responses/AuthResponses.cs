@@ -24,6 +24,9 @@ public record MeResponse(
 
 public record CollectionSummaryResponse(Guid Id, string Name, string Access);
 
+/// <summary>Which login methods the SPA should offer. Local auth is always available.</summary>
+public record ProvidersResponse(bool Local, bool Oidc);
+
 public record CollectionResponse(
     Guid Id,
     string Name,

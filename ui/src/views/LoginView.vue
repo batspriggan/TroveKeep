@@ -19,22 +19,48 @@
       <button type="submit" :disabled="loading">
         {{ loading ? 'Accesso…' : 'Accedi' }}
       </button>
+
+      <template v-if="oidcEnabled">
+        <div class="separator"><span>oppure</span></div>
+        <button type="button" class="oidc" @click="loginWithPangolin">
+          Accedi con Pangolin
+        </button>
+      </template>
     </form>
   </div>
 </template>
 
 <script setup>
-import { ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { onMounted, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { useAuth } from '../composables/useAuth.js'
+import { getProviders } from '../api/auth.js'
 
+const route = useRoute()
 const router = useRouter()
 const auth = useAuth()
 
 const email = ref('')
 const password = ref('')
-const error = ref('')
+// Pre-filled from a failed OIDC round-trip (?error=…), then reused for local login errors.
+const error = ref(route.query.error ? String(route.query.error) : '')
 const loading = ref(false)
+const oidcEnabled = ref(false)
+
+onMounted(async () => {
+  try {
+    const providers = await getProviders()
+    oidcEnabled.value = providers?.oidc === true
+  } catch {
+    // The login page must stay usable even if the probe fails: fall back to local auth only.
+    oidcEnabled.value = false
+  }
+})
+
+// Full-page navigation on purpose: the challenge endpoint answers with a redirect to Pangolin.
+function loginWithPangolin() {
+  window.location.href = '/api/auth/oidc/challenge'
+}
 
 async function submit() {
   error.value = ''
@@ -131,5 +157,28 @@ button:disabled {
   margin: 0;
   color: #f87171;
   font-size: 0.85rem;
+}
+
+.separator {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #64748b;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.separator::before,
+.separator::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: #334155;
+}
+
+button.oidc {
+  margin-top: 0;
+  background: #475569;
 }
 </style>

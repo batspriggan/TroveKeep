@@ -1,4 +1,6 @@
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.Authorization;
 using MongoDB.Bson;
 using MongoDB.Bson.Serialization;
@@ -52,6 +54,87 @@ builder.Services.AddAuthorization(options =>
         .RequireAuthenticatedUser()
         .Build();
 });
+
+// Optional OIDC login (Pangolin), registered only when explicitly enabled and fully configured.
+// The cookie scheme above remains the single session mechanism: OIDC authenticates the user once,
+// we then resolve (or auto-provision) the local account and issue the very same application
+// cookie the local login does. With the section missing/disabled nothing is added and the app
+// behaves exactly as before.
+var oidcSettings = builder.Configuration.GetSection(OidcSettings.SectionName).Get<OidcSettings>()
+    ?? new OidcSettings();
+builder.Services.AddSingleton(oidcSettings);
+if (oidcSettings.IsEnabled)
+{
+    builder.Services
+        .AddAuthentication()
+        .AddOpenIdConnect(OidcSettings.Scheme, options =>
+        {
+            options.Authority = oidcSettings.Authority;
+            options.ClientId = oidcSettings.ClientId;
+            options.ClientSecret = oidcSettings.ClientSecret;
+            options.RequireHttpsMetadata = oidcSettings.RequireHttpsMetadata;
+            options.ResponseType = "code";
+            options.SaveTokens = false;
+            options.GetClaimsFromUserInfoEndpoint = true;
+            options.CallbackPath = OidcSettings.CallbackPath;
+            // Never let the OIDC handler mint a session: it hands us the external principal and
+            // we sign the application cookie ourselves (same claims, roles and collection ids).
+            options.SignInScheme = CookieAuthenticationDefaults.AuthenticationScheme;
+
+            options.Scope.Clear();
+            foreach (var scope in oidcSettings.ParsedScopes) options.Scope.Add(scope);
+
+            options.Events = new OpenIdConnectEvents
+            {
+                // Provider-side failures (state mismatch, discovery error, user denied consent)
+                // must land back on the SPA login page, not on a raw 500.
+                OnRemoteFailure = context =>
+                {
+                    context.HandleResponse();
+                    context.Response.Redirect(OidcErrorRedirect(context.Failure?.Message));
+                    return Task.CompletedTask;
+                },
+
+                // We are the application: resolve the external identity to a local account and
+                // emit our own cookie. Anything else is reported as a clean login error.
+                OnTicketReceived = async context =>
+                {
+                    // Suppress the handler's default sign-in; we issue the cookie below.
+                    context.HandleResponse();
+
+                    var principal = context.Principal;
+                    var subject = principal?.FindFirst("sub")?.Value
+                        ?? principal?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+                    var email = principal?.FindFirst("email")?.Value
+                        ?? principal?.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value;
+                    var displayName = principal?.FindFirst("name")?.Value
+                        ?? principal?.FindFirst("preferred_username")?.Value
+                        ?? principal?.FindFirst(System.Security.Claims.ClaimTypes.Name)?.Value
+                        ?? email;
+
+                    var auth = context.HttpContext.RequestServices.GetRequiredService<IAuthService>();
+                    var cookies = context.HttpContext.RequestServices.GetRequiredService<AuthCookieFactory>();
+
+                    var result = await auth.ResolveExternalUserAsync(
+                        AuthService.OidcProvider, subject ?? string.Empty, email, displayName ?? string.Empty);
+
+                    if (!result.Success || result.User is null)
+                    {
+                        context.Response.Redirect(OidcErrorRedirect(result.Error));
+                        return;
+                    }
+
+                    await cookies.SignInAsync(context.HttpContext, result.User);
+                    context.Response.Redirect("/");
+                },
+            };
+        });
+}
+else if (oidcSettings.Enabled)
+{
+    Console.WriteLine(
+        "Warning: Auth:Oidc:Enabled is true but Authority/ClientId are empty; OIDC login stays disabled.");
+}
 
 // Mongo cookie serialization of the user principal is not needed: the collection ids travel as
 // plain string claims (see CurrentUser), so no custom claim type mapping is required.
@@ -157,3 +240,8 @@ app.MapControllers();
 app.MapFallbackToFile("index.html");
 
 app.Run();
+
+// Sends the SPA back to /login with a machine-readable reason instead of a bare 500 when the
+// OIDC round-trip cannot be completed.
+static string OidcErrorRedirect(string? reason) =>
+    "/login?error=" + Uri.EscapeDataString(string.IsNullOrWhiteSpace(reason) ? "oidc_login_failed" : reason);
