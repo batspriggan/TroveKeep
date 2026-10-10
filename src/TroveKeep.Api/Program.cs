@@ -133,8 +133,12 @@ await new MigrationRunner(
 Console.WriteLine("Database migrations completed.");
 
 // First-run provisioning: create the admin and its default collection membership (see
-// BootstrapService). No-op once at least one user exists.
-await app.Services.GetRequiredService<BootstrapService>().RunAsync();
+// BootstrapService). No-op once at least one user exists. Resolved from an explicit scope:
+// it depends on scoped repositories, which cannot be resolved from the root provider.
+using (var scope = app.Services.CreateScope())
+{
+    await scope.ServiceProvider.GetRequiredService<BootstrapService>().RunAsync();
+}
 
 if (app.Environment.IsDevelopment())
 {
