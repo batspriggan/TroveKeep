@@ -14,7 +14,8 @@ namespace TroveKeep.Core.Interfaces.Services;
 /// When the caller has selected an active collection (the <c>X-TroveKeep-Collection</c> header),
 /// the visible set is narrowed to that single collection. The header can only restrict access,
 /// never broaden it: it is honoured only when the caller is already a member of the named
-/// collection, otherwise the full membership set is used.
+/// collection, otherwise the full membership set is used. Unlike <see cref="CanAccessAll"/>, the
+/// explicit selection is a display filter and therefore also narrows listings for an admin.
 /// </para>
 /// </summary>
 public interface ICollectionScope
@@ -22,16 +23,23 @@ public interface ICollectionScope
     /// <summary>True for an admin: all collections are visible and writes skip the filter.</summary>
     bool CanAccessAll { get; }
 
+    /// <summary>True when the caller explicitly selected a collection (X-TroveKeep-Collection),
+    /// valid for them. Unlike CanAccessAll this also applies to admins, because it is a display
+    /// filter rather than an authorization rule.</summary>
+    bool HasExplicitCollectionSelection { get; }
+
     /// <summary>
     /// Collections a listing may span, after applying the active-collection filter. Empty means
     /// "nothing visible" for a non-admin — the repositories translate that into a filter matching
     /// no document.
     ///
     /// <para>
-    /// For a non-admin this is the single collection selected via <c>X-TroveKeep-Collection</c> when
-    /// the selection is valid (the caller is a member of it); otherwise it is every collection the
-    /// caller is a member of. An admin is unaffected: the repositories skip the filter entirely
-    /// because <see cref="CanAccessAll"/> is true.
+    /// With an explicit selection this is the single collection named via
+    /// <c>X-TroveKeep-Collection</c> when the selection is valid (the caller is a member of it, or
+    /// the caller is an admin); the selection is a display filter and therefore applies to admins
+    /// too. Without a selection a non-admin gets every collection they are a member of, while an
+    /// admin is unaffected: the repositories skip the filter entirely because
+    /// <see cref="CanAccessAll"/> is true.
     /// </para>
     ///
     /// <para>

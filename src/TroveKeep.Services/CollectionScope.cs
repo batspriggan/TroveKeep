@@ -17,23 +17,32 @@ public class CollectionScope : ICollectionScope
 
     public bool CanAccessAll => _currentUser.IsAdmin;
 
+    /// <summary>
+    /// True when this request carries a usable explicit selection: an active collection that the
+    /// caller may access. <see cref="CanAccess"/> is always true for an admin, so for an admin a
+    /// syntactically valid header counts even if the collection no longer exists. We deliberately
+    /// accept that: the selection is a display filter, and a stale id simply yields an empty list
+    /// until the user clears it — exactly the behaviour a non-admin already gets for a stale
+    /// membership. Verifying existence here would add a DB round-trip to every request and would
+    /// still not cover a collection deleted between the check and the query.
+    /// </summary>
+    public bool HasExplicitCollectionSelection =>
+        _currentUser.ActiveCollectionId is { } active && CanAccess(active);
+
     public IReadOnlyCollection<Guid> VisibleCollectionIds
     {
         get
         {
             // An explicit collection selection (X-TroveKeep-Collection) narrows the visible set to
-            // that single collection, so reads stop spanning every membership of the caller.
+            // that single collection, so reads stop spanning every membership of the caller. It is
+            // a display filter, so unlike CanAccessAll it applies to an admin too.
             //
             // This can only ever shrink access, never widen it: ActiveCollectionId already returns
             // the header solely when the caller is an admin or a member of that collection, and the
             // membership is re-checked here explicitly so a claim-derived active id (which is not
             // validated above) cannot leak a collection the user does not belong to.
-            if (!CanAccessAll
-                && _currentUser.ActiveCollectionId is { } active
-                && _currentUser.CollectionIds.Contains(active))
-            {
+            if (HasExplicitCollectionSelection && _currentUser.ActiveCollectionId is { } active)
                 return new[] { active };
-            }
 
             // No usable selection: keep the pre-existing behaviour (every membership of the user).
             return _currentUser.CollectionIds;

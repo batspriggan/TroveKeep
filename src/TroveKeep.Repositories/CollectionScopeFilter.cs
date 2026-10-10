@@ -14,6 +14,8 @@ internal sealed class UnscopedCollectionScope : ICollectionScope
 
     public bool CanAccessAll => true;
 
+    public bool HasExplicitCollectionSelection => false;
+
     public IReadOnlyCollection<Guid> VisibleCollectionIds => Array.Empty<Guid>();
 
     public IReadOnlyCollection<Guid> AccessibleCollectionIds => Array.Empty<Guid>();
@@ -31,16 +33,19 @@ internal static class CollectionScopeFilter
 {
     /// <summary>
     /// Restricts <paramref name="filter"/> (or "everything", when it is <c>null</c>) to the
-    /// collections visible to the caller. An admin gets the filter untouched; a non-admin with no
-    /// membership gets a filter that matches no document, so a query returns an empty list instead
-    /// of leaking other tenants' rows.
+    /// collections visible to the caller. An explicit <c>X-TroveKeep-Collection</c> selection is a
+    /// display filter and narrows listings for admins too; without one an admin gets the filter
+    /// untouched, while a non-admin with no membership gets a filter that matches no document, so a
+    /// query returns an empty list instead of leaking other tenants' rows.
     /// </summary>
     public static FilterDefinition<TDocument> ScopedTo<TDocument>(
         this ICollectionScope scope,
         Expression<Func<TDocument, Guid>> collectionId,
         FilterDefinition<TDocument>? filter = null)
     {
-        if (scope.CanAccessAll)
+        // An explicit selection overrides the admin bypass: it is a display filter, not an
+        // authorization rule. Only when there is no selection does an admin skip the filter.
+        if (!scope.HasExplicitCollectionSelection && scope.CanAccessAll)
             return filter ?? Builders<TDocument>.Filter.Empty;
 
         var visible = scope.VisibleCollectionIds;
