@@ -28,7 +28,7 @@ public class BoxRepository : IBoxRepository
 
     public async Task<Box?> GetByIdAsync(Guid id)
     {
-        var filter = _scope.ScopedTo<BoxDocument>(d => d.CollectionId,
+        var filter = _scope.ScopedToAccessible<BoxDocument>(d => d.CollectionId,
             Builders<BoxDocument>.Filter.Eq(x => x.Id, id));
         var doc = await _boxes.Find(filter).FirstOrDefaultAsync();
         return doc is null ? null : ToModel(doc);

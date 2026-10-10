@@ -29,7 +29,7 @@ public class BulkPieceRepository : IBulkPieceRepository
 
     public async Task<BulkPiece?> GetByIdAsync(Guid id)
     {
-        var filter = _scope.ScopedTo<BulkPieceDocument>(d => d.CollectionId,
+        var filter = _scope.ScopedToAccessible<BulkPieceDocument>(d => d.CollectionId,
             Builders<BulkPieceDocument>.Filter.Eq(x => x.Id, id));
         var doc = await _collection.Find(filter).FirstOrDefaultAsync();
         return doc is null ? null : ToModel(doc);

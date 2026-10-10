@@ -31,9 +31,10 @@ public class RoomExportService : IRoomExportService
     public async Task<(byte[] Data, string FileName)> ExportRoomAsync(Guid roomId)
     {
         // This service talks to IMongoDatabase directly (it has no repository dependency), so the
-        // collection filter has to be applied here too: a room outside the caller's scope must not
-        // be exported.
-        var roomFilter = _scope.ScopedTo<RoomDocument>(d => d.CollectionId,
+        // collection filter has to be applied here too: a room the caller is not a member of must
+        // not be exported. The active-collection header does not apply here: exporting a room by id
+        // is a per-resource read, not a listing.
+        var roomFilter = _scope.ScopedToAccessible<RoomDocument>(d => d.CollectionId,
             Builders<RoomDocument>.Filter.Eq(x => x.Id, roomId));
         var room = await _db.GetCollection<RoomDocument>("rooms")
             .Find(roomFilter)
@@ -42,7 +43,7 @@ public class RoomExportService : IRoomExportService
 
         var templateIds = room.Layout.Select(p => p.TemplateId).Distinct().ToHashSet();
 
-        var templateFilter = _scope.ScopedTo<TableTemplateDocument>(d => d.CollectionId,
+        var templateFilter = _scope.ScopedToAccessible<TableTemplateDocument>(d => d.CollectionId,
             Builders<TableTemplateDocument>.Filter.In(x => x.Id, templateIds));
         var allTemplates = await _db.GetCollection<TableTemplateDocument>("table_templates")
             .Find(templateFilter)

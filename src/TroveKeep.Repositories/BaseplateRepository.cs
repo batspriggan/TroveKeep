@@ -30,7 +30,7 @@ public class BaseplateRepository : IBaseplateRepository
 
     public async Task<Baseplate?> GetByIdAsync(Guid id)
     {
-        var filter = _scope.ScopedTo<BaseplateDocument>(d => d.CollectionId,
+        var filter = _scope.ScopedToAccessible<BaseplateDocument>(d => d.CollectionId,
             Builders<BaseplateDocument>.Filter.Eq(x => x.Id, id));
         var doc = await _baseplates.Find(filter).FirstOrDefaultAsync();
         return doc is null ? null : ToModel(doc);

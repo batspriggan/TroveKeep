@@ -28,7 +28,7 @@ public class TableTemplateRepository : ITableTemplateRepository
 
     public async Task<TableTemplate?> GetByIdAsync(Guid id)
     {
-        var filter = _scope.ScopedTo<TableTemplateDocument>(d => d.CollectionId,
+        var filter = _scope.ScopedToAccessible<TableTemplateDocument>(d => d.CollectionId,
             Builders<TableTemplateDocument>.Filter.Eq(x => x.Id, id));
         var doc = await _templates.Find(filter).FirstOrDefaultAsync();
         return doc is null ? null : ToModel(doc);

@@ -29,7 +29,7 @@ public class LegoSetRepository : ILegoSetRepository
 
     public async Task<LegoSet?> GetByIdAsync(Guid id)
     {
-        var filter = _scope.ScopedTo<LegoSetDocument>(d => d.CollectionId,
+        var filter = _scope.ScopedToAccessible<LegoSetDocument>(d => d.CollectionId,
             Builders<LegoSetDocument>.Filter.Eq(x => x.Id, id));
         var doc = await _collection.Find(filter).FirstOrDefaultAsync();
         return doc is null ? null : ToModel(doc);

@@ -28,7 +28,7 @@ public class DrawerContainerRepository : IDrawerContainerRepository
 
     public async Task<DrawerContainer?> GetByIdAsync(Guid id)
     {
-        var filter = _scope.ScopedTo<DrawerContainerDocument>(d => d.CollectionId,
+        var filter = _scope.ScopedToAccessible<DrawerContainerDocument>(d => d.CollectionId,
             Builders<DrawerContainerDocument>.Filter.Eq(x => x.Id, id));
         var doc = await _containers.Find(filter).FirstOrDefaultAsync();
         return doc is null ? null : ToModel(doc);

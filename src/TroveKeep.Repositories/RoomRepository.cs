@@ -28,7 +28,7 @@ public class RoomRepository : IRoomRepository
 
     public async Task<Room?> GetByIdAsync(Guid id)
     {
-        var filter = _scope.ScopedTo<RoomDocument>(d => d.CollectionId,
+        var filter = _scope.ScopedToAccessible<RoomDocument>(d => d.CollectionId,
             Builders<RoomDocument>.Filter.Eq(x => x.Id, id));
         var doc = await _rooms.Find(filter).FirstOrDefaultAsync();
         return doc is null ? null : ToModel(doc);

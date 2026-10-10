@@ -16,6 +16,8 @@ internal sealed class UnscopedCollectionScope : ICollectionScope
 
     public IReadOnlyCollection<Guid> VisibleCollectionIds => Array.Empty<Guid>();
 
+    public IReadOnlyCollection<Guid> AccessibleCollectionIds => Array.Empty<Guid>();
+
     public Guid? DefaultCollectionId => null;
 
     public bool CanAccess(Guid collectionId) => true;
@@ -50,6 +52,31 @@ internal static class CollectionScopeFilter
         }
 
         var scoped = Builders<TDocument>.Filter.In(collectionId, visible);
+        return filter is null ? scoped : Builders<TDocument>.Filter.And(filter, scoped);
+    }
+
+    /// <summary>
+    /// Restricts <paramref name="filter"/> to the collections the caller is a member of, ignoring
+    /// the active-collection selection. Use this for per-resource lookups (fetch/update/delete by
+    /// id): the active collection narrows what a listing shows, but it must not turn a legitimate
+    /// id — one whose collection the caller already belongs to — into a 404.
+    /// </summary>
+    public static FilterDefinition<TDocument> ScopedToAccessible<TDocument>(
+        this ICollectionScope scope,
+        Expression<Func<TDocument, Guid>> collectionId,
+        FilterDefinition<TDocument>? filter = null)
+    {
+        if (scope.CanAccessAll)
+            return filter ?? Builders<TDocument>.Filter.Empty;
+
+        var accessible = scope.AccessibleCollectionIds;
+        if (accessible.Count == 0)
+        {
+            // No membership: a per-resource lookup must miss, not fall through to "everything".
+            return Builders<TDocument>.Filter.In(collectionId, Array.Empty<Guid>());
+        }
+
+        var scoped = Builders<TDocument>.Filter.In(collectionId, accessible);
         return filter is null ? scoped : Builders<TDocument>.Filter.And(filter, scoped);
     }
 
