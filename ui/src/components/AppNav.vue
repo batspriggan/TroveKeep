@@ -18,12 +18,13 @@
            on mobile too (the other mobile-hide links are hidden inside the hamburger). -->
       <RouterLink v-if="settings.tablePlannerEnabled" to="/table-planner" :class="{ 'mobile-hide': !auth.isGuest }">Table Planner</RouterLink>
       <span class="user-block">
-        <span class="user-name">
-          {{ auth.state.user?.displayName }}
-          <span v-if="appMode.isSingleUser" class="mode-badge">single-user</span>
-        </span>
-        <!-- No session to end in single-user mode: the button would bounce straight back. -->
-        <button v-if="!appMode.isSingleUser" class="logout" @click="onLogout" title="Logout">Esci</button>
+        <!-- In single-user there is no session and no account to show: the badge alone explains
+             that requests run as the technical administrator. -->
+        <span v-if="appMode.isSingleUser" class="mode-badge">single-user</span>
+        <template v-else>
+          <span class="user-name">{{ auth.state.user?.displayName }}</span>
+          <button class="logout" @click="onLogout" title="Logout">Esci</button>
+        </template>
       </span>
     </div>
   </nav>
@@ -94,6 +95,8 @@ nav {
   display: flex;
   gap: 1.5rem;
   align-items: center;
+  /* Let the user block sit at the far right instead of hugging the last link. */
+  flex: 1;
 }
 
 .user-block {
@@ -183,6 +186,12 @@ a.router-link-active {
 
   .nav-links a.router-link-active {
     border-bottom-color: #3b82f6;
+  }
+
+  /* The menu is a vertical list here: keep the user block aligned like the other rows. */
+  .user-block {
+    margin-left: 0;
+    padding-top: 0.6rem;
   }
 
   .mobile-hide { display: none; }
