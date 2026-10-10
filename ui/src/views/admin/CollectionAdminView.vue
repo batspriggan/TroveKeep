@@ -140,6 +140,9 @@ import {
   removeCollectionMember,
 } from '../../api/collections.js'
 import { getAllUsers } from '../../api/users.js'
+import { useAuth } from '../../composables/useAuth.js'
+
+const auth = useAuth()
 
 const accesses = ['Viewer', 'Editor', 'Owner']
 
@@ -203,6 +206,10 @@ async function create() {
     form.name = ''
     form.description = ''
     notice.value = 'Collection created.'
+    // The create forms in the other views decide whether to ask for a collection from
+    // auth.collections, which is only refreshed by /api/auth/me: without this the new collection
+    // would not be offered until the next login.
+    await auth.fetchMe()
     await load()
   } catch (e) {
     error.value = e.message
@@ -245,6 +252,7 @@ async function doDelete() {
     if (editing.value?.id === target.id) editing.value = null
     if (openId.value === target.id) openId.value = null
     notice.value = 'Collection deleted.'
+    await auth.fetchMe()
     await load()
   } catch (e) {
     error.value = e.message
