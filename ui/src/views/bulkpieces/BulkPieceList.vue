@@ -36,19 +36,23 @@
       </form>
     </section>
 
+    <!-- The filter bar lives outside the loading branch on purpose: replacing it with the
+         loading placeholder on every keystroke unmounted the search input, which lost focus and
+         the caret. Only the results below it are swapped out. -->
+    <div class="filter-bar">
+      <input :value="query" @input="onQueryInput" type="search" placeholder="Filter by ID or description…" class="filter-input" />
+      <select v-model="assignedFilter" class="filter-select" @change="onFilterChange">
+        <option :value="null">All</option>
+        <option :value="true">Assigned</option>
+        <option :value="false">Unassigned</option>
+      </select>
+      <CollectionFilter @change="onCollectionChange" />
+      <span class="total-count">{{ total }} piece{{ total !== 1 ? 's' : '' }}</span>
+    </div>
+
     <p v-if="loading" class="loading-msg">Loading…</p>
 
     <template v-else>
-      <div class="filter-bar">
-        <input :value="query" @input="onQueryInput" type="search" placeholder="Filter by ID or description…" class="filter-input" />
-        <select v-model="assignedFilter" class="filter-select" @change="onFilterChange">
-          <option :value="null">All</option>
-          <option :value="true">Assigned</option>
-          <option :value="false">Unassigned</option>
-        </select>
-        <CollectionFilter @change="onCollectionChange" />
-        <span class="total-count">{{ total }} piece{{ total !== 1 ? 's' : '' }}</span>
-      </div>
 
       <!-- Desktop table -->
       <table class="pieces-table">

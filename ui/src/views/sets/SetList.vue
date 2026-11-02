@@ -61,19 +61,23 @@
       </form>
     </section>
 
+    <!-- The filter bar lives outside the loading branch on purpose: replacing it with the
+         loading placeholder on every keystroke unmounted the search input, which lost focus and
+         the caret. Only the results below it are swapped out. -->
+    <div class="filter-bar">
+      <input :value="query" @input="onQueryInput" type="search" placeholder="Filter by set number or description…" class="filter-input" />
+      <div class="type-filter">
+        <button type="button" class="type-btn" :class="{ active: typeFilter === 'all' }" @click="typeFilter = 'all'">All</button>
+        <button type="button" class="type-btn" :class="{ active: typeFilter === 'official' }" @click="typeFilter = 'official'">Official</button>
+        <button type="button" class="type-btn" :class="{ active: typeFilter === 'moc' }" @click="typeFilter = 'moc'">MOC</button>
+      </div>
+      <CollectionFilter @change="onCollectionChange" />
+      <span class="total-count">{{ total }} set{{ total !== 1 ? 's' : '' }}</span>
+    </div>
+
     <p v-if="loading" class="loading-msg">Loading…</p>
 
     <template v-else>
-      <div class="filter-bar">
-        <input :value="query" @input="onQueryInput" type="search" placeholder="Filter by set number or description…" class="filter-input" />
-        <div class="type-filter">
-          <button type="button" class="type-btn" :class="{ active: typeFilter === 'all' }" @click="typeFilter = 'all'">All</button>
-          <button type="button" class="type-btn" :class="{ active: typeFilter === 'official' }" @click="typeFilter = 'official'">Official</button>
-          <button type="button" class="type-btn" :class="{ active: typeFilter === 'moc' }" @click="typeFilter = 'moc'">MOC</button>
-        </div>
-        <CollectionFilter @change="onCollectionChange" />
-        <span class="total-count">{{ total }} set{{ total !== 1 ? 's' : '' }}</span>
-      </div>
 
       <!-- Desktop table -->
       <table class="sets-table">
