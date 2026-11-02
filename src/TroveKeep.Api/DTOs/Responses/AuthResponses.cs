@@ -40,3 +40,13 @@ public record CollectionMemberResponse(
     string DisplayName,
     string Access,
     DateTimeOffset AddedAt);
+
+/// <summary>
+/// A user that could be added to a collection, for the member picker. Deliberately reduced to the
+/// identity fields: the collection Owner needs to recognise the account, not to administer it
+/// (the full user list stays admin-only — <c>UsersController</c>).
+/// </summary>
+public record CollectionMemberCandidateResponse(
+    Guid UserId,
+    string Email,
+    string DisplayName);

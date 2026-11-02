@@ -1,5 +1,6 @@
 import { computed, ref } from 'vue'
 import { useActiveCollection } from './useActiveCollection.js'
+import { useAuth } from './useAuth.js'
 
 /**
  * Helper for the create forms when the user belongs to several collections.
@@ -12,19 +13,30 @@ import { useActiveCollection } from './useActiveCollection.js'
  *
  * With a single collection there is nothing to choose: no field is rendered and the POST runs
  * with the current state.
+ *
+ * The picker only offers collections the user may write into, and `canWrite` tells the host view
+ * whether the create form makes sense at all: a Viewer gets a read-only view with no add form
+ * (the backend would answer 403 anyway).
  */
 export function useCollectionCreate() {
-  const { collections, activeCollectionId, setActiveCollection } = useActiveCollection()
+  const auth = useAuth()
+  const { activeCollectionId, setActiveCollection, writableCollections } = useActiveCollection()
 
-  const needsCollectionChoice = computed(() => collections.value.length > 1)
+  // The choice is only needed when the backend cannot infer the collection on its own, i.e. when
+  // the user has more than one membership — even if only one of them is writable.
+  const needsCollectionChoice = computed(() => auth.collections.length > 1)
 
-  // The pick defaults to the current filter (or the first collection when the filter is
+  // The pick defaults to the current filter (or the first writable collection when the filter is
   // "All collections"), and follows the filter until the user picks one explicitly.
   const picked = ref(null)
   const collectionId = computed({
-    get: () => picked.value ?? activeCollectionId.value ?? collections.value[0]?.id ?? null,
+    get: () =>
+      picked.value ?? activeCollectionId.value ?? writableCollections.value[0]?.id ?? auth.collections[0]?.id ?? null,
     set: (value) => { picked.value = value },
   })
+
+  /** True when the collection the form would create into is writable. */
+  const canWrite = computed(() => auth.canWriteIn(collectionId.value))
 
   /** Runs `run` with the chosen collection active, then restores the previous filter. */
   async function withCollection(run) {
@@ -38,5 +50,7 @@ export function useCollectionCreate() {
     }
   }
 
-  return { collections, needsCollectionChoice, collectionId, withCollection }
+  return {
+    collections: writableCollections, needsCollectionChoice, collectionId, canWrite, withCollection,
+  }
 }

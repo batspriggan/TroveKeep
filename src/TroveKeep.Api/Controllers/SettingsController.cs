@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using TroveKeep.Core.Interfaces.Services;
+using TroveKeep.Core.Models;
 
 namespace TroveKeep.Api.Controllers;
 
@@ -25,6 +26,10 @@ public class SettingsController : ControllerBase
     }
 
     [HttpPost("restore")]
+    // A restore replaces every collection's data at once: there is no collection scope to
+    // authorize it against (see CollectionWriteTargetResolver's exclusion list), so it is
+    // restricted to an admin instead of any authenticated user.
+    [Authorize(Roles = nameof(UserRole.Admin))]
     [RequestSizeLimit(500_000_000)]
     [RequestFormLimits(MultipartBodyLengthLimit = 500_000_000)]
     public async Task<IActionResult> Restore(IFormFile file)

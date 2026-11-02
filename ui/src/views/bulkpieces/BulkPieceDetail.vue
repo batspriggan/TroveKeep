@@ -33,7 +33,7 @@
             <img :src="`/api/bulkpieces/${id}/image`" class="piece-image" alt="" />
           </div>
 
-          <div class="card">
+          <div v-if="canWrite" class="card">
             <h2>Edit Piece</h2>
             <div class="edit-grid">
               <div class="form-field">
@@ -59,7 +59,7 @@
             </div>
           </div>
 
-          <div class="card danger-zone">
+          <div v-if="canWrite" class="card danger-zone">
             <button class="danger" @click="showConfirm = true">Delete Piece</button>
           </div>
         </div>
@@ -106,12 +106,12 @@
                         :disabled="qtySaving"
                         @keyup.enter="updateAllocQty(a)"
                       />
-                      <button class="btn-update" :disabled="qtySaving" @click="updateAllocQty(a)" title="Update quantity">✓</button>
+                      <button v-if="canWrite" class="btn-update" :disabled="qtySaving" @click="updateAllocQty(a)" title="Update quantity">✓</button>
                     </template>
                     <template v-else>{{ a.quantity }}</template>
                   </td>
                   <td class="td-action">
-                    <button class="btn-remove" @click="deallocate(a)">Remove</button>
+                    <button v-if="canWrite" class="btn-remove" @click="deallocate(a)">Remove</button>
                   </td>
                 </tr>
               </tbody>
@@ -121,7 +121,7 @@
             <fieldset class="alloc-forms" :disabled="fullyAllocated">
               <div class="alloc-form-group">
                 <p class="alloc-form-label">Assign to Box</p>
-                <form class="alloc-row" @submit.prevent="submitBoxStorage">
+                <form v-if="canWrite" class="alloc-row" @submit.prevent="submitBoxStorage">
                   <select v-model="selectedBoxId" class="alloc-select">
                     <option value="">— select box —</option>
                     <option v-for="b in boxes" :key="b.id" :value="b.id">{{ b.name }}</option>
@@ -133,7 +133,7 @@
 
               <div class="alloc-form-group">
                 <p class="alloc-form-label">Assign to Drawer</p>
-                <form class="alloc-row" @submit.prevent="submitDrawerStorage">
+                <form v-if="canWrite" class="alloc-row" @submit.prevent="submitDrawerStorage">
                   <div class="alloc-col">
                     <select v-model="selectedContainerId" class="alloc-select" @change="onContainerChange">
                       <option :value="null">— select container —</option>
@@ -158,7 +158,7 @@
             <p v-if="fullyAllocated" class="alloc-full-msg">All quantity allocated — remove a location to free up space.</p>
 
             <div v-if="piece.storageAllocations?.length" class="clear-row">
-              <button type="button" class="danger" @click="clearStorage">Clear All Storage</button>
+              <button v-if="canWrite" type="button" class="danger" @click="clearStorage">Clear All Storage</button>
             </div>
 
             <p v-if="storageError" class="error">{{ storageError }}</p>
@@ -190,9 +190,12 @@ import { getAllDrawerContainers, getDrawerContainerDrawers } from '../../api/dra
 import { getColorsList } from '../../api/archives.js'
 import { useLabels } from '../../composables/useLabels.js'
 import ConfirmDialog from '../../components/ConfirmDialog.vue'
+import { useActiveCollection } from '../../composables/useActiveCollection.js'
 import ColorSelect from '../../components/ColorSelect.vue'
 
 const route = useRoute()
+// A Viewer reads the piece and its storage, with no write control.
+const { canWrite } = useActiveCollection()
 const router = useRouter()
 const id = route.params.id
 

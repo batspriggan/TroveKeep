@@ -3,7 +3,7 @@
   <div class="page">
     <h1>Bulk Pieces</h1>
 
-    <section class="add-section">
+    <section v-if="canWrite" class="add-section">
       <form @submit.prevent="submit">
         <div class="add-row">
           <div class="form-field add-id-field">
@@ -84,7 +84,7 @@
             <td class="td-qty">{{ p.quantity }}</td>
             <td class="td-storage">{{ (p.storageAllocations?.length) ? `${p.storageAllocations.length} location(s)` : '—' }}</td>
             <td class="td-action">
-              <button class="btn-delete" @click="confirmDelete(p)" aria-label="Delete piece">Delete</button>
+              <button v-if="canWrite" class="btn-delete" @click="confirmDelete(p)" aria-label="Delete piece">Delete</button>
             </td>
           </tr>
           <tr v-if="pieces.length === 0">
@@ -128,6 +128,7 @@
             </div>
           </div>
           <button
+            v-if="canWrite"
             class="card-delete"
             @click.prevent="confirmDelete(p)"
             aria-label="Delete piece"
@@ -175,7 +176,7 @@ const loading = ref(true)
 const error = ref('')
 const deleteTarget = ref(null)
 const form = ref({ legoId: '', legoColorUid: '', description: '', quantity: 1 })
-const { collections, needsCollectionChoice, collectionId, withCollection } = useCollectionCreate()
+const { collections, needsCollectionChoice, collectionId, canWrite, withCollection } = useCollectionCreate()
 
 let debounceTimer = null
 function onQueryInput(e) {

@@ -13,7 +13,8 @@
       <RouterLink v-if="!auth.isGuest" to="/baseplates">Baseplates</RouterLink>
       <RouterLink v-if="!auth.isGuest" to="/settings">Settings</RouterLink>
       <RouterLink v-if="auth.isAdmin" to="/admin/users" class="admin-link">Users</RouterLink>
-      <RouterLink v-if="auth.isAdmin" to="/admin/collections" class="admin-link">Collections</RouterLink>
+      <!-- Also shown to a collection Owner: it is where members are managed. -->
+      <RouterLink v-if="auth.isAdmin || auth.ownsAnyCollection" to="/admin/collections" class="admin-link">Collections</RouterLink>
       <!-- A Guest has the Table Planner as their only destination, so the link stays visible
            on mobile too (the other mobile-hide links are hidden inside the hamburger). -->
       <RouterLink v-if="settings.tablePlannerEnabled" to="/table-planner" :class="{ 'mobile-hide': !auth.isGuest }">Table Planner</RouterLink>

@@ -1,18 +1,23 @@
 using TroveKeep.Core.Interfaces.Services;
+using TroveKeep.Core.Models;
 
 namespace TroveKeep.Services;
 
 /// <summary>
-/// Collection isolation derived entirely from <see cref="ICurrentUser"/>. Registered scoped, so it
-/// is computed once per request from the auth cookie claims and the active-collection header.
+/// Collection isolation derived from <see cref="ICurrentUser"/> (visible set, from the cookie
+/// claims) and <see cref="ICollectionMembershipCache"/> (access level, from <c>collection_members</c>).
+/// Registered scoped, so it is computed once per request from the auth cookie claims, the
+/// active-collection header and the membership lookup primed by <c>CollectionMembershipMiddleware</c>.
 /// </summary>
 public class CollectionScope : ICollectionScope
 {
     private readonly ICurrentUser _currentUser;
+    private readonly ICollectionMembershipCache _memberships;
 
-    public CollectionScope(ICurrentUser currentUser)
+    public CollectionScope(ICurrentUser currentUser, ICollectionMembershipCache memberships)
     {
         _currentUser = currentUser;
+        _memberships = memberships;
     }
 
     public bool CanAccessAll => _currentUser.IsAdmin;
@@ -75,4 +80,29 @@ public class CollectionScope : ICollectionScope
 
     public bool CanAccess(Guid collectionId) =>
         CanAccessAll || AccessibleCollectionIds.Contains(collectionId);
+
+    /// <summary>
+    /// Highest level the caller holds. An admin is modelled as <see cref="CollectionAccess.Owner"/>
+    /// of every collection (they may write and manage members anywhere), a member gets the level
+    /// stored on their membership, and a non-member gets <c>null</c>.
+    /// </summary>
+    public CollectionAccess? AccessFor(Guid collectionId)
+    {
+        if (CanAccessAll) return CollectionAccess.Owner;
+
+        // Not loaded yet (a code path that runs outside the request pipeline, e.g. the migrations'
+        // hand-wired object graph): no level is known, so the caller is treated as a non-member and
+        // nothing is writable. The middleware primes the cache on every real request.
+        if (!_memberships.IsLoaded) return null;
+
+        return _memberships.AccessByCollection.TryGetValue(collectionId, out var access)
+            ? access
+            : null;
+    }
+
+    public bool CanWrite(Guid collectionId) =>
+        CanAccessAll || (AccessFor(collectionId) is CollectionAccess.Editor or CollectionAccess.Owner);
+
+    public bool CanManageMembers(Guid collectionId) =>
+        CanAccessAll || (AccessFor(collectionId) == CollectionAccess.Owner);
 }

@@ -5,9 +5,12 @@ import { getRoom, getAllTemplates, saveAggregateBpLayout } from '../../api/table
 import { getAllBaseplates, getBaseplateImageUrl, getPlannerEntities } from '../../api/baseplates.js'
 import { getSet } from '../../api/sets.js'
 import { generateAggregatePdf } from '../../utils/platePdf.js'
+import { useActiveCollection } from '../../composables/useActiveCollection.js'
 
 const route = useRoute()
 const router = useRouter()
+// A Viewer opens the placement canvas read-only: no palette to add plates, no save, no removal.
+const { canWrite } = useActiveCollection()
 const roomId = route.params.roomId
 const repId  = route.params.repId
 
@@ -913,13 +916,13 @@ async function fixLayout() {
         <button class="pdf-btn" :disabled="pdfExporting" @click="exportPdf" title="Export layout as PDF">
           {{ pdfExporting ? 'Exporting…' : 'Export PDF' }}
         </button>
-        <button class="save-btn" :class="{ dirty: isDirty }" :disabled="!isDirty" @click="save">Save</button>
+        <button v-if="canWrite" class="save-btn" :class="{ dirty: isDirty }" :disabled="!isDirty" @click="save">Save</button>
       </div>
     </div>
 
     <div v-if="needsFix" class="fix-banner">
       <span>This layout was saved with an older plate-size formula. Positions may be off by up to 2 mm.</span>
-      <button class="fix-btn" @click="fixLayout">Fix Plate Positions</button>
+      <button v-if="canWrite" class="fix-btn" @click="fixLayout">Fix Plate Positions</button>
     </div>
 
     <div v-if="loading" class="loading">Loading…</div>
@@ -975,6 +978,7 @@ async function fixLayout() {
             <template v-if="!collapsedCategories.has(group.category)">
               <button
                 v-for="bp in group.items"
+                v-show="canWrite"
                 :key="bp.id"
                 class="bp-card"
                 @click="addBaseplate(bp)"
@@ -1008,6 +1012,7 @@ async function fixLayout() {
           <template v-if="!collapsedSets">
             <button
               v-for="ent in plannerEntities"
+              v-show="canWrite"
               :key="ent.setId"
               class="bp-card set-card"
               :class="{ 'set-card--dragging': paletteDragId === ent.setId }"
@@ -1038,8 +1043,8 @@ async function fixLayout() {
           <!-- Selected plate toolbar -->
           <div class="toolbar">
             <template v-if="selectedId">
-              <button class="tool-btn" @click="rotateSelected">↺ Rotate 90°</button>
-              <button class="tool-btn danger" @click="removePlate(selectedId)">✕ Remove</button>
+              <button v-if="canWrite" class="tool-btn" @click="rotateSelected">↺ Rotate 90°</button>
+              <button v-if="canWrite" class="tool-btn danger" @click="removePlate(selectedId)">✕ Remove</button>
             </template>
             <!-- Plain placed-plate count (no derived estimate) -->
             <span v-if="placedPlates.length" class="plate-count">{{ placedPlates.length }} placed</span>

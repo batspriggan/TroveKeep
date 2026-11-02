@@ -144,7 +144,11 @@ public class AuthController : ControllerBase
             .Select(c => new CollectionSummaryResponse(
                 c.Id,
                 c.Name,
-                user.Role == UserRole.Admin && !byCollection.ContainsKey(c.Id)
+                // An admin may write and manage members everywhere (CollectionScope.AccessFor returns
+                // Owner for any collection), so the reported level is "Admin" even when the caller
+                // happens to be a Viewer member of that collection: the UI derives the controls it
+                // shows from this value.
+                user.Role == UserRole.Admin
                     ? "Admin"
                     : byCollection[c.Id].ToString()))
             .OrderBy(c => c.Name)

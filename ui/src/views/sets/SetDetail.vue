@@ -33,7 +33,7 @@
             <div v-if="photos.length" class="photo-grid">
               <div v-for="p in photos" :key="p.id" class="photo-item">
                 <img :src="`/api/sets/${id}/photos/${p.id}`" class="photo-thumb" alt="" />
-                <button class="photo-delete" @click="deletePhoto(p.id)" title="Delete photo">✕</button>
+                <button v-if="canWrite" class="photo-delete" @click="deletePhoto(p.id)" title="Delete photo">✕</button>
               </div>
             </div>
             <p v-else class="no-photos">No photos yet.</p>
@@ -77,14 +77,14 @@
                   </td>
                   <td class="td-qty">{{ a.quantity }}</td>
                   <td class="td-action">
-                    <button class="btn-remove" @click="deallocate(a.storageId)">Remove</button>
+                    <button v-if="canWrite" class="btn-remove" @click="deallocate(a.storageId)">Remove</button>
                   </td>
                 </tr>
               </tbody>
             </table>
             <p v-else class="no-storage">Not stored anywhere yet.</p>
 
-            <div class="alloc-form-group">
+            <div v-if="canWrite" class="alloc-form-group">
               <p class="alloc-form-label">Assign to Box</p>
               <form class="alloc-row" @submit.prevent="submitStorage">
                 <select v-model="selectedBoxId" class="alloc-select">
@@ -96,7 +96,7 @@
               </form>
             </div>
 
-            <div v-if="set.storageAllocations?.length" class="clear-row">
+            <div v-if="canWrite && set.storageAllocations?.length" class="clear-row">
               <button type="button" class="danger" @click="clearStorage">Clear All Storage</button>
             </div>
 
@@ -140,7 +140,7 @@
                     <span v-else class="muted">—</span>
                   </td>
                   <td class="td-action">
-                    <button class="btn-remove" :disabled="bpBusy" @click="removeBpReservation(r)">Remove</button>
+                    <button v-if="canWrite" class="btn-remove" :disabled="bpBusy" @click="removeBpReservation(r)">Remove</button>
                   </td>
                 </tr>
               </tbody>
@@ -149,7 +149,7 @@
               No baseplates declared for this {{ set?.isMoc ? 'MOC' : 'set' }}.
             </p>
 
-            <div class="alloc-form-group bp-add-group">
+            <div v-if="canWrite" class="alloc-form-group bp-add-group">
               <p class="alloc-form-label">Add baseplate</p>
               <form class="alloc-row bp-add-row" @submit.prevent="addBpReservation">
                 <select v-model="bpSelectedId" class="alloc-select">
@@ -186,7 +186,7 @@
 
         <!-- Edit + delete (bottom-left on desktop, last on mobile) -->
         <div class="col-edit">
-          <div class="card">
+          <div v-if="canWrite" class="card">
             <h2>Edit</h2>
             <div class="edit-grid">
               <div class="form-field">
@@ -206,7 +206,7 @@
             <p v-if="editError" class="error inline-error">{{ editError }}</p>
           </div>
 
-          <div class="card danger-zone">
+          <div v-if="canWrite" class="card danger-zone">
             <button class="danger" @click="showConfirm = true">Delete Set</button>
           </div>
         </div>
@@ -232,10 +232,13 @@ import {
 } from '../../api/baseplates.js'
 import { useLabels } from '../../composables/useLabels.js'
 import ConfirmDialog from '../../components/ConfirmDialog.vue'
+import { useActiveCollection } from '../../composables/useActiveCollection.js'
 
 const route = useRoute()
 const router = useRouter()
 const id = route.params.id
+// A Viewer reads the set, its storage and its reservations, but gets no write control.
+const { canWrite } = useActiveCollection()
 
 const set = ref(null)
 const boxes = ref([])

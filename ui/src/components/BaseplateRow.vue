@@ -21,13 +21,13 @@
         :alt="bp.name"
         @error="e => e.target.style.display = 'none'"
       />
-      <label class="bp-upload-label" :title="bp.imageCached ? 'Replace image' : 'Upload image'">
+      <label v-if="canWrite" class="bp-upload-label" :title="bp.imageCached ? 'Replace image' : 'Upload image'">
         <input type="file" accept="image/*" style="display:none" @change="e => onBpFileChange(e, bp.id)" />
         <span class="bp-upload-link">{{ bp.imageCached ? 'Replace' : 'Upload' }}</span>
       </label>
-      <button v-if="bpPendingFile[bp.id]" class="primary small" @click="handlers.saveBpImage(bp.id)">Save</button>
+      <button v-if="canWrite && bpPendingFile[bp.id]" class="primary small" @click="handlers.saveBpImage(bp.id)">Save</button>
       <button
-        v-if="bp.imageCached"
+        v-if="canWrite && bp.imageCached"
         class="remove-img-btn"
         title="Remove the uploaded preview"
         @click="handlers.removeBpImage(bp.id)"
@@ -54,7 +54,8 @@
     <span v-else class="muted">—</span>
   </td>
   <td class="num-col">
-    <div class="stepper">
+    <span v-if="!canWrite">{{ bp.quantity ?? 0 }}</span>
+    <div v-else class="stepper">
       <button class="step-btn" :disabled="rowLocked(bp) || (bp.quantity ?? 0) <= 0" @click="handlers.saveQuantity(bp, (bp.quantity ?? 0) - 1)">−</button>
       <input
         class="step-input"
@@ -73,9 +74,11 @@
     <span v-else class="muted">—</span>
   </td>
   <td class="actions-col">
-    <button class="import-btn" :disabled="rowLocked(bp)" @click="handlers.openEdit(bp)">Edit</button>
-    <button v-if="bp.needsReview" class="import-btn confirm-btn" :disabled="rowLocked(bp)" @click="handlers.confirmRow(bp)">Confirm</button>
-    <button class="import-btn danger-btn" :disabled="rowLocked(bp)" @click="handlers.removeRow(bp)">Delete</button>
+    <template v-if="canWrite">
+      <button class="import-btn" :disabled="rowLocked(bp)" @click="handlers.openEdit(bp)">Edit</button>
+      <button v-if="bp.needsReview" class="import-btn confirm-btn" :disabled="rowLocked(bp)" @click="handlers.confirmRow(bp)">Confirm</button>
+      <button class="import-btn danger-btn" :disabled="rowLocked(bp)" @click="handlers.removeRow(bp)">Delete</button>
+    </template>
   </td>
 </tr>
 
@@ -95,12 +98,12 @@
         <li v-for="r in bp.reservations" :key="r.setId" class="res-item">
           <span class="res-desc">{{ r.setDescription || r.setId }}</span>
           <span class="res-qty">×{{ r.quantity }}</span>
-          <button class="import-btn danger-btn small-btn" :disabled="rowLocked(bp)" @click="handlers.removeMoc(bp, r.setId)">Remove</button>
+          <button v-if="canWrite" class="import-btn danger-btn small-btn" :disabled="rowLocked(bp)" @click="handlers.removeMoc(bp, r.setId)">Remove</button>
         </li>
       </ul>
       <p v-else class="muted res-empty">No reservations.</p>
 
-      <div class="add-moc">
+      <div v-if="canWrite" class="add-moc">
         <div class="search-wrap">
           <input
             class="search-input"
@@ -153,5 +156,7 @@ const props = defineProps({
   getImageUrl: { type: Function, required: true },
   bpPendingFile: { type: Object, required: true },
   handlers: { type: Object, required: true },
+  // A Viewer of the collection reads the catalogue but gets no control that would be a 403.
+  canWrite: { type: Boolean, default: true },
 })
 </script>

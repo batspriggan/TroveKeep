@@ -2,7 +2,7 @@
   <div>
     <h1>Drawer Containers</h1>
 
-    <form class="form-row" @submit.prevent="submit">
+    <form v-if="canWrite" class="form-row" @submit.prevent="submit">
       <div class="form-field">
         <label>Name *</label>
         <input v-model="form.name" required placeholder="Container name" />
@@ -51,7 +51,7 @@
           <td>{{ c.description || '—' }}</td>
           <td>{{ c.drawerCount }}</td>
           <td>
-            <button class="danger" @click="confirmDelete(c)">Delete</button>
+            <button v-if="canWrite" class="danger" @click="confirmDelete(c)">Delete</button>
           </td>
         </tr>
         <tr v-if="containers.length === 0">
@@ -94,7 +94,7 @@ const loading = ref(true)
 const error = ref('')
 const deleteTarget = ref(null)
 const form = ref({ name: '', description: '' })
-const { collections, needsCollectionChoice, collectionId, withCollection } = useCollectionCreate()
+const { collections, needsCollectionChoice, collectionId, canWrite, withCollection } = useCollectionCreate()
 
 async function load() {
   loading.value = true

@@ -2,11 +2,15 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getRoom, getAllTemplates, saveRoomLayout, updateRoom, fitRoomToLayout } from '../../api/tableplanner.js'
+import { useActiveCollection } from '../../composables/useActiveCollection.js'
 import { getAllBaseplates } from '../../api/baseplates.js'
 import { generateRoomPdf } from '../../utils/roomPdf.js'
 
 const route = useRoute()
 const router = useRouter()
+// A Viewer opens the planner read-only: the layout is still rendered, but nothing that would be
+// persisted (rename, resize, Fit to tables, drag-and-drop toolbar, Save) is offered.
+const { canWrite } = useActiveCollection()
 const roomId = route.params.id
 
 // Scale: 100 px = 1 m → 1 px = 1 cm
@@ -817,7 +821,7 @@ async function saveLayout() {
         </template>
         <template v-else>
           <h1>{{ room.name }}</h1>
-          <button class="rename-btn" @click="startRename" title="Rename room">✎</button>
+          <button v-if="canWrite" class="rename-btn" @click="startRename" title="Rename room">✎</button>
         </template>
 
         <!-- Room size: editable, floored at the layout's footprint. -->
@@ -847,12 +851,15 @@ async function saveLayout() {
           </span>
         </template>
         <template v-else>
+          <span v-if="!canWrite" class="size-badge">{{ (room.widthCm / 100).toFixed(2) }} × {{ (room.depthCm / 100).toFixed(2) }} m</span>
           <button
+            v-if="canWrite"
             class="size-badge"
             @click="startSizeEdit"
             title="Change room size"
           >{{ (room.widthCm / 100).toFixed(2) }} × {{ (room.depthCm / 100).toFixed(2) }} m ✎</button>
           <button
+            v-if="canWrite"
             class="small-btn"
             :disabled="fitting || placedTables.length === 0"
             title="Move the tables to the origin and resize the room to their exact footprint"
@@ -874,6 +881,7 @@ async function saveLayout() {
           {{ pdfExporting ? 'Exporting…' : 'Export PDF' }}
         </button>
         <button
+          v-if="canWrite"
           class="primary save-btn"
           :class="{ dirty: isDirty }"
           :disabled="!isDirty"
@@ -890,6 +898,7 @@ async function saveLayout() {
         <span class="palette-label">Templates:</span>
         <button
           v-for="t in templates"
+          v-show="canWrite"
           :key="t.id"
           class="chip"
           :style="{ background: t.color }"
@@ -966,8 +975,8 @@ async function saveLayout() {
             @mousedown="startDrag($event, p)"
             @touchstart.prevent="onTouchStart($event, p)"
           >
-            <button class="remove-btn" @mousedown.stop @click="removeTable(p.instanceId)" title="Remove">✕</button>
-            <button class="rotate-btn" @mousedown.stop @click="rotateTable(p)" title="Rotate 90°">⟳</button>
+            <button v-if="canWrite" class="remove-btn" @mousedown.stop @click="removeTable(p.instanceId)" title="Remove">✕</button>
+            <button v-if="canWrite" class="rotate-btn" @mousedown.stop @click="rotateTable(p)" title="Rotate 90°">⟳</button>
             <span class="table-label">{{ templateMap[p.templateId]?.description ?? '?' }}</span>
             <span class="table-dims" v-if="templateMap[p.templateId]">
               {{ effW(p) }}x{{ effH(p) }} cm
@@ -986,6 +995,7 @@ async function saveLayout() {
             }"
           >
             <button
+              v-if="canWrite"
               class="agg-rotate-handle"
               @mousedown.stop
               @click.stop="rotateAggregate(selectedAggregateId)"

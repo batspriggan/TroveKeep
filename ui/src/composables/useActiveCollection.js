@@ -77,8 +77,20 @@ export function useActiveCollection() {
     () => activeCollectionId.value ?? auth.collections[0]?.id ?? null,
   )
 
+  // Access level of the collection currently in view, and what it allows. The write buttons are
+  // hidden when it is a Viewer's: the backend refuses those calls with 403 anyway, this keeps the
+  // UI honest. With the "all collections" filter on a user who has different rights per collection
+  // the first collection decides — the exotic case; the create forms use the collection picked in
+  // `useCollectionCreate`, which is exact.
+  const activeAccess = computed(() => auth.accessFor(effectiveCollectionId.value))
+  const canWrite = computed(() => auth.canWriteIn(effectiveCollectionId.value))
+  const canManageMembers = computed(() => auth.canManageMembersIn(effectiveCollectionId.value))
+  // Collections the user may write into: what a create form may offer.
+  const writableCollections = computed(() => collections.value.filter((c) => auth.canWriteIn(c.id)))
+
   return {
     collections, activeCollectionId, effectiveCollectionId, showSelector,
+    activeAccess, canWrite, canManageMembers, writableCollections,
     setActiveCollection, clearActiveCollection,
   }
 }

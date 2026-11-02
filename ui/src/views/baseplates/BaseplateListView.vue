@@ -30,7 +30,7 @@
           </span>
         </div>
 
-        <div class="q-options">
+        <div v-if="canWrite" class="q-options">
           <!-- 1. Reconcile -->
           <div class="q-option">
             <div class="q-option-label">1 · Convert to real plates</div>
@@ -234,9 +234,9 @@
           :title="grouped ? 'Show a flat list' : 'Group by type and size'"
           @click="grouped = !grouped"
         >{{ grouped ? '▾ Grouped' : '▸ Group by type & size' }}</button>
-        <button class="primary small" @click="openAdd">+ Add Baseplate</button>
+        <button v-if="canWrite" class="primary small" @click="openAdd">+ Add Baseplate</button>
         <button
-          v-if="filteredReviewCount > 0"
+          v-if="canWrite && filteredReviewCount > 0"
           class="import-btn"
           :disabled="confirmingAll"
           @click="confirmAllFiltered"
@@ -245,7 +245,7 @@
     </section>
 
     <!-- ── Add / Edit form ── -->
-    <section v-if="formOpen" class="bp-form">
+    <section v-if="formOpen && canWrite" class="bp-form">
       <h2>{{ editingId ? 'Edit baseplate' : 'Add baseplate' }}</h2>
 
       <div class="form-grid">
@@ -404,6 +404,7 @@
                     :get-image-url="getBaseplateImageUrl"
                     :bp-pending-file="bpPendingFile"
                     :handlers="rowHandlers"
+                    :can-write="canWrite"
                   />
                 </template>
               </template>
@@ -422,6 +423,7 @@
           :get-image-url="getBaseplateImageUrl"
           :bp-pending-file="bpPendingFile"
           :handlers="rowHandlers"
+          :can-write="canWrite"
         />
       </tbody>
     </table>
@@ -446,7 +448,7 @@ import {
 } from '../../api/baseplates.js'
 
 const settings = useSettings()
-const { collections, needsCollectionChoice, collectionId, withCollection } = useCollectionCreate()
+const { collections, needsCollectionChoice, collectionId, canWrite, withCollection } = useCollectionCreate()
 
 const ROAD_SHAPES = ['Straight', 'Curve', 'Junction', 'TJunction', 'Crossroad']
 const CANONICAL_SIZES = ['8x8', '8x16', '16x16', '16x32', '32x32', '32x48', '48x48']

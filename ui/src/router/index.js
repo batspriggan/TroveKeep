@@ -46,7 +46,9 @@ const routes = [
   { path: '/archives', component: ArchivesView },
   { path: '/settings', component: SettingsView },
   { path: '/admin/users', component: UserAdminView, meta: { admin: true } },
-  { path: '/admin/collections', component: CollectionAdminView, meta: { admin: true } },
+  // Reachable by an admin and by the Owner of at least one collection (member management);
+  // the view hides the admin-only controls.
+  { path: '/admin/collections', component: CollectionAdminView, meta: { collectionAdmin: true } },
   { path: '/baseplates', component: BaseplateListView },
   { path: '/table-planner', component: TablePlannerView },
   { path: '/table-planner/rooms/:id', component: RoomPlannerView, meta: { fullscreen: true } },
@@ -93,6 +95,8 @@ router.beforeEach((to) => {
   // Admin gate: the user/collection administration pages are off limits to everyone else.
   // Single-user runs as the technical admin, so it passes even before fetchMe settles.
   if (to.meta.admin && !auth.isAdmin && !singleUser) return '/'
+  // Collection administration is also the member-management page of a collection Owner.
+  if (to.meta.collectionAdmin && !auth.isAdmin && !auth.ownsAnyCollection && !singleUser) return '/'
 
   if (to.path.startsWith('/table-planner') && !settings.tablePlannerEnabled) return '/'
   if ((to.path.startsWith('/bulkpieces') || to.path.startsWith('/drawercontainers') || to.path.startsWith('/drawers')) && !settings.bulkPiecesEnabled) return '/'

@@ -3,7 +3,7 @@
   <div class="page">
     <h1>Lego Sets</h1>
 
-    <section class="add-section">
+    <section v-if="canWrite" class="add-section">
       <div class="add-tabs">
         <button type="button" class="add-tab" :class="{ active: !form.isMoc }" @click="onMocToggle(false)">Official Set</button>
         <button type="button" class="add-tab" :class="{ active: form.isMoc }" @click="onMocToggle(true)">MOC</button>
@@ -105,7 +105,7 @@
             <td class="td-qty">{{ s.quantity }}</td>
             <td class="td-storage">{{ s.storageAllocations?.length ? `${s.storageAllocations.length} location(s)` : '—' }}</td>
             <td class="td-action">
-              <button class="btn-delete" @click="confirmDelete(s)" aria-label="Delete set">Delete</button>
+              <button v-if="canWrite" class="btn-delete" @click="confirmDelete(s)" aria-label="Delete set">Delete</button>
             </td>
           </tr>
           <tr v-if="sets.length === 0">
@@ -145,7 +145,7 @@
               <span class="card-storage">{{ s.storageAllocations?.length ? `${s.storageAllocations.length} location(s)` : 'Not stored' }}</span>
             </div>
           </div>
-          <button class="card-delete" @click.prevent="confirmDelete(s)" aria-label="Delete set">✕</button>
+          <button v-if="canWrite" class="card-delete" @click.prevent="confirmDelete(s)" aria-label="Delete set">✕</button>
         </RouterLink>
         <div v-if="totalPages > 1" class="pagination pagination-mobile">
           <button class="page-btn" :disabled="page === 1" @click="page--; load()">Prev</button>
@@ -192,7 +192,7 @@ const error = ref('')
 const deleteTarget = ref(null)
 const form = ref({ setNumber: '', description: '', quantity: 1, isMoc: false })
 const selectedArchiveSet = ref(null)
-const { collections, needsCollectionChoice, collectionId, withCollection } = useCollectionCreate()
+const { collections, needsCollectionChoice, collectionId, canWrite, withCollection } = useCollectionCreate()
 
 let debounceTimer = null
 function onQueryInput(e) {

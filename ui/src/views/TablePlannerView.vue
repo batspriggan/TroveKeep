@@ -9,7 +9,7 @@ import CollectionFilter from '../components/CollectionFilter.vue'
 import { useCollectionCreate } from '../composables/useCollectionCreate.js'
 
 const router = useRouter()
-const { collections, needsCollectionChoice, collectionId, withCollection } = useCollectionCreate()
+const { collections, needsCollectionChoice, collectionId, canWrite, withCollection } = useCollectionCreate()
 
 // ── Rooms ────────────────────────────────────────────────────────────────────
 const rooms = ref([])
@@ -112,7 +112,7 @@ onMounted(() => loadRooms())
         <CollectionFilter @change="onCollectionChange" />
       </div>
 
-      <form class="inline-form" @submit.prevent="submitRoom">
+      <form v-if="canWrite" class="inline-form" @submit.prevent="submitRoom">
         <input v-model="roomForm.name" placeholder="Room name" />
         <label>W (m) <input v-model.number="roomForm.widthM" type="number" min="1" max="100" step="0.1" style="width:80px" /></label>
         <label>D (m) <input v-model.number="roomForm.depthM" type="number" min="1" max="100" step="0.1" style="width:80px" /></label>
@@ -163,12 +163,12 @@ onMounted(() => loadRooms())
             <td>{{ r.layout.length }}</td>
             <td class="actions">
               <button class="primary small" @click="openRoom(r.id)">Open</button>
-              <button class="small" @click="copyRoom(r)" title="Copy this room, layout included">Duplicate</button>
+              <button v-if="canWrite" class="small" @click="copyRoom(r)" title="Copy this room, layout included">Duplicate</button>
               <button class="small" @click="exportRoom(r.id)">Export</button>
-              <button class="small" @click="toggleObsolete(r)">
+              <button v-if="canWrite" class="small" @click="toggleObsolete(r)">
                 {{ r.obsolete ? 'Restore' : 'Archive' }}
               </button>
-              <button class="danger small" @click="removeRoom(r.id)">Delete</button>
+              <button v-if="canWrite" class="danger small" @click="removeRoom(r.id)">Delete</button>
             </td>
           </tr>
         </tbody>

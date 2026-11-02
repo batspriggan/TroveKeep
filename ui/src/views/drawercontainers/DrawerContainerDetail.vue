@@ -23,10 +23,10 @@
                 <input type="file" accept="image/*" class="file-input" @change="onFileChange" />
                 <span>Choose file</span>
               </label>
-              <button type="button" class="btn-secondary mobile-only" @click="cameraInput.click()">Take Photo</button>
+              <button v-if="canWrite" type="button" class="btn-secondary mobile-only" @click="cameraInput.click()">Take Photo</button>
               <input ref="cameraInput" type="file" accept="image/*" capture="environment" style="display:none" @change="onCameraCapture" />
-              <button class="primary" :disabled="!photoFile" @click="uploadPhoto">Upload</button>
-              <button v-if="container.imageCached" class="danger" @click="removePhoto">Remove</button>
+              <button v-if="canWrite" class="primary" :disabled="!photoFile" @click="uploadPhoto">Upload</button>
+              <button v-if="canWrite && container.imageCached" class="danger" @click="removePhoto">Remove</button>
             </div>
             <p v-if="photoError" class="error">{{ photoError }}</p>
           </div>
@@ -75,8 +75,8 @@
                   </td>
                   <td v-if="settings.bulkPiecesEnabled" class="td-count">{{ d.bulkPieceCount }}</td>
                   <td class="td-action">
-                    <button v-if="d.bulkPieceCount > 0" class="btn-action" @click="openMove(d)">Move…</button>
-                    <button class="btn-delete" @click="confirmDeleteDrawer(d)">Delete</button>
+                    <button v-if="canWrite && d.bulkPieceCount > 0" class="btn-action" @click="openMove(d)">Move…</button>
+                    <button v-if="canWrite" class="btn-delete" @click="confirmDeleteDrawer(d)">Delete</button>
                   </td>
                 </tr>
               </tbody>
@@ -99,7 +99,7 @@
 
             <div class="add-drawer">
               <p class="add-drawer-label">Add Drawer</p>
-              <form class="add-drawer-row" @submit.prevent="submitDrawer">
+              <form v-if="canWrite" class="add-drawer-row" @submit.prevent="submitDrawer">
                 <label class="pos-label">
                   Position
                   <input v-model.number="drawerForm.position" type="number" min="1" required class="pos-input" />
@@ -125,12 +125,12 @@
                 <input v-model="editForm.description" placeholder="Optional" />
               </div>
             </div>
-            <button class="primary" @click="submitEdit">Save</button>
+            <button v-if="canWrite" class="primary" @click="submitEdit">Save</button>
             <p v-if="editError" class="error">{{ editError }}</p>
           </div>
 
           <div class="card danger-zone">
-            <button class="danger" @click="showConfirm = true">Delete Container</button>
+            <button v-if="canWrite" class="danger" @click="showConfirm = true">Delete Container</button>
           </div>
         </div>
       </div>
@@ -191,12 +191,15 @@ import {
 import { deleteDrawer, moveDrawer } from '../../api/drawers.js'
 import { useLabels } from '../../composables/useLabels.js'
 import ConfirmDialog from '../../components/ConfirmDialog.vue'
+import { useActiveCollection } from '../../composables/useActiveCollection.js'
 import { useSettings } from '../../composables/useSettings.js'
 
 const settings = useSettings()
 const { config, ensureConfig, printOrDownload } = useLabels()
 
 const route = useRoute()
+// A Viewer reads the container and its drawers, with no write control.
+const { canWrite } = useActiveCollection()
 const router = useRouter()
 const id = route.params.id
 

@@ -136,7 +136,8 @@
       </button>
     </section>
 
-    <section class="card">
+    <!-- A restore rewrites every collection at once: admin only (SettingsController enforces it). -->
+    <section v-if="auth.isAdmin" class="card">
       <h2>Restore</h2>
       <p class="muted">Upload a previously downloaded backup file. <strong>This will replace all current inventory data.</strong></p>
       <p v-if="restoreError" class="error">{{ restoreError }}</p>

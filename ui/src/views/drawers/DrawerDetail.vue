@@ -12,7 +12,7 @@
 
       <div class="card">
         <h2>Edit Drawer</h2>
-        <form class="form-row" @submit.prevent="submitEdit">
+        <form v-if="canWrite" class="form-row" @submit.prevent="submitEdit">
           <div class="form-field">
             <label>Label</label>
             <input v-model="editForm.label" placeholder="Optional label" />
@@ -54,7 +54,7 @@
                   :disabled="qtySaving"
                   @keyup.enter="updateAllocQty(p)"
                 />
-                <button class="btn-update" :disabled="qtySaving" @click="updateAllocQty(p)" title="Update quantity">✓</button>
+                <button v-if="canWrite" class="btn-update" :disabled="qtySaving" @click="updateAllocQty(p)" title="Update quantity">✓</button>
               </td>
             </tr>
           </tbody>
@@ -64,8 +64,8 @@
       </div>
 
       <div class="card actions-card">
-        <button class="secondary" :disabled="emptyLoading" @click="showEmptyConfirm = true">Empty Drawer</button>
-        <button class="danger" @click="showConfirm = true">Delete Drawer</button>
+        <button v-if="canWrite" class="secondary" :disabled="emptyLoading" @click="showEmptyConfirm = true">Empty Drawer</button>
+        <button v-if="canWrite" class="danger" @click="showConfirm = true">Delete Drawer</button>
       </div>
     </template>
 
@@ -91,8 +91,11 @@ import { useRoute, useRouter } from 'vue-router'
 import { getDrawerContents, updateDrawer, deleteDrawer, emptyDrawer } from '../../api/drawers.js'
 import { setDrawerQuantity } from '../../api/bulkpieces.js'
 import ConfirmDialog from '../../components/ConfirmDialog.vue'
+import { useActiveCollection } from '../../composables/useActiveCollection.js'
 
 const route = useRoute()
+// A Viewer reads the drawer and its contents, with no write control.
+const { canWrite } = useActiveCollection()
 const router = useRouter()
 const containerId = route.params.containerId
 const position = parseInt(route.params.position)

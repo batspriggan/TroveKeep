@@ -2,7 +2,7 @@
   <div>
     <h1>Boxes</h1>
 
-    <form class="form-row" @submit.prevent="submit">
+    <form v-if="canWrite" class="form-row" @submit.prevent="submit">
       <div class="form-field">
         <label>Name *</label>
         <input v-model="form.name" required placeholder="Box name" />
@@ -43,7 +43,7 @@
           <td>{{ b.setCount }}</td>
           <td v-if="settings.bulkPiecesEnabled">{{ b.bulkPieceCount }}</td>
           <td>
-            <button class="danger" @click="confirmDelete(b)">Delete</button>
+            <button v-if="canWrite" class="danger" @click="confirmDelete(b)">Delete</button>
           </td>
         </tr>
         <tr v-if="boxes.length === 0">
@@ -74,7 +74,7 @@ import { useSettings } from '../../composables/useSettings.js'
 import { useCollectionCreate } from '../../composables/useCollectionCreate.js'
 
 const settings = useSettings()
-const { collections, needsCollectionChoice, collectionId, withCollection } = useCollectionCreate()
+const { collections, needsCollectionChoice, collectionId, canWrite, withCollection } = useCollectionCreate()
 
 const boxes = ref([])
 const filterText = ref('')

@@ -31,11 +31,22 @@ async function request(path, options = {}) {
     // The API reports errors as `{ "error": "..." }`; prefer that over the raw body.
     const text = await res.text()
     let message = text
+    let reported = false
     try {
       const data = JSON.parse(text)
-      if (data?.error) message = data.error
+      if (data?.error) {
+        message = data.error
+        reported = true
+      }
     } catch {
       // non-JSON error body
+    }
+    // A write refused because the membership is read-only (Viewer) carries an `{ error }` body from
+    // the backend. A refusal without one (framework-level "Forbidden", empty body) still has to
+    // read as a permission problem instead of a generic status code.
+    if (!reported && res.status === 403) {
+      message = 'You do not have permission to do that (read-only access to this collection).'
+      reported = true
     }
     const error = new Error(message || `HTTP ${res.status}`)
     // Callers that react differently per status (e.g. the setup form on 403/409) need it.

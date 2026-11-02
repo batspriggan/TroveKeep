@@ -5,8 +5,8 @@
     <p v-if="error" class="error">{{ error }}</p>
     <p v-if="notice" class="success">{{ notice }}</p>
 
-    <!-- Create -->
-    <section class="card">
+    <!-- Create (admin only: an Owner manages the members of the collections it owns) -->
+    <section v-if="isAdmin" class="card">
       <h2>New collection</h2>
       <form class="form-row" @submit.prevent="create">
         <div class="form-field">
@@ -23,8 +23,8 @@
       </form>
     </section>
 
-    <!-- Edit -->
-    <section v-if="editing" class="card">
+    <!-- Edit (admin only) -->
+    <section v-if="editing && isAdmin" class="card">
       <h2>Edit {{ editing.name }}</h2>
       <form class="form-row" @submit.prevent="saveEdit">
         <div class="form-field">
@@ -63,11 +63,16 @@
               <td class="td-desc">{{ c.description || '—' }}</td>
               <td class="td-date">{{ formatDate(c.createdAt) }}</td>
               <td class="td-action">
-                <button class="link-btn" @click="toggleMembers(c)">
+                <!-- Members: admin, or the Owner of this collection. An Editor sees nothing. -->
+                <button
+                  v-if="auth.canManageMembersIn(c.id)"
+                  class="link-btn"
+                  @click="toggleMembers(c)"
+                >
                   {{ openId === c.id ? 'Hide members' : 'Members' }}
                 </button>
-                <button class="link-btn" @click="startEdit(c)">Edit</button>
-                <button class="link-btn danger-text" @click="deleteTarget = c">Delete</button>
+                <button v-if="isAdmin" class="link-btn" @click="startEdit(c)">Edit</button>
+                <button v-if="isAdmin" class="link-btn danger-text" @click="deleteTarget = c">Delete</button>
               </td>
             </tr>
 
@@ -136,18 +141,20 @@ import {
   updateCollection,
   deleteCollection,
   getCollectionMembers,
+  getCollectionMemberCandidates,
   addCollectionMember,
   removeCollectionMember,
 } from '../../api/collections.js'
-import { getAllUsers } from '../../api/users.js'
 import { useAuth } from '../../composables/useAuth.js'
 
 const auth = useAuth()
+// Creating, renaming and deleting a collection is an admin operation; an Owner only manages the
+// members of the collections it owns. The backend enforces both, this only shapes the page.
+const isAdmin = computed(() => auth.isAdmin)
 
 const accesses = ['Viewer', 'Editor', 'Owner']
 
 const collections = ref([])
-const users = ref([])
 const loading = ref(true)
 const error = ref('')
 const notice = ref('')
@@ -161,18 +168,19 @@ const savingEdit = ref(false)
 
 const deleteTarget = ref(null)
 
-// Members of the single expanded collection.
+// Members of the single expanded collection, plus the accounts that could be added to it (fetched
+// per collection: GET /api/users is admin-only, Owners get the candidates endpoint instead).
 const openId = ref(null)
 const members = ref([])
+const candidates = ref([])
 const membersLoading = ref(false)
 const membersError = ref('')
 const memberForm = reactive({ userId: '', access: 'Editor' })
 const addingMember = ref(false)
 
-const addableUsers = computed(() => {
-  const taken = new Set(members.value.map((m) => m.userId))
-  return users.value.filter((u) => !taken.has(u.id))
-})
+const addableUsers = computed(() =>
+  candidates.value.map((c) => ({ id: c.userId, email: c.email, displayName: c.displayName })),
+)
 
 function clearMessages() {
   error.value = ''
@@ -188,9 +196,7 @@ async function load() {
   loading.value = true
   clearMessages()
   try {
-    const [cols, allUsers] = await Promise.all([getAllCollections(), getAllUsers()])
-    collections.value = cols
-    users.value = allUsers
+    collections.value = await getAllCollections()
   } catch (e) {
     error.value = e.message
   } finally {
@@ -275,8 +281,10 @@ async function loadMembers(id) {
   membersLoading.value = true
   membersError.value = ''
   members.value = []
+  candidates.value = []
   try {
     members.value = await getCollectionMembers(id)
+    candidates.value = await getCollectionMemberCandidates(id)
   } catch (e) {
     membersError.value = e.message
   } finally {

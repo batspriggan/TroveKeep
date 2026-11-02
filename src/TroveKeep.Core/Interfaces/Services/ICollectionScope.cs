@@ -1,13 +1,25 @@
+using TroveKeep.Core.Models;
+
 namespace TroveKeep.Core.Interfaces.Services;
 
 /// <summary>
 /// Request-scoped answer to "which collections may the caller read and write?".
 ///
 /// <para>
-/// It is a thin, testable layer over <see cref="ICurrentUser"/>: decoupling the repositories from
-/// the raw claims makes the isolation rules explicit and gives every repository a single, shared
-/// notion of the visible set. Admins bypass the filter entirely; everybody else is restricted to
-/// the collections they are a member of.
+/// It is a thin, testable layer over <see cref="ICurrentUser"/> (for the visible set) and
+/// <see cref="ICollectionMembershipCache"/> (for the access level): decoupling the repositories
+/// from the raw claims makes the isolation rules explicit and gives every repository a single,
+/// shared notion of the visible set. Admins bypass the filter entirely; everybody else is
+/// restricted to the collections they are a member of.
+/// </para>
+///
+/// <para>
+/// Reading and writing are authorized differently on purpose. <see cref="CanAccessAll"/> (the
+/// admin bypass) plus membership decide what can be <em>read</em> — see
+/// <see cref="VisibleCollectionIds"/> and <see cref="CanAccess"/>; membership <em>level</em> decides
+/// what can be <em>written</em> — see <see cref="AccessFor"/>, <see cref="CanWrite"/> and
+/// <see cref="CanManageMembers"/>. Being a member is no longer sufficient to mutate a collection:
+/// a <see cref="CollectionAccess.Viewer"/> is read-only.
 /// </para>
 ///
 /// <para>
@@ -69,6 +81,35 @@ public interface ICollectionScope
     /// <summary>
     /// True when the caller may access <paramref name="collectionId"/> as a resource. Unlike
     /// <see cref="VisibleCollectionIds"/> this is not narrowed by the active-collection header.
+    /// This is the <em>read</em> boundary: on its own it says nothing about writing, which is
+    /// governed by <see cref="CanWrite"/>.
     /// </summary>
     bool CanAccess(Guid collectionId);
+
+    /// <summary>
+    /// Highest access the caller holds on the collection: <see cref="CollectionAccess.Owner"/> for
+    /// an admin (all collections, member or not), otherwise the membership level, or <c>null</c>
+    /// when the caller is not a member of that collection.
+    ///
+    /// <para>
+    /// The level comes from <c>collection_members</c> via <see cref="ICollectionMembershipCache"/>
+    /// (loaded once per request), never from a client-supplied value: this is the input the write
+    /// endpoints are authorized against.
+    /// </para>
+    /// </summary>
+    CollectionAccess? AccessFor(Guid collectionId);
+
+    /// <summary>
+    /// True when the caller may create/update/delete inside the collection: an admin always, an
+    /// <see cref="CollectionAccess.Editor"/> or <see cref="CollectionAccess.Owner"/> member, and
+    /// never a <see cref="CollectionAccess.Viewer"/> or a non-member.
+    /// </summary>
+    bool CanWrite(Guid collectionId);
+
+    /// <summary>
+    /// True when the caller may manage the membership of the collection: an admin, or the
+    /// <see cref="CollectionAccess.Owner"/> of that collection. An
+    /// <see cref="CollectionAccess.Editor"/> can write the collection's data but not its members.
+    /// </summary>
+    bool CanManageMembers(Guid collectionId);
 }

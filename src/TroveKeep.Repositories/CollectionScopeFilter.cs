@@ -1,6 +1,7 @@
 using System.Linq.Expressions;
 using MongoDB.Driver;
 using TroveKeep.Core.Interfaces.Services;
+using TroveKeep.Core.Models;
 
 namespace TroveKeep.Repositories;
 
@@ -23,6 +24,12 @@ internal sealed class UnscopedCollectionScope : ICollectionScope
     public Guid? DefaultCollectionId => null;
 
     public bool CanAccess(Guid collectionId) => true;
+
+    public CollectionAccess? AccessFor(Guid collectionId) => CollectionAccess.Owner;
+
+    public bool CanWrite(Guid collectionId) => true;
+
+    public bool CanManageMembers(Guid collectionId) => true;
 }
 
 /// <summary>

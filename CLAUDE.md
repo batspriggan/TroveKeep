@@ -34,6 +34,21 @@ Api → Repositories → Core
 
 **Frontend:** `ui/src/api/<entity>.js` wraps `client.js`. Vue Router 4, no Pinia.
 
+**Collection access (multi-user):** every domain row carries a `CollectionId`; `ICollectionScope`
+is the request-scoped answer to "what may I read/write here". Reads are scoped by the repository
+filter (`ScopedTo` for listings, `ScopedToAccessible` for fetch-by-id) and admins bypass it.
+Writes are authorized by membership **level**: `Viewer` is read-only, `Editor`/`Owner` may write,
+an admin may write everywhere. It is enforced in one place — the global `CollectionWriteGuardFilter`
+(`IAsyncActionFilter`) answers **403** for every non-GET request whose target collection the caller
+cannot write; `ICollectionWriteTargetResolver` derives that collection from the route id (loaded
+through the scoped repository), else from `DefaultCollectionId` (creates), else the endpoint is a
+declared exclusion (Auth, Setup, Mode, Users, Settings, Archives, Labels, Scanner, Search) — plus
+`CollectionsController`, which checks `CanManageMembers` per action (admin or Owner, never an
+Editor). Levels come from `collection_members` via `ICollectionMembershipCache`, primed once per
+request by `CollectionMembershipMiddleware` — not from a cookie claim, so a demotion takes effect
+immediately. The SPA mirrors this (`useActiveCollection().canWrite`, `canManageMembers`) to hide
+controls, but the UI is not the boundary.
+
 ## Domain
 
 - Primary entities: `LegoSet`, `BulkPiece` — storage tracked in `storage_allocations` collection (separate, not embedded).

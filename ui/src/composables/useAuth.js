@@ -58,11 +58,37 @@ async function logout() {
 }
 
 export function useAuth() {
+  /**
+   * Access level the user holds on a collection as reported by `/api/auth/me`:
+   * `"Viewer" | "Editor" | "Owner" | "Admin"`, or `null` when the collection is not in the
+   * caller's list. The backend is the boundary (a Viewer gets a 403 on every write); this is only
+   * used to render the controls the user can actually use.
+   */
+  function accessFor(collectionId) {
+    if (!collectionId) return null
+    const key = String(collectionId).toLowerCase()
+    const found = (state.user?.collections ?? []).find((c) => c.id?.toLowerCase() === key)
+    return found?.access ?? null
+  }
+
+  /** True when the user may create/update/delete inside the collection. */
+  function canWriteIn(collectionId) {
+    return ['Editor', 'Owner', 'Admin'].includes(accessFor(collectionId))
+  }
+
+  /** True when the user may manage the members of the collection (admin or Owner). */
+  function canManageMembersIn(collectionId) {
+    return ['Owner', 'Admin'].includes(accessFor(collectionId))
+  }
+
   return {
     state,
     fetchMe,
     login,
     logout,
+    accessFor,
+    canWriteIn,
+    canManageMembersIn,
     get isAuthenticated() {
       return state.user != null
     },
@@ -74,6 +100,14 @@ export function useAuth() {
     },
     get collections() {
       return state.user?.collections ?? []
+    },
+    /** True when at least one visible collection is writable (used to hide empty add sections). */
+    get canWriteAnywhere() {
+      return (state.user?.collections ?? []).some((c) => canWriteIn(c.id))
+    },
+    /** True when the user owns at least one collection (owner of the collection admin page). */
+    get ownsAnyCollection() {
+      return (state.user?.collections ?? []).some((c) => canManageMembersIn(c.id))
     },
   }
 }

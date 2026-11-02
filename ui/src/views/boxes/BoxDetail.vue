@@ -34,10 +34,10 @@
                 <input type="file" accept="image/*" class="file-input" @change="onFileChange" />
                 <span>Choose file</span>
               </label>
-              <button type="button" class="btn-secondary mobile-only" @click="cameraInput.click()">Take Photo</button>
+              <button v-if="canWrite" type="button" class="btn-secondary mobile-only" @click="cameraInput.click()">Take Photo</button>
               <input ref="cameraInput" type="file" accept="image/*" capture="environment" style="display:none" @change="onCameraCapture" />
-              <button class="primary" :disabled="!photoFile" @click="uploadPhoto">Upload</button>
-              <button v-if="box.imageCached" class="danger" @click="removePhoto">Remove</button>
+              <button v-if="canWrite" class="primary" :disabled="!photoFile" @click="uploadPhoto">Upload</button>
+              <button v-if="canWrite && box.imageCached" class="danger" @click="removePhoto">Remove</button>
             </div>
             <p v-if="photoError" class="error">{{ photoError }}</p>
           </div>
@@ -131,11 +131,14 @@ import { useRoute, useRouter } from 'vue-router'
 import { getBoxContents, updateBox, deleteBox, uploadBoxImage, deleteBoxImage } from '../../api/boxes.js'
 import { useLabels } from '../../composables/useLabels.js'
 import ConfirmDialog from '../../components/ConfirmDialog.vue'
+import { useActiveCollection } from '../../composables/useActiveCollection.js'
 import { useSettings } from '../../composables/useSettings.js'
 
 const settings = useSettings()
 
 const route = useRoute()
+// A Viewer reads the box and its contents, with no write control.
+const { canWrite } = useActiveCollection()
 const router = useRouter()
 const id = route.params.id
 

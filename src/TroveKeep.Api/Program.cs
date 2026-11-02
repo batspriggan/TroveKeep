@@ -19,7 +19,12 @@ BsonSerializer.RegisterSerializer(new GuidSerializer(GuidRepresentation.Standard
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddControllers(options => options.Filters.Add<ApiExceptionFilter>());
+builder.Services.AddControllers(options =>
+{
+    options.Filters.Add<ApiExceptionFilter>();
+    // Enforces the collection access level (Viewer = read-only) on every write endpoint.
+    options.Filters.Add<CollectionWriteGuardFilter>();
+});
 builder.Services.AddOpenApi();
 
 // Multi-user auth: cookie sessions (not bearer tokens) because the SPA is served same-origin.
@@ -170,7 +175,10 @@ builder.Services.AddScoped<IBaseplateRepository, BaseplateRepository>();
 
 // Services
 builder.Services.AddScoped<ICurrentUser, CurrentUser>();
+// Access levels come from collection_members, not from the cookie claims: see ICollectionMembershipCache.
+builder.Services.AddScoped<ICollectionMembershipCache, CollectionMembershipCache>();
 builder.Services.AddScoped<ICollectionScope, CollectionScope>();
+builder.Services.AddScoped<ICollectionWriteTargetResolver, CollectionWriteTargetResolver>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<ICollectionService, CollectionService>();
@@ -247,6 +255,9 @@ app.UseAuthentication();
 // Must sit between authentication and authorization: it may reject an uninitialized instance or
 // replace the principal with the technical account of single-user mode.
 app.UseMiddleware<AppModeMiddleware>();
+// Primes the caller's collection access levels for this request (sync reads afterwards); sits
+// before authorization because the write guard filter consults them.
+app.UseMiddleware<CollectionMembershipMiddleware>();
 app.UseAuthorization();
 app.MapControllers();
 // Serves index.html for every non-API path (including /login), so the SPA router takes over.
