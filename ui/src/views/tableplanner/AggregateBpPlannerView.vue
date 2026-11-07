@@ -6,7 +6,8 @@ import { getAllBaseplates, getBaseplateImageUrl, getPlannerEntities } from '../.
 import { getSet } from '../../api/sets.js'
 import { generateAggregatePdf } from '../../utils/platePdf.js'
 import { useActiveCollection } from '../../composables/useActiveCollection.js'
-import { MARQUEE_THRESHOLD_PX, normaliseMarquee, rectsIntersect } from '../../utils/marquee.js'
+import { MARQUEE_THRESHOLD_PX, normaliseMarquee } from '../../utils/marquee.js'
+import { collectUnitKeys, nextSelection, planRigidDrag, rectsOverlap } from '../../utils/selection.js'
 
 const route = useRoute()
 const router = useRouter()
@@ -17,6 +18,7 @@ const repId  = route.params.repId
 
 // px per mm at zoom=1  (1 stud=8mm; 32×32 Standard plate = 255.8mm ≈ 128px)
 const SCALE = 0.5
+const STUD = 8             // stud pitch in mm — the placement grid
 const PADDING_MM = 80     // canvas padding around the aggregate bounding box
 const SNAP_MM = 12        // edge-to-edge snap threshold in mm
 const MIN_ZOOM = 0.25
@@ -494,7 +496,6 @@ function generateUUID() {
 }
 
 function findFreePosition(ew, eh) {
-  const STUD = 8
   const maxX = aggBounds.value.widthMm + PADDING_MM + ew
   const maxY = aggBounds.value.heightMm + PADDING_MM + eh
 
@@ -633,17 +634,7 @@ let _suppressClick = false
 function clearSelection() { selection.value = new Set() }
 
 function applyUnitClick(plate, { toggle = false, add = false } = {}) {
-  const key = unitKey(plate)
-  const next = new Set(selection.value)
-  if (toggle) {
-    next.has(key) ? next.delete(key) : next.add(key)
-  } else if (add) {
-    next.add(key)
-  } else {
-    next.clear()
-    next.add(key)
-  }
-  selection.value = next
+  selection.value = nextSelection(selection.value, new Set([unitKey(plate)]), { toggle, add })
 }
 
 // The single selected plate, if exactly one unit is selected.
@@ -752,35 +743,38 @@ function startDrag(e, plate) {
 function onMoveGroup(e) {
   if (!_drag.groupStartPositions?.length) return
   const ids = _drag.instanceIds
-  const nonSelected = placedPlates.value.filter(p => !ids.has(p.instanceId))
   const { clientX, clientY } = getEventCoords(e)
-  const STUD = 8
-  const snapDx = Math.round((clientX - _drag.startMouseX) / (SCALE * zoom.value) / STUD) * STUD
-  const snapDy = Math.round((clientY - _drag.startMouseY) / (SCALE * zoom.value) / STUD) * STUD
 
-  const proposed = _drag.groupStartPositions.map(sp => {
-    const p = placedPlates.value.find(x => x.instanceId === sp.instanceId)
-    const bp = p ? baseplateMap.value[p.baseplateId] : null
-    return { p, bp, newX: sp.startX + snapDx, newY: sp.startY + snapDy }
+  // Rigid drag: one 8 mm-snapped delta for every member of the group, rejected as a
+  // block when it would overlap a plate that is NOT part of the dragged set. The
+  // baseplate canvas has no walls, so there is no clamp here (see `planRigidDrag`).
+  const plan = planRigidDrag({
+    startPositions: _drag.groupStartPositions.flatMap(sp => {
+      const p = placedPlates.value.find(x => x.instanceId === sp.instanceId)
+      const bp = p ? baseplateMap.value[p.baseplateId] : null
+      if (!p || !bp) return []
+      return [{
+        id: sp.instanceId, x: sp.startX, y: sp.startY,
+        w: effectiveW(bp, p.rotation), h: effectiveH(bp, p.rotation),
+      }]
+    }),
+    deltaX: (clientX - _drag.startMouseX) / (SCALE * zoom.value),
+    deltaY: (clientY - _drag.startMouseY) / (SCALE * zoom.value),
+    snap: STUD,
+    others: placedPlates.value.flatMap(p => {
+      if (ids.has(p.instanceId)) return []
+      const bp = baseplateMap.value[p.baseplateId]
+      if (!bp) return []
+      return [{ x: p.xMm, y: p.yMm, w: effectiveW(bp, p.rotation), h: effectiveH(bp, p.rotation) }]
+    }),
   })
+  if (plan.blocked) return
 
-  const hasOv = proposed.some(pr => {
-    if (!pr.p || !pr.bp) return false
-    return nonSelected.some(other => {
-      const obp = baseplateMap.value[other.baseplateId]
-      if (!obp) return false
-      return rectsOverlap(
-        pr.newX, pr.newY, effectiveW(pr.bp, pr.p.rotation), effectiveH(pr.bp, pr.p.rotation),
-        other.xMm, other.yMm, effectiveW(obp, other.rotation), effectiveH(obp, other.rotation),
-      )
-    })
-  })
-  if (hasOv) return
-
-  for (const pr of proposed) {
-    if (!pr.p) continue
-    pr.p.xMm = pr.newX
-    pr.p.yMm = pr.newY
+  for (const pr of plan.positions) {
+    const p = placedPlates.value.find(x => x.instanceId === pr.id)
+    if (!p) continue
+    p.xMm = pr.x
+    p.yMm = pr.y
   }
 }
 
@@ -808,18 +802,12 @@ function onMove(e) {
   const { x: snappedX, y: snappedY, xSnapped, ySnapped } = snapPlate(rawCanvasX, rawCanvasY, ew, eh, p.instanceId)
 
   // Convert back to aggregate-relative mm: edge-snap takes priority; otherwise stud-grid (8mm)
-  const STUD = 8
   const newXmm = xSnapped ? Math.round(snappedX - PADDING_MM) : Math.round((snappedX - PADDING_MM) / STUD) * STUD
   const newYmm = ySnapped ? Math.round(snappedY - PADDING_MM) : Math.round((snappedY - PADDING_MM) / STUD) * STUD
   if (!hasOverlap(newXmm, newYmm, ew, eh, p.instanceId)) {
     p.xMm = newXmm
     p.yMm = newYmm
   }
-}
-
-function rectsOverlap(ax, ay, aw, ah, bx, by, bw, bh) {
-  // Touching edges (ax+aw === bx etc.) is allowed — only strict interior overlap counts
-  return ax < bx + bw && ax + aw > bx && ay < by + bh && ay + ah > by
 }
 
 function hasOverlap(xMm, yMm, ew, eh, excludeId) {
@@ -975,11 +963,7 @@ function onMarqueeUp() {
 
   // One plate of a MOC instance touched by the rectangle selects the whole instance.
   const rect = normaliseMarquee(m.startX, m.startY, m.lastX, m.lastY)
-  const hitKeys = new Set()
-  for (const p of placedPlates.value) {
-    const r = plateRect(p)
-    if (r && rectsIntersect(rect, r)) hitKeys.add(unitKey(p))
-  }
+  const hitKeys = collectUnitKeys(rect, placedPlates.value, unitKey, plateRect)
   const units = expandToUnits(hitKeys)
   if (m.add) {
     const next = new Set(selection.value)

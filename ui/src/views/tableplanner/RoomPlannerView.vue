@@ -5,7 +5,8 @@ import { getRoom, getAllTemplates, saveRoomLayout, updateRoom, fitRoomToLayout }
 import { useActiveCollection } from '../../composables/useActiveCollection.js'
 import { getAllBaseplates } from '../../api/baseplates.js'
 import { generateRoomPdf } from '../../utils/roomPdf.js'
-import { MARQUEE_THRESHOLD_PX, normaliseMarquee, rectsIntersect, clampGroupShift } from '../../utils/marquee.js'
+import { MARQUEE_THRESHOLD_PX, normaliseMarquee } from '../../utils/marquee.js'
+import { bboxOf, closeOverUnits, collectUnitKeys, nextSelection, planRigidDrag } from '../../utils/selection.js'
 
 const route = useRoute()
 const router = useRouter()
@@ -169,15 +170,13 @@ const aggregateMap = computed(() => {
 // selected aggregate.
 const selectionBBox = computed(() => {
   if (!selection.value.size) return null
-  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+  const boxes = []
   for (const id of selection.value) {
     const t = placedTables.value.find(p => p.instanceId === id)
     if (!t || !templateMap.value[t.templateId]) continue
-    minX = Math.min(minX, t.xCm);      minY = Math.min(minY, t.yCm)
-    maxX = Math.max(maxX, t.xCm + effW(t)); maxY = Math.max(maxY, t.yCm + effH(t))
+    boxes.push({ x: t.xCm, y: t.yCm, w: effW(t), h: effH(t) })
   }
-  if (!isFinite(minX)) return null
-  return { minX, minY, maxX, maxY }
+  return bboxOf(boxes)
 })
 
 // Aggregate indexes covered by the selection (rotation stays a single-group action).
@@ -215,29 +214,14 @@ function tableStyle(p) {
 // Close an arbitrary id set over the current aggregates: from one table of a
 // group to the whole group (selection granularity = the aggregate).
 function expandToAggregates(ids) {
-  const out = new Set()
-  for (const id of ids) {
+  return closeOverUnits(ids, id => {
     const idx = aggregateMap.value[id]
-    if (idx == null) continue
-    for (const member of aggregates.value[idx] ?? []) out.add(member)
-  }
-  return out
+    return idx == null ? null : aggregates.value[idx]
+  })
 }
 
 function applyUnitClick(instanceId, { toggle = false, add = false } = {}) {
-  const unit = expandToAggregates([instanceId])
-  if (toggle) {
-    const next = new Set(selection.value)
-    const allSelected = [...unit].every(id => next.has(id))
-    for (const id of unit) { allSelected ? next.delete(id) : next.add(id) }
-    selection.value = next
-  } else if (add) {
-    const next = new Set(selection.value)
-    for (const id of unit) next.add(id)
-    selection.value = next
-  } else {
-    selection.value = unit
-  }
+  selection.value = nextSelection(selection.value, expandToAggregates([instanceId]), { toggle, add })
 }
 
 function clearSelection() { selection.value = new Set() }
@@ -657,59 +641,44 @@ function onMoveGroup(e) {
   const nonGroup = placedTables.value.filter(t => !groupIds.has(t.instanceId))
 
   const { clientX: mx, clientY: my } = getEventCoords(e)
-  const rawDx = (mx - _drag.startMouseX) / (SCALE * zoom.value)
-  const rawDy = (my - _drag.startMouseY) / (SCALE * zoom.value)
-  const snapDx = parseFloat((Math.round(rawDx / SNAP) * SNAP).toFixed(2))
-  const snapDy = parseFloat((Math.round(rawDy / SNAP) * SNAP).toFixed(2))
 
-  // Proposed positions + the bounding box they form
-  const proposed = []
-  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
-  for (const sp of gsp) {
-    const t = placedTables.value.find(p => p.instanceId === sp.instanceId)
-    if (!t || !templateMap.value[t.templateId]) continue
-    const tw = effW(t), th = effH(t)
-    const newX = sp.startX + snapDx, newY = sp.startY + snapDy
-    proposed.push({ instanceId: sp.instanceId, newX, newY, tw, th })
-    minX = Math.min(minX, newX);         minY = Math.min(minY, newY)
-    maxX = Math.max(maxX, newX + tw);    maxY = Math.max(maxY, newY + th)
-  }
-  if (!proposed.length) return
+  // Rigid drag: one snapped delta for the whole group, clamped as a block against the
+  // room walls, rejected as a block when it would overlap a non-selected table (see
+  // `planRigidDrag`). All positions/units are centimetres.
+  const plan = planRigidDrag({
+    startPositions: gsp.flatMap(sp => {
+      const t = placedTables.value.find(p => p.instanceId === sp.instanceId)
+      if (!t || !templateMap.value[t.templateId]) return []
+      return [{ id: sp.instanceId, x: sp.startX, y: sp.startY, w: effW(t), h: effH(t) }]
+    }),
+    deltaX: (mx - _drag.startMouseX) / (SCALE * zoom.value),
+    deltaY: (my - _drag.startMouseY) / (SCALE * zoom.value),
+    snap: SNAP,
+    bounds: { width: room.value.widthCm, depth: room.value.depthCm },
+    others: nonGroup
+      .filter(t => templateMap.value[t.templateId])
+      .map(t => ({ x: t.xCm, y: t.yCm, w: effW(t), h: effH(t) })),
+  })
+  if (!plan.positions.length) return
 
-  // Uniform clamp on the proposed bbox: ONE delta for the whole group, so it stays
-  // rigid and stops at the walls. (The previous per-table loop mixed Math.max and
-  // Math.min on the same accumulator, which could push the group out of the room.)
-  const { dx, dy } = clampGroupShift(
-    { minX, minY, maxX, maxY },
-    room.value.widthCm,
-    room.value.depthCm,
-  )
-
-  // Overlap check against every table outside the dragged set
-  const hasOverlap = proposed.some(pr => nonGroup.some(other => {
-    if (!templateMap.value[other.templateId]) return false
-    const x = pr.newX + dx, y = pr.newY + dy
-    return x < other.xCm + effW(other) && x + pr.tw > other.xCm &&
-           y < other.yCm + effH(other) && y + pr.th > other.yCm
-  }))
-
-  if (!hasOverlap) {
-    for (const pr of proposed) {
-      const t = placedTables.value.find(p => p.instanceId === pr.instanceId)
-      if (!t) continue
-      t.xCm = parseFloat((pr.newX + dx).toFixed(2))
-      t.yCm = parseFloat((pr.newY + dy).toFixed(2))
-      t.overlapping = false
-    }
-    const main = proposed.find(p => p.instanceId === _drag.instanceId)
-    if (main) { _drag.lastValidX = main.newX + dx; _drag.lastValidY = main.newY + dy }
-  } else {
+  if (plan.blocked) {
     // Blocked: flag the whole dragged set so it is visible that the group stopped.
-    for (const pr of proposed) {
-      const t = placedTables.value.find(p => p.instanceId === pr.instanceId)
+    for (const pr of plan.positions) {
+      const t = placedTables.value.find(p => p.instanceId === pr.id)
       if (t) t.overlapping = true
     }
+    return
   }
+
+  for (const pr of plan.positions) {
+    const t = placedTables.value.find(p => p.instanceId === pr.id)
+    if (!t) continue
+    t.xCm = parseFloat(pr.x.toFixed(2))
+    t.yCm = parseFloat(pr.y.toFixed(2))
+    t.overlapping = false
+  }
+  const main = plan.positions.find(p => p.id === _drag.instanceId)
+  if (main) { _drag.lastValidX = main.x; _drag.lastValidY = main.y }
 }
 
 function onUp(e) {
@@ -790,7 +759,8 @@ function onMarqueeUp() {
   if (!m?.moved) return // a plain click on empty canvas: the click handler clears the selection
 
   const rect = normaliseMarquee(m.startX, m.startY, m.lastX, m.lastY)
-  const hitIds = placedTables.value.filter(t => rectsIntersect(rect, tableRect(t))).map(t => t.instanceId)
+  // Touching one table of an aggregate selects the whole aggregate.
+  const hitIds = collectUnitKeys(rect, placedTables.value, t => t.instanceId, tableRect)
   const hits = expandToAggregates(hitIds)
   if (m.add) {
     const next = new Set(selection.value)
