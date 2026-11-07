@@ -181,7 +181,7 @@ const selectionBBox = computed(() => {
 })
 
 // Aggregate indexes covered by the selection (rotation stays a single-group action).
-const selectedAggregateIds = computed(() => {
+const selectedAggIndexes = computed(() => {
   const idxs = new Set()
   for (const id of selection.value) {
     const idx = aggregateMap.value[id]
@@ -465,6 +465,9 @@ function rotateAggregate(aggIdx) {
 // ── Drag ─────────────────────────────────────────────────────────────────────
 const draggingId = ref(null)
 let _drag = null
+// Set when a drag actually moved: the `click` that follows (which lands on the canvas
+// whenever the pointer is released outside the pressed table) must not wipe the selection.
+let _dragJustEnded = false
 
 function getEventCoords(e) {
   if (e.touches?.length) return { clientX: e.touches[0].clientX, clientY: e.touches[0].clientY }
@@ -696,9 +699,16 @@ function onMoveGroup(e) {
       if (!t) continue
       t.xCm = parseFloat((pr.newX + dx).toFixed(2))
       t.yCm = parseFloat((pr.newY + dy).toFixed(2))
+      t.overlapping = false
     }
     const main = proposed.find(p => p.instanceId === _drag.instanceId)
     if (main) { _drag.lastValidX = main.newX + dx; _drag.lastValidY = main.newY + dy }
+  } else {
+    // Blocked: flag the whole dragged set so it is visible that the group stopped.
+    for (const pr of proposed) {
+      const t = placedTables.value.find(p => p.instanceId === pr.instanceId)
+      if (t) t.overlapping = true
+    }
   }
 }
 
@@ -710,6 +720,7 @@ function onUp(e) {
     }
     const { clientX, clientY } = getEventCoords(e)
     const moved = Math.abs(clientX - _drag.startMouseX) + Math.abs(clientY - _drag.startMouseY)
+    if (moved >= 5) _dragJustEnded = true
     // Alt+drag (or long press) detaches a single table and never touches the selection.
     if (!_drag.forceDetach) {
       if (moved < 5) {
@@ -751,6 +762,7 @@ function onCanvasMouseDown(e) {
   if (!p0) return
   e.preventDefault()
   _marqueeJustEnded = false
+  _dragJustEnded = false
   _marquee = { startX: p0.x, startY: p0.y, lastX: p0.x, lastY: p0.y, moved: false, add: !!(e.ctrlKey || e.metaKey || e.shiftKey) }
   marqueeRect.value = null
   window.addEventListener('mousemove', onMarqueeMove)
@@ -792,6 +804,7 @@ function onMarqueeUp() {
 
 function onCanvasClick(e) {
   if (e.target !== e.currentTarget) return
+  if (_dragJustEnded) { _dragJustEnded = false; return }
   if (_marqueeJustEnded) { _marqueeJustEnded = false; return }
   clearSelection()
 }
@@ -1154,10 +1167,10 @@ async function saveLayout() {
           >
             <!-- Rotating a multi-selection is out of scope: the handle only appears for one group. -->
             <button
-              v-if="canWrite && selectedAggregateIds.length === 1"
+              v-if="canWrite && selectedAggIndexes.length === 1"
               class="agg-rotate-handle"
               @mousedown.stop
-              @click.stop="rotateAggregate(selectedAggregateIds[0])"
+              @click.stop="rotateAggregate(selectedAggIndexes[0])"
               title="Rotate group 90°"
             >⟳</button>
           </div>
@@ -1182,7 +1195,7 @@ async function saveLayout() {
         <span class="legend-title">1 m</span>
         <span class="legend-line"></span>
         <span v-if="selectionBBox" class="legend-item">
-          <span class="legend-swatch agg"></span> selected group{{ selectedAggregateIds.length > 1 ? `s (${selectedAggregateIds.length})` : '' }}
+          <span class="legend-swatch agg"></span> selected group{{ selectedAggIndexes.length > 1 ? `s (${selectedAggIndexes.length})` : '' }}
         </span>
         <span v-if="overlappingCount > 0" class="legend-item">
           <span class="legend-swatch overlap"></span> overlapping ({{ overlappingCount }})

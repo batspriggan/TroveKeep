@@ -666,6 +666,8 @@ function selectPlate(e, plate) {
 
 function onCanvasClick(e) {
   if (e.target !== e.currentTarget) return
+  // A click released on the canvas right after a drag must not collapse the selection.
+  if (_suppressClick) { _suppressClick = false; return }
   if (_marqueeJustEnded) { _marqueeJustEnded = false; return }
   clearSelection()
 }
@@ -708,6 +710,9 @@ function startDrag(e, plate) {
   if (e.type !== 'touchstart' && e.button !== 0) return
   e.preventDefault()
   pressedId.value = plate.instanceId
+  // Touch has no modifiers and `preventDefault` suppresses the synthesized click: a tap
+  // selects the pressed unit right here (same replace semantics as a plain click).
+  if (e.type === 'touchstart') selection.value = expandToUnits([unitKey(plate)])
   const { clientX, clientY } = getEventCoords(e)
   // Explicit drag set: the whole selection when the pressed plate belongs to it,
   // otherwise only the pressed plate's own unit.
@@ -782,9 +787,9 @@ function onMoveGroup(e) {
 function onMove(e) {
   if (!_drag) return
   const pt = getEventCoords(e)
-  if (Math.hypot(pt.clientX - _drag.startMouseX, pt.clientY - _drag.startMouseY) > MARQUEE_THRESHOLD_PX) {
-    _dragMoved = true
-  }
+  // Threshold in canvas px (undo zoom), same unit as the marquee threshold.
+  const movedPx = Math.hypot(pt.clientX - _drag.startMouseX, pt.clientY - _drag.startMouseY) / zoom.value
+  if (movedPx > MARQUEE_THRESHOLD_PX) _dragMoved = true
   if (_drag.isGroup) return onMoveGroup(e)
   const p = placedPlates.value.find(t => t.instanceId === _drag.instanceId)
   if (!p) return
@@ -938,6 +943,7 @@ function onCanvasMouseDown(e) {
   if (!p0) return
   e.preventDefault()
   _marqueeJustEnded = false
+  _suppressClick = false
   _marquee = {
     startX: p0.x, startY: p0.y, lastX: p0.x, lastY: p0.y, moved: false,
     add: !!(e.ctrlKey || e.metaKey || e.shiftKey),

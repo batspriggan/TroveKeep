@@ -4,9 +4,9 @@
 
 **Backend:** `dotnet build` · `cd src/TroveKeep.Api && dotnet run` (http://localhost:5221, OpenAPI at `/openapi/v1.json`)
 
-**Frontend:** `cd ui && npm run dev` (http://localhost:5173, proxies /api → 5221) · `npm run build` · `npm run preview`
+**Frontend:** `cd ui && npm run dev` (http://localhost:5173, proxies /api → 5221) · `npm run build` · `npm run preview` · `npm test` (dependency-free `node:test` unit tests in `ui/tests/`, currently the planner marquee/group-clamp maths)
 
-No test projects.
+No .NET test projects; the UI has plain `node:test` files under `ui/tests/` only.
 
 ## Conventions
 
