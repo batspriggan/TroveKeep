@@ -79,3 +79,11 @@ Current chain: `001` baseplate type fields · `002` set images by set id · `003
 - `/baseplates` — baseplate library (`views/baseplates/BaseplateListView.vue`). **Top-level nav entry, always visible** — *not* gated by `tablePlannerEnabled`.
 - `/table-planner` — rooms · `/table-planner/rooms/:id` — room canvas · `/table-planner/baseplates` — aggregate list · `/table-planner/baseplates/:roomId/:repId` — baseplate placement canvas · `/table-planner/build-check` — multi-configuration feasibility. All `/table-planner/*` are gated by `tablePlannerEnabled`.
 - Baseplate API client: `ui/src/api/baseplates.js` (not `tableplanner.js`).
+- **Multi-selection in both planners** (`RoomPlannerView`, `AggregateBpPlannerView`) is **volatile**: it
+  lives in a `Set` in component state and is never serialised into `layout`/`placedBaseplates`.
+  Ctrl/Cmd+click toggles, Shift+click adds, dragging on empty canvas draws a marquee
+  (`ui/src/utils/marquee.js` — canvas-px rectangles, strict intersection, 3 px threshold), Esc or a
+  click on empty canvas clears. Selection granularity is the whole unit: a table selects its entire
+  aggregate, a plate selects its entire MOC/set instance. **Only movement is multi** — a rigid drag
+  with one uniform snap/clamp delta, overlaps checked against the non-selected units; rotation and
+  removal stay single-unit (their buttons/keys are hidden or inactive for a multi-selection).

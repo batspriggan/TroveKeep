@@ -5,6 +5,7 @@ import { getRoom, getAllTemplates, saveRoomLayout, updateRoom, fitRoomToLayout }
 import { useActiveCollection } from '../../composables/useActiveCollection.js'
 import { getAllBaseplates } from '../../api/baseplates.js'
 import { generateRoomPdf } from '../../utils/roomPdf.js'
+import { MARQUEE_THRESHOLD_PX, normaliseMarquee, rectsIntersect, clampGroupShift } from '../../utils/marquee.js'
 
 const route = useRoute()
 const router = useRouter()
@@ -44,7 +45,11 @@ const showGrid = ref(true)
 const zoom = ref(1)
 const canvasWrapEl = ref(null)
 
-const selectedAggregateId = ref(null)   // integer index into aggregates.value, or null
+// Volatile multi-selection: a Set of `instanceId`s, never serialised. Selection
+// granularity is the whole aggregate — clicking a table selects every table of
+// its connected group (see `expandToAggregates`).
+const selection = ref(new Set())
+const canvasEl = ref(null)
 const baseplates = ref([])
 const aggSelections = ref({})           // aggIdx → canonical bpKey e.g. "16x32"
 
@@ -160,21 +165,82 @@ const aggregateMap = computed(() => {
   return map
 })
 
-// Bounding box of the currently selected aggregate (canvas coordinates, cm)
-const selectedAggregateBBox = computed(() => {
-  if (selectedAggregateId.value === null) return null
-  const group = aggregates.value[selectedAggregateId.value]
-  if (!group?.length) return null
+// Bounding box of the whole selection (canvas px = cm at zoom 1), covering every
+// selected aggregate.
+const selectionBBox = computed(() => {
+  if (!selection.value.size) return null
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
-  for (const id of group) {
+  for (const id of selection.value) {
     const t = placedTables.value.find(p => p.instanceId === id)
-    if (!t) continue
-    const w = effW(t), h = effH(t)
+    if (!t || !templateMap.value[t.templateId]) continue
     minX = Math.min(minX, t.xCm);      minY = Math.min(minY, t.yCm)
-    maxX = Math.max(maxX, t.xCm + w);  maxY = Math.max(maxY, t.yCm + h)
+    maxX = Math.max(maxX, t.xCm + effW(t)); maxY = Math.max(maxY, t.yCm + effH(t))
   }
+  if (!isFinite(minX)) return null
   return { minX, minY, maxX, maxY }
 })
+
+// Aggregate indexes covered by the selection (rotation stays a single-group action).
+const selectedAggregateIds = computed(() => {
+  const idxs = new Set()
+  for (const id of selection.value) {
+    const idx = aggregateMap.value[id]
+    if (idx != null) idxs.add(idx)
+  }
+  return [...idxs].sort((a, b) => a - b)
+})
+
+// Single source of truth for a table's geometry on the canvas: reused by the
+// inline :style and by the marquee hit test, so they can never drift apart.
+function tableRect(p) {
+  const x = p.xCm * SCALE, y = p.yCm * SCALE
+  return {
+    x1: x, y1: y,
+    x2: x + effW(p) * SCALE, y2: y + effH(p) * SCALE,
+  }
+}
+
+function tableStyle(p) {
+  const r = tableRect(p)
+  return {
+    left: r.x1 + 'px',
+    top: r.y1 + 'px',
+    width: (r.x2 - r.x1) + 'px',
+    height: (r.y2 - r.y1) + 'px',
+    background: templateMap.value[p.templateId]?.color ?? '#8b6340',
+  }
+}
+
+// ── Selection model ───────────────────────────────────────────────────────────
+// Close an arbitrary id set over the current aggregates: from one table of a
+// group to the whole group (selection granularity = the aggregate).
+function expandToAggregates(ids) {
+  const out = new Set()
+  for (const id of ids) {
+    const idx = aggregateMap.value[id]
+    if (idx == null) continue
+    for (const member of aggregates.value[idx] ?? []) out.add(member)
+  }
+  return out
+}
+
+function applyUnitClick(instanceId, { toggle = false, add = false } = {}) {
+  const unit = expandToAggregates([instanceId])
+  if (toggle) {
+    const next = new Set(selection.value)
+    const allSelected = [...unit].every(id => next.has(id))
+    for (const id of unit) { allSelected ? next.delete(id) : next.add(id) }
+    selection.value = next
+  } else if (add) {
+    const next = new Set(selection.value)
+    for (const id of unit) next.add(id)
+    selection.value = next
+  } else {
+    selection.value = unit
+  }
+}
+
+function clearSelection() { selection.value = new Set() }
 
 // ── Distinct baseplates by canonical dimension ─────────────────────────────────
 const distinctBaseplates = computed(() => {
@@ -278,6 +344,7 @@ onMounted(async () => {
   savedAggSelectionsJson.value = JSON.stringify(buildAggSelectionsForSave())
   loading.value = false
   canvasWrapEl.value?.addEventListener('wheel', onWheelZoom, { passive: false })
+  window.addEventListener('keydown', onWindowKeyDown)
 })
 
 // ── Add from palette ──────────────────────────────────────────────────────────
@@ -329,6 +396,11 @@ function addFromTemplate(tpl) {
 // ── Remove ────────────────────────────────────────────────────────────────────
 function removeTable(instanceId) {
   placedTables.value = placedTables.value.filter(p => p.instanceId !== instanceId)
+  if (selection.value.has(instanceId)) {
+    const next = new Set(selection.value)
+    next.delete(instanceId)
+    selection.value = next
+  }
 }
 
 function rotateTable(p) {
@@ -401,23 +473,32 @@ function getEventCoords(e) {
 }
 
 function beginDrag(placed, startClientX, startClientY, forceDetach) {
+  // The drag set is explicit, not inferred from the pressed table's aggregate: if the
+  // pressed table belongs to the current selection, the whole selection moves (closed
+  // over the aggregates); otherwise only the pressed table's own aggregate does.
+  const pressedWasSelected = selection.value.has(placed.instanceId)
   const aggIdx = aggregateMap.value[placed.instanceId]
-  const aggGroup = (aggIdx != null) ? aggregates.value[aggIdx] : [placed.instanceId]
-  const isGroup = aggGroup.length > 1 && !forceDetach
+  const unitIds = (pressedWasSelected && !forceDetach)
+    ? expandToAggregates(selection.value)
+    : new Set(aggIdx != null ? aggregates.value[aggIdx] : [placed.instanceId])
+  const isGroup = unitIds.size > 1 && !forceDetach
+  const instanceIds = isGroup ? unitIds : new Set([placed.instanceId])
   draggingId.value = placed.instanceId
   _drag = {
     instanceId: placed.instanceId,
+    pressedWasSelected,
+    forceDetach: !!forceDetach,
     startMouseX: startClientX, startMouseY: startClientY,
     startX: placed.xCm, startY: placed.yCm,
     lastValidX: placed.xCm, lastValidY: placed.yCm,
     isGroup,
+    instanceIds,
     groupStartPositions: isGroup
-      ? aggGroup.map(id => {
+      ? [...instanceIds].map(id => {
           const t = placedTables.value.find(p => p.instanceId === id)
           return { instanceId: id, startX: t.xCm, startY: t.yCm }
         })
       : null,
-    groupInstanceIds: isGroup ? aggGroup : null,
   }
 }
 
@@ -473,12 +554,16 @@ function onTouchMovePending(e) {
 }
 
 function onTouchEndPending() {
+  const pending = _touchPending
+  const wasArmed = !!longPressArmedId.value
   clearTimeout(_longPressTimer)
   _longPressTimer = null
   longPressArmedId.value = null
   _touchPending = null
   window.removeEventListener('touchmove', onTouchMovePending)
   window.removeEventListener('touchend', onTouchEndPending)
+  // A tap (no movement, no long press) selects the tapped aggregate, as it always did.
+  if (pending && !wasArmed) applyUnitClick(pending.placed.instanceId, {})
 }
 
 function onMove(e) {
@@ -564,7 +649,8 @@ function onMoveSingle(e) {
 function onMoveGroup(e) {
   if (!room.value) return
   const gsp = _drag.groupStartPositions
-  const groupIds = new Set(_drag.groupInstanceIds)
+  if (!gsp?.length) return
+  const groupIds = _drag.instanceIds
   const nonGroup = placedTables.value.filter(t => !groupIds.has(t.instanceId))
 
   const { clientX: mx, clientY: my } = getEventCoords(e)
@@ -573,64 +659,68 @@ function onMoveGroup(e) {
   const snapDx = parseFloat((Math.round(rawDx / SNAP) * SNAP).toFixed(2))
   const snapDy = parseFloat((Math.round(rawDy / SNAP) * SNAP).toFixed(2))
 
-  const proposed = gsp.map(sp => ({
-    instanceId: sp.instanceId,
-    newX: sp.startX + snapDx,
-    newY: sp.startY + snapDy,
-  }))
-
-  // Bounding box → clamp correction (uniform shift)
-  let clampDx = 0, clampDy = 0
-  for (const pr of proposed) {
-    const t = placedTables.value.find(p => p.instanceId === pr.instanceId)
-    if (!templateMap.value[t.templateId]) continue
+  // Proposed positions + the bounding box they form
+  const proposed = []
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+  for (const sp of gsp) {
+    const t = placedTables.value.find(p => p.instanceId === sp.instanceId)
+    if (!t || !templateMap.value[t.templateId]) continue
     const tw = effW(t), th = effH(t)
-    if (pr.newX < 0) clampDx = Math.max(clampDx, -pr.newX)
-    if (pr.newX + tw > room.value.widthCm)
-      clampDx = Math.min(clampDx, room.value.widthCm - pr.newX - tw)
-    if (pr.newY < 0) clampDy = Math.max(clampDy, -pr.newY)
-    if (pr.newY + th > room.value.depthCm)
-      clampDy = Math.min(clampDy, room.value.depthCm - pr.newY - th)
+    const newX = sp.startX + snapDx, newY = sp.startY + snapDy
+    proposed.push({ instanceId: sp.instanceId, newX, newY, tw, th })
+    minX = Math.min(minX, newX);         minY = Math.min(minY, newY)
+    maxX = Math.max(maxX, newX + tw);    maxY = Math.max(maxY, newY + th)
   }
-  for (const pr of proposed) { pr.newX += clampDx; pr.newY += clampDy }
+  if (!proposed.length) return
 
-  // Overlap check vs non-group tables
-  const hasOverlap = proposed.some(pr => {
-    const t = placedTables.value.find(p => p.instanceId === pr.instanceId)
-    if (!templateMap.value[t.templateId]) return false
-    const tw = effW(t), th = effH(t)
-    return nonGroup.some(other => {
-      if (!templateMap.value[other.templateId]) return false
-      return pr.newX < other.xCm + effW(other) && pr.newX + tw > other.xCm &&
-             pr.newY < other.yCm + effH(other) && pr.newY + th > other.yCm
-    })
-  })
+  // Uniform clamp on the proposed bbox: ONE delta for the whole group, so it stays
+  // rigid and stops at the walls. (The previous per-table loop mixed Math.max and
+  // Math.min on the same accumulator, which could push the group out of the room.)
+  const { dx, dy } = clampGroupShift(
+    { minX, minY, maxX, maxY },
+    room.value.widthCm,
+    room.value.depthCm,
+  )
+
+  // Overlap check against every table outside the dragged set
+  const hasOverlap = proposed.some(pr => nonGroup.some(other => {
+    if (!templateMap.value[other.templateId]) return false
+    const x = pr.newX + dx, y = pr.newY + dy
+    return x < other.xCm + effW(other) && x + pr.tw > other.xCm &&
+           y < other.yCm + effH(other) && y + pr.th > other.yCm
+  }))
 
   if (!hasOverlap) {
     for (const pr of proposed) {
       const t = placedTables.value.find(p => p.instanceId === pr.instanceId)
-      if (t) {
-        t.xCm = parseFloat(pr.newX.toFixed(2))
-        t.yCm = parseFloat(pr.newY.toFixed(2))
-      }
+      if (!t) continue
+      t.xCm = parseFloat((pr.newX + dx).toFixed(2))
+      t.yCm = parseFloat((pr.newY + dy).toFixed(2))
     }
     const main = proposed.find(p => p.instanceId === _drag.instanceId)
-    if (main) { _drag.lastValidX = main.newX; _drag.lastValidY = main.newY }
+    if (main) { _drag.lastValidX = main.newX + dx; _drag.lastValidY = main.newY + dy }
   }
 }
 
 function onUp(e) {
   if (_drag) {
-    const ids = _drag.isGroup ? _drag.groupInstanceIds : [_drag.instanceId]
-    for (const id of ids) {
+    for (const id of _drag.instanceIds) {
       const t = placedTables.value.find(p => p.instanceId === id)
       if (t) t.overlapping = false
     }
     const { clientX, clientY } = getEventCoords(e)
     const moved = Math.abs(clientX - _drag.startMouseX) + Math.abs(clientY - _drag.startMouseY)
-    if (moved < 5) {
-      const idx = aggregateMap.value[_drag.instanceId]
-      selectedAggregateId.value = idx ?? null
+    // Alt+drag (or long press) detaches a single table and never touches the selection.
+    if (!_drag.forceDetach) {
+      if (moved < 5) {
+        applyUnitClick(_drag.instanceId, {
+          toggle: !!(e.ctrlKey || e.metaKey),
+          add: !!e.shiftKey,
+        })
+      } else if (!_drag.pressedWasSelected) {
+        // A real drag on an unselected table: it becomes the new selection once dropped.
+        selection.value = expandToAggregates([_drag.instanceId])
+      }
     }
   }
   _drag = null
@@ -641,8 +731,77 @@ function onUp(e) {
   window.removeEventListener('touchend', onUp)
 }
 
+// ── Marquee selection (mouse only; touch keeps using tap) ─────────────────────
+const marqueeRect = ref(null)   // canvas px { x1, y1, x2, y2 }
+let _marquee = null
+// Set when a real marquee ended, so the following `click` does not wipe the selection.
+let _marqueeJustEnded = false
+
+// Client coordinates → canvas px (undo zoom and canvas offset/scroll).
+function canvasPoint(clientX, clientY) {
+  const el = canvasEl.value
+  if (!el) return null
+  const rect = el.getBoundingClientRect()
+  return { x: (clientX - rect.left) / zoom.value, y: (clientY - rect.top) / zoom.value }
+}
+
+function onCanvasMouseDown(e) {
+  if (e.button !== 0 || e.target !== e.currentTarget) return
+  const p0 = canvasPoint(e.clientX, e.clientY)
+  if (!p0) return
+  e.preventDefault()
+  _marqueeJustEnded = false
+  _marquee = { startX: p0.x, startY: p0.y, lastX: p0.x, lastY: p0.y, moved: false, add: !!(e.ctrlKey || e.metaKey || e.shiftKey) }
+  marqueeRect.value = null
+  window.addEventListener('mousemove', onMarqueeMove)
+  window.addEventListener('mouseup', onMarqueeUp)
+}
+
+function onMarqueeMove(e) {
+  if (!_marquee) return
+  const p = canvasPoint(e.clientX, e.clientY)
+  if (!p) return
+  _marquee.lastX = p.x
+  _marquee.lastY = p.y
+  if (!_marquee.moved &&
+      Math.hypot(p.x - _marquee.startX, p.y - _marquee.startY) < MARQUEE_THRESHOLD_PX) return
+  _marquee.moved = true
+  marqueeRect.value = normaliseMarquee(_marquee.startX, _marquee.startY, p.x, p.y)
+}
+
+function onMarqueeUp() {
+  const m = _marquee
+  _marquee = null
+  marqueeRect.value = null
+  window.removeEventListener('mousemove', onMarqueeMove)
+  window.removeEventListener('mouseup', onMarqueeUp)
+  if (!m?.moved) return // a plain click on empty canvas: the click handler clears the selection
+
+  const rect = normaliseMarquee(m.startX, m.startY, m.lastX, m.lastY)
+  const hitIds = placedTables.value.filter(t => rectsIntersect(rect, tableRect(t))).map(t => t.instanceId)
+  const hits = expandToAggregates(hitIds)
+  if (m.add) {
+    const next = new Set(selection.value)
+    for (const id of hits) next.add(id)
+    selection.value = next
+  } else {
+    selection.value = hits
+  }
+  _marqueeJustEnded = true
+}
+
 function onCanvasClick(e) {
-  if (e.target === e.currentTarget) selectedAggregateId.value = null
+  if (e.target !== e.currentTarget) return
+  if (_marqueeJustEnded) { _marqueeJustEnded = false; return }
+  clearSelection()
+}
+
+function onWindowKeyDown(e) {
+  if (e.key !== 'Escape') return
+  const tag = e.target?.tagName
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
+  if (_drag) return
+  clearSelection()
 }
 
 // ── Zoom ──────────────────────────────────────────────────────────────────────
@@ -665,6 +824,9 @@ onUnmounted(() => {
   window.removeEventListener('touchmove', onTouchMovePending)
   window.removeEventListener('touchend', onTouchEndPending)
   clearTimeout(_longPressTimer)
+  window.removeEventListener('keydown', onWindowKeyDown)
+  window.removeEventListener('mousemove', onMarqueeMove)
+  window.removeEventListener('mouseup', onMarqueeUp)
   canvasWrapEl.value?.removeEventListener('wheel', onWheelZoom)
 })
 
@@ -906,7 +1068,7 @@ async function saveLayout() {
           :title="`${t.widthCm}x${t.depthCm} cm`"
         >{{ t.description }}</button>
         <span v-if="templates.length === 0" class="empty-palette">No templates — create some in Table Planner.</span>
-        <span class="palette-hint">Alt+drag (or long press on touch) to detach a table from its group</span>
+        <span class="palette-hint">Ctrl/Cmd+click, Shift+click or drag a rectangle to select several groups · Esc to deselect · Alt+drag (or long press on touch) to detach a table from its group</span>
       </div>
 
       <!-- Plate Calculator -->
@@ -951,8 +1113,10 @@ async function saveLayout() {
         <div class="canvas-zoom-container" :style="{ width: canvasWidth * zoom + 'px', height: canvasHeight * zoom + 'px' }">
         <div
           class="canvas"
+          ref="canvasEl"
           :class="{ 'canvas--grid': showGrid }"
           :style="{ width: canvasWidth + 'px', height: canvasHeight + 'px', transform: `scale(${zoom})`, transformOrigin: 'top left' }"
+          @mousedown="onCanvasMouseDown"
           @click="onCanvasClick"
         >
           <div
@@ -962,16 +1126,10 @@ async function saveLayout() {
             :class="{
               active: draggingId === p.instanceId,
               'table-item--overlap': p.overlapping,
-              'table-item--selected': selectedAggregateId !== null && aggregateMap[p.instanceId] === selectedAggregateId,
+              'table-item--selected': selection.has(p.instanceId),
               'table-item--lp-armed': longPressArmedId === p.instanceId,
             }"
-            :style="{
-              left: p.xCm * SCALE + 'px',
-              top: p.yCm * SCALE + 'px',
-              width: effW(p) * SCALE + 'px',
-              height: effH(p) * SCALE + 'px',
-              background: templateMap[p.templateId]?.color ?? '#8b6340',
-            }"
+            :style="tableStyle(p)"
             @mousedown="startDrag($event, p)"
             @touchstart.prevent="onTouchStart($event, p)"
           >
@@ -983,25 +1141,38 @@ async function saveLayout() {
             </span>
           </div>
 
-          <!-- Aggregate bounding-box overlay -->
+          <!-- Selection bounding-box overlay -->
           <div
-            v-if="selectedAggregateId !== null && selectedAggregateBBox"
+            v-if="selectionBBox"
             class="agg-bbox"
             :style="{
-              left:   selectedAggregateBBox.minX * SCALE + 'px',
-              top:    selectedAggregateBBox.minY * SCALE + 'px',
-              width:  (selectedAggregateBBox.maxX - selectedAggregateBBox.minX) * SCALE + 'px',
-              height: (selectedAggregateBBox.maxY - selectedAggregateBBox.minY) * SCALE + 'px',
+              left:   selectionBBox.minX * SCALE + 'px',
+              top:    selectionBBox.minY * SCALE + 'px',
+              width:  (selectionBBox.maxX - selectionBBox.minX) * SCALE + 'px',
+              height: (selectionBBox.maxY - selectionBBox.minY) * SCALE + 'px',
             }"
           >
+            <!-- Rotating a multi-selection is out of scope: the handle only appears for one group. -->
             <button
-              v-if="canWrite"
+              v-if="canWrite && selectedAggregateIds.length === 1"
               class="agg-rotate-handle"
               @mousedown.stop
-              @click.stop="rotateAggregate(selectedAggregateId)"
+              @click.stop="rotateAggregate(selectedAggregateIds[0])"
               title="Rotate group 90°"
             >⟳</button>
           </div>
+
+          <!-- Marquee (rubber band) -->
+          <div
+            v-if="marqueeRect"
+            class="marquee"
+            :style="{
+              left:   marqueeRect.x1 + 'px',
+              top:    marqueeRect.y1 + 'px',
+              width:  (marqueeRect.x2 - marqueeRect.x1) + 'px',
+              height: (marqueeRect.y2 - marqueeRect.y1) + 'px',
+            }"
+          ></div>
         </div>
         </div>
       </div>
@@ -1010,8 +1181,8 @@ async function saveLayout() {
       <div class="legend">
         <span class="legend-title">1 m</span>
         <span class="legend-line"></span>
-        <span v-if="selectedAggregateBBox" class="legend-item">
-          <span class="legend-swatch agg"></span> selected group
+        <span v-if="selectionBBox" class="legend-item">
+          <span class="legend-swatch agg"></span> selected group{{ selectedAggregateIds.length > 1 ? `s (${selectedAggregateIds.length})` : '' }}
         </span>
         <span v-if="overlappingCount > 0" class="legend-item">
           <span class="legend-swatch overlap"></span> overlapping ({{ overlappingCount }})
@@ -1480,6 +1651,15 @@ async function saveLayout() {
 .size-min {
   font-size: 0.72rem;
   color: #90a4ae;
+}
+
+/* ── Marquee (rubber band) ─────────────────────────────────────────────── */
+.marquee {
+  position: absolute;
+  border: 1px dashed #1a90d0;
+  background: rgba(26, 144, 208, 0.1);
+  pointer-events: none;
+  z-index: 9;
 }
 
 /* ── Aggregate bounding-box overlay ──────────────────────────────────────── */

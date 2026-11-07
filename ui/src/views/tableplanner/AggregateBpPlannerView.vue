@@ -6,6 +6,7 @@ import { getAllBaseplates, getBaseplateImageUrl, getPlannerEntities } from '../.
 import { getSet } from '../../api/sets.js'
 import { generateAggregatePdf } from '../../utils/platePdf.js'
 import { useActiveCollection } from '../../composables/useActiveCollection.js'
+import { MARQUEE_THRESHOLD_PX, normaliseMarquee, rectsIntersect } from '../../utils/marquee.js'
 
 const route = useRoute()
 const router = useRouter()
@@ -268,19 +269,42 @@ const groupOutlines = computed(() => {
   return out
 })
 
-const selectedPlacementId = computed(() => {
-  const p = placedPlates.value.find(p => p.instanceId === selectedId.value)
-  return p?.placementId ?? null
-})
+// ── Selection model (volatile, never serialised) ──────────────────────────────
+// A Set of unit keys: the `placementId` for a whole MOC/set instance, the
+// `instanceId` for an individually placed plate. Pressing one plate of a MOC
+// selects the whole instance — that is the selection granularity.
+const selection = ref(new Set())
 
-function isGroupSelected(p) {
-  return !!p.placementId && p.placementId === selectedPlacementId.value
+function unitKey(p) { return p.placementId ?? p.instanceId }
+
+// Placed-plate instance ids belonging to one unit: every plate of a MOC instance,
+// or the single plate itself.
+function unitIds(key) {
+  const group = plateGroups.value.get(key)
+  if (group) return group.map(p => p.instanceId)
+  return placedPlates.value.some(p => p.instanceId === key) ? [key] : []
 }
 
-// Group members (same placementId) including the given plate; single plates → [p].
-function groupMembers(p) {
-  if (!p?.placementId) return p ? [p] : []
-  return placedPlates.value.filter(x => x.placementId === p.placementId)
+// Normalise a key set against the current layout (drops keys that no longer exist).
+function expandToUnits(keys) {
+  const wanted = keys instanceof Set ? keys : new Set(keys)
+  const out = new Set()
+  for (const p of placedPlates.value) {
+    const k = unitKey(p)
+    if (wanted.has(k)) out.add(k)
+  }
+  return out
+}
+
+function unitKeyOfInstance(instanceId) {
+  const p = placedPlates.value.find(x => x.instanceId === instanceId)
+  return p ? unitKey(p) : null
+}
+
+const selectedUnitKeys = computed(() => [...selection.value])
+
+function isGroupSelected(p) {
+  return !!p.placementId && selection.value.has(p.placementId)
 }
 
 // ── Owned-quantity warning (non-blocking, warning only) ────────────────────────
@@ -442,6 +466,7 @@ onMounted(async () => {
   canvasWrapEl.value?.addEventListener('wheel', onWheelZoom, { passive: false })
   window.addEventListener('mousemove', onPaletteMove)
   window.addEventListener('mouseup', onPaletteUp)
+  window.addEventListener('keydown', onWindowKeyDown)
 })
 
 onUnmounted(() => {
@@ -453,6 +478,9 @@ onUnmounted(() => {
   window.removeEventListener('mouseup', onPaletteUp)
   window.removeEventListener('touchmove', onPaletteMove)
   window.removeEventListener('touchend', onPaletteUp)
+  window.removeEventListener('keydown', onWindowKeyDown)
+  window.removeEventListener('mousemove', onMarqueeMove)
+  window.removeEventListener('mouseup', onMarqueeUp)
   canvasWrapEl.value?.removeEventListener('wheel', onWheelZoom)
   clearTimeout(_tooltipTimer)
 })
@@ -583,44 +611,92 @@ function addPlannerEntity(entity, at = null) {
 function removePlate(instanceId) {
   const plate = placedPlates.value.find(p => p.instanceId === instanceId)
   // A plate belonging to a placed MOC/set removes the whole instance (placementId).
-  const doomed = new Set(
-    plate && plate.placementId
-      ? placedPlates.value.filter(p => p.placementId === plate.placementId).map(p => p.instanceId)
-      : [instanceId]
-  )
+  const key = plate ? unitKey(plate) : null
+  const doomed = new Set(key != null ? unitIds(key) : [instanceId])
   placedPlates.value = placedPlates.value.filter(p => !doomed.has(p.instanceId))
-  if (selectedId.value && doomed.has(selectedId.value)) selectedId.value = null
+  if (doomed.has(pressedId.value)) pressedId.value = null
+  if (key != null) {
+    const next = new Set(selection.value)
+    next.delete(key)
+    selection.value = next
+  }
 }
 
 // ── Selection ─────────────────────────────────────────────────────────────────
-const selectedId = ref(null)
+// The plate the user pressed last: the target of Rotate/Remove inside the selected
+// unit (a MOC instance is many plates, and rotation stays a single-plate action).
+const pressedId = ref(null)
+// Set by a drag that actually moved: the click that follows must not collapse the
+// multi-selection back to the pressed plate.
+let _suppressClick = false
+
+function clearSelection() { selection.value = new Set() }
+
+function applyUnitClick(plate, { toggle = false, add = false } = {}) {
+  const key = unitKey(plate)
+  const next = new Set(selection.value)
+  if (toggle) {
+    next.has(key) ? next.delete(key) : next.add(key)
+  } else if (add) {
+    next.add(key)
+  } else {
+    next.clear()
+    next.add(key)
+  }
+  selection.value = next
+}
+
+// The single selected plate, if exactly one unit is selected.
+function pressedPlate() {
+  if (selection.value.size !== 1) return null
+  const key = [...selection.value][0]
+  const members = placedPlates.value.filter(p => unitKey(p) === key)
+  if (!members.length) return null
+  return members.find(p => p.instanceId === pressedId.value) ?? members[0]
+}
 
 function selectPlate(e, plate) {
-  selectedId.value = plate.instanceId
+  pressedId.value = plate.instanceId
+  if (_suppressClick) { _suppressClick = false; return }
+  applyUnitClick(plate, {
+    toggle: !!(e.ctrlKey || e.metaKey),
+    add: !!e.shiftKey,
+  })
 }
 
 function onCanvasClick(e) {
-  if (e.target === e.currentTarget) selectedId.value = null
+  if (e.target !== e.currentTarget) return
+  if (_marqueeJustEnded) { _marqueeJustEnded = false; return }
+  clearSelection()
 }
 
 function rotateSelected() {
-  const p = placedPlates.value.find(p => p.instanceId === selectedId.value)
+  const p = pressedPlate()
   if (p) p.rotation = (p.rotation + 90) % 360
 }
 
 function onKeyDown(e) {
-  if (selectedId.value && (e.key === 'r' || e.key === 'R') && !e.ctrlKey && !e.metaKey) {
+  const single = pressedPlate()
+  if (single && (e.key === 'r' || e.key === 'R') && !e.ctrlKey && !e.metaKey) {
     rotateSelected()
   }
-  if (selectedId.value && (e.key === 'Delete' || e.key === 'Backspace')) {
-    removePlate(selectedId.value)
+  if (single && (e.key === 'Delete' || e.key === 'Backspace')) {
+    removePlate(single.instanceId)
   }
 }
 
+function onWindowKeyDown(e) {
+  if (e.key !== 'Escape') return
+  const tag = e.target?.tagName
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
+  if (_drag) return
+  clearSelection()
+}
+
 // ── Drag ─────────────────────────────────────────────────────────────────────
-const draggingId = ref(null)
-const draggingGroupId = ref(null)
+const draggingIds = ref(new Set())
 let _drag = null
+let _dragMoved = false
 
 function getEventCoords(e) {
   if (e.touches?.length) return { clientX: e.touches[0].clientX, clientY: e.touches[0].clientY }
@@ -631,20 +707,32 @@ function getEventCoords(e) {
 function startDrag(e, plate) {
   if (e.type !== 'touchstart' && e.button !== 0) return
   e.preventDefault()
-  selectedId.value = plate.instanceId
-  draggingId.value = plate.instanceId
+  pressedId.value = plate.instanceId
   const { clientX, clientY } = getEventCoords(e)
-  const members = groupMembers(plate)
-  const isGroup = members.length > 1
-  draggingGroupId.value = isGroup ? plate.placementId : null
+  // Explicit drag set: the whole selection when the pressed plate belongs to it,
+  // otherwise only the pressed plate's own unit.
+  const key = unitKey(plate)
+  const pressedWasSelected = selection.value.has(key)
+  const keys = pressedWasSelected ? expandToUnits(selection.value) : new Set([key])
+  const instanceIds = new Set()
+  for (const k of keys) for (const id of unitIds(k)) instanceIds.add(id)
+  if (!instanceIds.size) instanceIds.add(plate.instanceId)
+  const isGroup = instanceIds.size > 1
+  draggingIds.value = instanceIds
+  _dragMoved = false
+  _suppressClick = false
   _drag = {
     instanceId: plate.instanceId,
+    pressedWasSelected,
     startMouseX: clientX, startMouseY: clientY,
     startX: plate.xMm, startY: plate.yMm,
     isGroup,
-    groupIds: isGroup ? members.map(p => p.instanceId) : null,
+    instanceIds,
     groupStartPositions: isGroup
-      ? members.map(p => ({ instanceId: p.instanceId, startX: p.xMm, startY: p.yMm }))
+      ? [...instanceIds].map(id => {
+          const p = placedPlates.value.find(x => x.instanceId === id)
+          return { instanceId: id, startX: p.xMm, startY: p.yMm }
+        })
       : null,
   }
   window.addEventListener('mousemove', onMove)
@@ -653,11 +741,13 @@ function startDrag(e, plate) {
   window.addEventListener('touchend', onUp)
 }
 
-// Whole-instance drag: every plate with the same placementId follows the pointer as
-// a rigid block (uniform stud-grid shift, no internal deformation, no overlap).
+// Rigid multi-unit drag: every selected plate follows the pointer with one uniform
+// stud-grid delta (no internal deformation). Overlaps are checked against every
+// plate that is NOT part of the dragged set, so selected units never block each other.
 function onMoveGroup(e) {
-  const ids = new Set(_drag.groupIds)
-  const nonGroup = placedPlates.value.filter(p => !ids.has(p.instanceId))
+  if (!_drag.groupStartPositions?.length) return
+  const ids = _drag.instanceIds
+  const nonSelected = placedPlates.value.filter(p => !ids.has(p.instanceId))
   const { clientX, clientY } = getEventCoords(e)
   const STUD = 8
   const snapDx = Math.round((clientX - _drag.startMouseX) / (SCALE * zoom.value) / STUD) * STUD
@@ -671,7 +761,7 @@ function onMoveGroup(e) {
 
   const hasOv = proposed.some(pr => {
     if (!pr.p || !pr.bp) return false
-    return nonGroup.some(other => {
+    return nonSelected.some(other => {
       const obp = baseplateMap.value[other.baseplateId]
       if (!obp) return false
       return rectsOverlap(
@@ -691,6 +781,10 @@ function onMoveGroup(e) {
 
 function onMove(e) {
   if (!_drag) return
+  const pt = getEventCoords(e)
+  if (Math.hypot(pt.clientX - _drag.startMouseX, pt.clientY - _drag.startMouseY) > MARQUEE_THRESHOLD_PX) {
+    _dragMoved = true
+  }
   if (_drag.isGroup) return onMoveGroup(e)
   const p = placedPlates.value.find(t => t.instanceId === _drag.instanceId)
   if (!p) return
@@ -701,7 +795,7 @@ function onMove(e) {
   const eh = effectiveH(bp, p.rotation)
 
   // Raw new position in mm (canvas mm = xMm + PADDING_MM)
-  const { clientX, clientY } = getEventCoords(e)
+  const { clientX, clientY } = pt
   const rawCanvasX = (_drag.startX + PADDING_MM) + (clientX - _drag.startMouseX) / (SCALE * zoom.value)
   const rawCanvasY = (_drag.startY + PADDING_MM) + (clientY - _drag.startMouseY) / (SCALE * zoom.value)
 
@@ -777,13 +871,118 @@ function snapPlate(canvasX, canvasY, ew, eh, excludeId) {
 }
 
 function onUp() {
+  if (_drag) {
+    if (_dragMoved) {
+      // The click that follows a real drag must not collapse the multi-selection.
+      _suppressClick = true
+      if (!_drag.pressedWasSelected) {
+        const key = unitKeyOfInstance(_drag.instanceId)
+        if (key != null) selection.value = expandToUnits([key])
+      }
+    }
+  }
   _drag = null
-  draggingId.value = null
-  draggingGroupId.value = null
+  _dragMoved = false
+  draggingIds.value = new Set()
   window.removeEventListener('mousemove', onMove)
   window.removeEventListener('mouseup', onUp)
   window.removeEventListener('touchmove', onMove)
   window.removeEventListener('touchend', onUp)
+}
+
+// ── Marquee selection (mouse only) ───────────────────────────────────────────
+// Coordinates are canvas px, i.e. `(mm + PADDING_MM) * SCALE` — the same space as
+// the inline styles, so zoom/scroll never affect the hit test.
+const marqueeRect = ref(null)
+const canvasEl = ref(null)
+let _marquee = null
+let _marqueeJustEnded = false
+
+function canvasPoint(clientX, clientY) {
+  const el = canvasEl.value
+  if (!el) return null
+  const rect = el.getBoundingClientRect()
+  return { x: (clientX - rect.left) / zoom.value, y: (clientY - rect.top) / zoom.value }
+}
+
+// Single source of truth for a placed plate's geometry on the canvas: used by the
+// inline :style and by the marquee hit test.
+function plateRect(p) {
+  const bp = baseplateMap.value[p.baseplateId]
+  if (!bp) return null
+  const x = (p.xMm + PADDING_MM) * SCALE
+  const y = (p.yMm + PADDING_MM) * SCALE
+  return {
+    x1: x, y1: y,
+    x2: x + effectiveW(bp, p.rotation) * SCALE,
+    y2: y + effectiveH(bp, p.rotation) * SCALE,
+  }
+}
+
+function plateStyle(p) {
+  const r = plateRect(p)
+  if (!r) return {}
+  const bp = baseplateMap.value[p.baseplateId]
+  return {
+    left: r.x1 + 'px',
+    top: r.y1 + 'px',
+    width: (r.x2 - r.x1) + 'px',
+    height: (r.y2 - r.y1) + 'px',
+    background: bp?.legoColorRgb ? '#' + bp.legoColorRgb : '#9ac',
+  }
+}
+
+function onCanvasMouseDown(e) {
+  if (e.button !== 0 || e.target !== e.currentTarget) return
+  const p0 = canvasPoint(e.clientX, e.clientY)
+  if (!p0) return
+  e.preventDefault()
+  _marqueeJustEnded = false
+  _marquee = {
+    startX: p0.x, startY: p0.y, lastX: p0.x, lastY: p0.y, moved: false,
+    add: !!(e.ctrlKey || e.metaKey || e.shiftKey),
+  }
+  marqueeRect.value = null
+  window.addEventListener('mousemove', onMarqueeMove)
+  window.addEventListener('mouseup', onMarqueeUp)
+}
+
+function onMarqueeMove(e) {
+  if (!_marquee) return
+  const p = canvasPoint(e.clientX, e.clientY)
+  if (!p) return
+  _marquee.lastX = p.x
+  _marquee.lastY = p.y
+  if (!_marquee.moved &&
+      Math.hypot(p.x - _marquee.startX, p.y - _marquee.startY) < MARQUEE_THRESHOLD_PX) return
+  _marquee.moved = true
+  marqueeRect.value = normaliseMarquee(_marquee.startX, _marquee.startY, p.x, p.y)
+}
+
+function onMarqueeUp() {
+  const m = _marquee
+  _marquee = null
+  marqueeRect.value = null
+  window.removeEventListener('mousemove', onMarqueeMove)
+  window.removeEventListener('mouseup', onMarqueeUp)
+  if (!m?.moved) return // plain click on empty canvas: the click handler clears the selection
+
+  // One plate of a MOC instance touched by the rectangle selects the whole instance.
+  const rect = normaliseMarquee(m.startX, m.startY, m.lastX, m.lastY)
+  const hitKeys = new Set()
+  for (const p of placedPlates.value) {
+    const r = plateRect(p)
+    if (r && rectsIntersect(rect, r)) hitKeys.add(unitKey(p))
+  }
+  const units = expandToUnits(hitKeys)
+  if (m.add) {
+    const next = new Set(selection.value)
+    for (const k of units) next.add(k)
+    selection.value = next
+  } else {
+    selection.value = units
+  }
+  _marqueeJustEnded = true
 }
 
 // ── Palette drag: MOC / Set → canvas ─────────────────────────────────────────
@@ -1034,6 +1233,8 @@ async function fixLayout() {
           <div class="side-hints">
             <span>R — rotate</span>
             <span>Del — remove</span>
+            <span>Ctrl/Cmd+click or box — multi-select</span>
+            <span>Esc — deselect</span>
             <span>Ctrl+scroll — zoom</span>
           </div>
         </div>
@@ -1042,9 +1243,11 @@ async function fixLayout() {
         <div class="canvas-area">
           <!-- Selected plate toolbar -->
           <div class="toolbar">
-            <template v-if="selectedId">
+            <!-- Multi-selection moves as a whole: rotation and removal stay single-unit only. -->
+            <span v-if="selection.size > 1" class="multi-count">{{ selectedUnitKeys.length }} selected</span>
+            <template v-else-if="pressedPlate()">
               <button v-if="canWrite" class="tool-btn" @click="rotateSelected">↺ Rotate 90°</button>
-              <button v-if="canWrite" class="tool-btn danger" @click="removePlate(selectedId)">✕ Remove</button>
+              <button v-if="canWrite" class="tool-btn danger" @click="removePlate(pressedPlate().instanceId)">✕ Remove</button>
             </template>
             <!-- Plain placed-plate count (no derived estimate) -->
             <span v-if="placedPlates.length" class="plate-count">{{ placedPlates.length }} placed</span>
@@ -1065,7 +1268,9 @@ async function fixLayout() {
         <div class="canvas-zoom-container" :style="{ width: canvasWidth * zoom + 'px', height: canvasHeight * zoom + 'px' }">
           <div
             class="canvas"
+            ref="canvasEl"
             :style="{ width: canvasWidth + 'px', height: canvasHeight + 'px', transform: `scale(${zoom})`, transformOrigin: 'top left' }"
+            @mousedown="onCanvasMouseDown"
             @click="onCanvasClick"
           >
             <!-- Table silhouettes -->
@@ -1088,7 +1293,7 @@ async function fixLayout() {
               v-for="g in groupOutlines"
               :key="'grp-' + g.placementId"
               class="plate-group"
-              :class="{ 'plate-group--selected': g.placementId === selectedPlacementId }"
+              :class="{ 'plate-group--selected': selection.has(g.placementId) }"
               :style="{
                 left:   (g.xMm + PADDING_MM) * SCALE - 4 + 'px',
                 top:    (g.yMm + PADDING_MM) * SCALE - 4 + 'px',
@@ -1105,19 +1310,11 @@ async function fixLayout() {
               :key="p.instanceId"
               class="plate"
               :class="{
-                'plate--selected': selectedId === p.instanceId,
+                'plate--selected': selection.has(unitKey(p)),
                 'plate--group-selected': isGroupSelected(p),
-                'plate--dragging': draggingId === p.instanceId || (!!p.placementId && p.placementId === draggingGroupId),
+                'plate--dragging': draggingIds.has(p.instanceId),
               }"
-              :style="{
-                left:   (p.xMm + PADDING_MM) * SCALE + 'px',
-                top:    (p.yMm + PADDING_MM) * SCALE + 'px',
-                width:  effectiveW(baseplateMap[p.baseplateId], p.rotation) * SCALE + 'px',
-                height: effectiveH(baseplateMap[p.baseplateId], p.rotation) * SCALE + 'px',
-                background: baseplateMap[p.baseplateId]?.legoColorRgb
-                  ? '#' + baseplateMap[p.baseplateId].legoColorRgb
-                  : '#9ac',
-              }"
+              :style="plateStyle(p)"
               @mousedown="startDrag($event, p)"
               @touchstart.prevent="startDrag($event, p)"
               @click.stop="selectPlate($event, p)"
@@ -1141,6 +1338,18 @@ async function fixLayout() {
               </span>
               <span v-if="p.sourceSetId" class="plate-set-tag">{{ entityName(p.sourceSetId) }}</span>
             </div>
+
+            <!-- Marquee (rubber band) -->
+            <div
+              v-if="marqueeRect"
+              class="marquee"
+              :style="{
+                left:   marqueeRect.x1 + 'px',
+                top:    marqueeRect.y1 + 'px',
+                width:  (marqueeRect.x2 - marqueeRect.x1) + 'px',
+                height: (marqueeRect.y2 - marqueeRect.y1) + 'px',
+              }"
+            ></div>
           </div>
         </div>
           </div><!-- /canvas-wrap -->
@@ -1418,6 +1627,21 @@ async function fixLayout() {
 .tool-btn.danger:hover { background: #fde8e8; border-color: #c0392b; }
 
 .plate-count { margin-left: auto; font-size: 0.78rem; color: #778; font-weight: 600; }
+
+.multi-count {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #1a90d0;
+}
+
+/* ── Marquee (rubber band) ───────────────────────────────────────────────── */
+.marquee {
+  position: absolute;
+  border: 1px dashed #1a90d0;
+  background: rgba(26, 144, 208, 0.1);
+  pointer-events: none;
+  z-index: 20;
+}
 
 .loading, .empty { color: #888; padding: 1rem 0; }
 
