@@ -17,11 +17,15 @@ services:
     volumes:
       # host-visible: the runner refuses to migrate unless it can write its backup here
       - ./migration-backups:/migration-backups
+      # Keeps the Data Protection key ring, so cookie sessions survive restarts and redeploys.
+      # Treat this directory as a secret: it holds the keys that encrypt session cookies.
+      - ./dataprotection-keys:/app/keys
     environment:
       - ASPNETCORE_ENVIRONMENT=Production
       - MongoDb__ConnectionString=mongodb://admin:password@mongo:27017 # change if you need to connect to a different MongoDB instance
       - MongoDb__DatabaseName=trovekeep
       - Migration__BackupDir=/migration-backups
+      - DataProtection__KeyRingPath=/app/keys
     depends_on:
       - mongo
 

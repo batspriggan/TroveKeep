@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.DataProtection;
 using MongoDB.Bson;
 using MongoDB.Bson.Serialization;
 using MongoDB.Bson.Serialization.Serializers;
@@ -59,6 +60,16 @@ builder.Services.AddAuthorization(options =>
         .RequireAuthenticatedUser()
         .Build();
 });
+
+// The cookie session is encrypted with the Data Protection key ring. By default that ring lives
+// inside the container (~/.aspnet/DataProtection-Keys) and is regenerated on every recreation,
+// which silently invalidates every existing session. Pointing it at a mounted directory keeps
+// sessions valid across restarts and redeploys; unset means the ASP.NET Core default (fine for
+// local development).
+if (builder.Configuration["DataProtection:KeyRingPath"] is { Length: > 0 } keyRingPath)
+{
+    builder.Services.AddDataProtection().PersistKeysToFileSystem(new DirectoryInfo(keyRingPath));
+}
 
 // Optional OIDC login (Pangolin), registered only when explicitly enabled and fully configured.
 // The cookie scheme above remains the single session mechanism: OIDC authenticates the user once,
@@ -260,8 +271,10 @@ app.UseMiddleware<AppModeMiddleware>();
 app.UseMiddleware<CollectionMembershipMiddleware>();
 app.UseAuthorization();
 app.MapControllers();
-// Serves index.html for every non-API path (including /login), so the SPA router takes over.
-app.MapFallbackToFile("index.html");
+// Serves index.html for every non-API path (including /login and /setup), so the SPA router takes
+// over. The shell must be readable without a session, otherwise a logged-out instance answers 401
+// to the browser and renders a blank page with no way back to the login form.
+app.MapFallbackToFile("index.html").AllowAnonymous();
 
 app.Run();
 

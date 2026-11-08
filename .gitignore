@@ -494,3 +494,5 @@ appsettings.Development.json
 
 # Local pre-migration backups (dev only)
 migration-backups/
+# Data Protection key ring: secret, never committed
+dataprotection-keys/

@@ -58,6 +58,20 @@ There is **no authentication and no authorisation** of any kind:
 
 Because of this, **do not expose TroveKeep to the public internet** (no port-forwarding, no public reverse proxy, no cloud hosting without putting your own authentication layer and TLS in front of it). Anyone who can reach the port can read, modify, and delete the entire inventory. Treat it like a household appliance on the home network, not like a multi-tenant web service.
 
+> **Update — since v5.0.0 this paragraph only describes single-user mode.** TroveKeep now starts
+> **locked** until a one-shot first-run setup decides the application mode:
+>
+> - **single-user** — no accounts, no sessions, every request is served as a technical admin.
+>   This is the behaviour described above, and it stays the default for a home instance.
+> - **multi-user** — local accounts (plus optional OIDC) with cookie sessions, per-collection
+>   isolation, roles (Guest / Viewer / Editor / Owner / Admin) and access levels enforced on
+>   every write endpoint.
+>
+> In both modes the instance answers **503 to every API call** until setup completes, and the
+> setup itself requires a **token printed once in the startup log** — see
+> [First-run setup](#first-run-setup). An instance that was upgraded but never set up looks like
+> a broken app (blank page, `401` / `503`); that is the lock, not a fault.
+
 > **Authentication:** alongside local accounts, TroveKeep supports an optional OpenID Connect (Pangolin) login that maps an external identity to a local role. See [docs/oidc-pangolin.md](docs/oidc-pangolin.md) for setup and how it interacts with Pangolin.
 
 ## Features
@@ -151,6 +165,75 @@ podman-compose -f deploy/podman-compose.image.yml up -d
 
 The app is available at `http://localhost:8080`.
 
+> **The first start is locked.** Complete [First-run setup](#first-run-setup) before anything is
+> reachable; until then the browser shows a blank page and the API answers `503`.
+
+## First-run setup
+
+Since v5.0.0 a fresh **or upgraded** database needs a one-shot setup. The setup itself runs
+**exactly once** (`POST /api/setup` returns `409` afterwards), but the mode it picks is **not
+permanent**: an admin can switch between single-user and multi-user at any time from the user
+management page, or with `PUT /api/admin/mode` (`{"multiUserEnabled": true|false}`). What cannot
+be repeated is the initial account creation.
+
+### 1. Read the setup token
+
+The token exists only while the instance is unconfigured. It is generated in memory at startup and
+**printed to the log**, so it changes on every restart — read the log first, then post it.
+
+```bash
+docker logs trovekeep-api-1 2>&1 | grep -i "setup token"
+# warn: TroveKeep.Api[0] TroveKeep setup token: 6d8a290f...c14235cfdc (required by POST /api/setup ...)
+```
+
+With the compose files, the container is named after the stack (`<project>-api-1`); use
+`docker compose -f deploy/docker-compose.image.yml logs api` if you prefer the service name.
+If the instance is already initialized there is no token, and this step is done.
+
+### 2. Pick the mode
+
+**Single-user** — no accounts, no login, the previous v4 behaviour:
+
+```bash
+curl -X POST http://localhost:8080/api/setup \
+  -H 'Content-Type: application/json' \
+  -d '{"token":"<TOKEN>","multiUser":false}'
+```
+
+**Multi-user** — creates the first admin from the technical account, then `/login` is required:
+
+```bash
+curl -X POST http://localhost:8080/api/setup \
+  -H 'Content-Type: application/json' \
+  -d '{"token":"<TOKEN>","multiUser":true,"email":"you@example.com","password":"<at least 8 characters>"}'
+```
+
+The same form is available in the UI at `/setup` (it asks for the token in single-user mode).
+
+### 3. Verify
+
+```bash
+curl -s http://localhost:8080/api/setup/status
+# {"initialized":true,"multiUserEnabled":true,"requiresToken":false}
+```
+
+`requiresToken:false` means the setup is closed. In multi-user mode, log in at `/login`; in
+single-user mode every page is immediately reachable.
+
+> **Note:** the token is a transient first-run gate, not a permanent secret. Anyone who reaches the
+> API while it is unconfigured can complete the setup — do not leave a half-configured instance
+> exposed on a network you do not trust.
+
+### Troubleshooting a stuck instance
+
+| Symptom | Cause |
+| --- | --- |
+| Blank page, `GET /` answers `401` | Instance not initialized or no session — the shell is served anonymously since v5.0.1, older images need the setup first |
+| `503 TroveKeep is not initialized yet` | Setup not completed; read the token from the log |
+| `403 Invalid setup token` | Wrong/stale token — restart the container and read the fresh one from the log |
+| `409 This instance is already set up` | Setup already ran. To change the mode use the toggle in user management (`PUT /api/admin/mode`), not the setup endpoint. |
+| Logged out after every redeploy | Missing `DataProtection__KeyRingPath` mount — the key ring is regenerated with the container |
+
 #### Available tags
 
 | Tag | Meaning |
@@ -193,6 +276,7 @@ It expects the following Forgejo configuration under *Settings → Actions*:
 | `MongoDb__ConnectionString` | `mongodb://admin:password@mongo:27017` | MongoDB connection string |
 | `MongoDb__DatabaseName` | `trovekeep` | MongoDB database name |
 | `Migration__BackupDir` | *(empty)* | Directory (host-visible) where an automatic full backup is written before any pending migration runs. **Required** when there are pending migrations — if unset or the backup fails, startup aborts and no migration runs. Must align with the backup volume mount (e.g. `./migration-backups:/migration-backups` + `Migration__BackupDir=/migration-backups`). Both `deploy/docker-compose.*.yml` and `deploy/podman-compose.*.yml` already wire this up. |
+| `DataProtection__KeyRingPath` | *(unset → container-local default)* | Directory where the Data Protection key ring is persisted (`AddDataProtection().PersistKeysToFileSystem`). The ring encrypts the session cookie: leave it unset and every container recreation silently invalidates all sessions. The shipped compose files mount `./dataprotection-keys` at `/app/keys` and set this to that path. **Treat the directory as a secret** (it is git-ignored), back it up like the database, and do not share it between instances. |
 | `LabelTool__PublicBaseUrl` | *(empty)* | Public base URL of the API (no trailing slash) used to build the absolute image URL embedded in a label (label-tool downloads the image from this URL). Labels fall back to QR-only when this is unset. |
 
 > **Note:** Change the default MongoDB credentials before exposing the instance to a network.
