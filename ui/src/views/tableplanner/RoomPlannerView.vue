@@ -5,6 +5,7 @@ import { getRoom, getAllTemplates, saveRoomLayout, updateRoom, fitRoomToLayout }
 import { useActiveCollection } from '../../composables/useActiveCollection.js'
 import { getAllBaseplates } from '../../api/baseplates.js'
 import { generateRoomPdf } from '../../utils/roomPdf.js'
+import { TILE_OPTIONS } from '../../utils/printSheets.js'
 import { MARQUEE_THRESHOLD_PX, normaliseMarquee } from '../../utils/marquee.js'
 import { bboxOf, closeOverUnits, collectUnitKeys, nextSelection, planRigidDrag } from '../../utils/selection.js'
 
@@ -53,6 +54,31 @@ const selection = ref(new Set())
 const canvasEl = ref(null)
 const baseplates = ref([])
 const aggSelections = ref({})           // aggIdx → canonical bpKey e.g. "16x32"
+
+// Print options for `Export PDF`. Both are opt-in: the default export is the same
+// single landscape/portrait A4 sheet it always was.
+//   printGrid — placeholder baseplate grid over the groups with a plate selected below.
+//   tileSize  — 1 | 2 | 3 × A4 sheets at full size instead of one shrunk page.
+const printGrid = ref(false)
+const tileSize = ref(1)
+const printSummary = ref('inline')   // 'inline' | 'separate-page' | 'none'
+// With the placeholder grid on, the sheet carries the drawing only: the summary is
+// forced off, and the control says so instead of pretending to work.
+const summaryForcedOff = computed(() => printGrid.value)
+
+// The placeholder grid needs a plate size to tile with, and that comes from the plate
+// calculator below the canvas — one size per group. Warn instead of drawing nothing.
+const printGridHint = computed(() =>
+  printGrid.value && Object.values(aggSelections.value).every(v => !v)
+    ? 'Plate grid: pick a baseplate size in the calculator first'
+    : '',
+)
+
+const PLATE_TYPES = [
+  { value: 'Standard', label: 'Plate' },
+  { value: 'Road', label: 'Road' },
+  { value: 'Custom', label: 'Custom' },
+]
 
 // Map from templateId → template data for display
 const templateMap = computed(() => {
@@ -935,7 +961,21 @@ async function fitToTables() {
 function exportPdf() {
   pdfExporting.value = true
   try {
-    generateRoomPdf(room.value, templates.value, placedTables.value, aggregates.value)
+    // The calculator keys a plate type by its *canonical* stud pair (min × max), so a
+    // 16×32 and a 32×16 selection are the same entry. Types are drawn from the library,
+    // where type is not part of the key: take it from the first matching plate.
+    const bpTypes = {}
+    for (const bp of baseplates.value) {
+      const key = `${Math.min(bp.widthStuds, bp.depthStuds)}x${Math.max(bp.widthStuds, bp.depthStuds)}`
+      bpTypes[key] ??= bp.type ?? 'Standard'
+    }
+    generateRoomPdf(room.value, templates.value, placedTables.value, aggregates.value, {
+      baseplateGrid: printGrid.value,
+      bpKeyByAggIdx: { ...aggSelections.value },
+      bpTypes,
+      tileSize: tileSize.value,
+      tableSummary: summaryForcedOff.value ? 'none' : printSummary.value,
+    })
   } finally {
     pdfExporting.value = false
   }
@@ -1022,6 +1062,38 @@ async function saveLayout() {
           <button class="zoom-btn" @click="zoomIn" :disabled="zoom >= MAX_ZOOM" title="Zoom in">+</button>
         </div>
         <span v-if="saveSuccess" class="save-ok">Layout saved!</span>
+        <!-- Print options: a labelled block, not loose controls — a bare checkbox in a
+             crowded header row reads as a toggle for the canvas, not for the PDF. -->
+        <div class="print-opts">
+          <span class="print-opts-title">PDF</span>
+          <label class="print-opt" :title="printGridHint || 'Draw a placeholder baseplate grid over the groups that have a plate size selected in the calculator'">
+            <input type="checkbox" v-model="printGrid" />
+            Plate grid
+          </label>
+          <label
+            class="print-opt"
+            :class="{ disabled: summaryForcedOff }"
+            :title="summaryForcedOff
+              ? 'A plate grid sheet prints the drawing only: the summary is off'
+              : 'Where the table summary goes in the PDF'"
+          >
+            Summary
+            <select v-model="printSummary" class="print-select" :disabled="summaryForcedOff">
+              <option value="inline">On page</option>
+              <option value="separate-page">Own page</option>
+              <option value="none">None</option>
+            </select>
+          </label>
+          <label class="print-opt" title="Print the layout across several A4 sheets at full size">
+            Sheets
+            <select v-model.number="tileSize" class="print-select">
+              <option v-for="n in TILE_OPTIONS" :key="n" :value="n">
+                {{ n === 1 ? '1' : `${n}×${n}` }}
+              </option>
+            </select>
+          </label>
+        </div>
+        <span v-if="printGridHint" class="print-hint">{{ printGridHint }}</span>
         <button class="pdf-btn" :disabled="pdfExporting" @click="exportPdf" title="Export layout as PDF">
           {{ pdfExporting ? 'Exporting…' : 'Export PDF' }}
         </button>
@@ -1219,6 +1291,60 @@ async function saveLayout() {
   color: #2a7a2a;
   font-size: 0.85rem;
   font-weight: 600;
+}
+
+.print-opts {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.2rem 0.5rem;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  background: #fafafa;
+  white-space: nowrap;
+}
+
+.print-opts-title {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: #999;
+  text-transform: uppercase;
+}
+
+.print-opt {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.8rem;
+  color: #444;
+}
+
+.print-opt.disabled { opacity: 0.45; }
+.print-select:disabled { cursor: not-allowed; }
+
+.print-opt input[type="checkbox"] {
+  margin: 0 0.1rem 0 0;
+  width: 15px;
+  height: 15px;
+  cursor: pointer;
+}
+
+.print-select {
+  font-size: 0.8rem;
+  padding: 0.1rem 0.2rem;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  background: #fff;
+  color: #333;
+  cursor: pointer;
+}
+
+.print-hint {
+  font-size: 0.75rem;
+  color: #b26a00;
+  max-width: 14rem;
+  line-height: 1.2;
 }
 
 .pdf-btn {

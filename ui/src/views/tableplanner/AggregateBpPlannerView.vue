@@ -5,6 +5,7 @@ import { getRoom, getAllTemplates, saveAggregateBpLayout } from '../../api/table
 import { getAllBaseplates, getBaseplateImageUrl, getPlannerEntities } from '../../api/baseplates.js'
 import { getSet } from '../../api/sets.js'
 import { generateAggregatePdf } from '../../utils/platePdf.js'
+import { TILE_OPTIONS } from '../../utils/printSheets.js'
 import { useActiveCollection } from '../../composables/useActiveCollection.js'
 import { MARQUEE_THRESHOLD_PX, normaliseMarquee } from '../../utils/marquee.js'
 import { collectUnitKeys, nextSelection, planRigidDrag, rectsOverlap } from '../../utils/selection.js'
@@ -31,6 +32,39 @@ const plannerEntities = ref([])
 const loading   = ref(true)
 const saveSuccess = ref(false)
 const pdfExporting = ref(false)
+// Print options for `Export PDF`, all opt-in; the default is the one-page A4 sheet with
+// the real placements and the summary.
+//   tileSize  — 1 | 2 | 3 × A4 sheets at full size.
+//   printGrid — placeholder grid for a plate type that is not placed yet (drawn instead
+//               of the placements, on a sheet with nothing but the grid).
+const tileSize = ref(1)
+const printGrid = ref(false)
+const printGridBpKey = ref('')
+const printSummary = ref('inline')   // 'inline' | 'separate-page' | 'none'
+// With the placeholder grid on, the sheet carries the drawing only: the summary is
+// forced off, and the control says so instead of pretending to work.
+const summaryForcedOff = computed(() => printGrid.value)
+
+// Plate types available as a placeholder, keyed canonically (min × max studs) like the
+// room planner's calculator.
+const printGridOptions = computed(() => {
+  const seen = new Map()
+  for (const bp of baseplates.value) {
+    const w = Math.min(bp.widthStuds, bp.depthStuds)
+    const d = Math.max(bp.widthStuds, bp.depthStuds)
+    const key = `${w}x${d}`
+    if (!seen.has(key)) seen.set(key, { key, label: `${w}×${d} studs`, type: bp.type ?? 'Standard' })
+  }
+  return [...seen.values()].sort((a, b) => b.key.localeCompare(a.key, undefined, { numeric: true }))
+})
+
+// As in the room planner, a grid sheet is only worth printing for a size that is
+// actually picked; with nothing chosen there is nothing to lay out.
+const printGridHint = computed(() => {
+  if (!printGrid.value || printGridBpKey.value) return ''
+  if (printGridOptions.value.length === 0) return 'Plate grid: no baseplate in the library'
+  return 'Plate grid: pick a size first'
+})
 const zoom = ref(1)
 const canvasWrapEl = ref(null)
 
@@ -1053,6 +1087,13 @@ function exportPdf() {
       placedPlates.value,
       baseplateMap.value,
       baseplates.value,
+      {
+        baseplateGrid: printGrid.value,
+        gridBpKey: printGridBpKey.value,
+        gridBpType: printGridOptions.value.find(o => o.key === printGridBpKey.value)?.type ?? 'Standard',
+        tileSize: tileSize.value,
+        tableSummary: summaryForcedOff.value ? 'none' : printSummary.value,
+      },
     )
   } finally {
     pdfExporting.value = false
@@ -1102,6 +1143,44 @@ async function fixLayout() {
           <button class="zoom-btn" @click="zoomIn" :disabled="zoom >= MAX_ZOOM" title="Zoom in">+</button>
         </div>
         <span v-if="saveSuccess" class="save-ok">Saved!</span>
+        <div class="print-opts">
+          <span class="print-opts-title">PDF</span>
+          <label class="print-opt" title="Print the layout across several A4 sheets at full size">
+            Sheets
+            <select v-model.number="tileSize" class="print-select">
+              <option v-for="n in TILE_OPTIONS" :key="n" :value="n">
+                {{ n === 1 ? '1' : `${n}×${n}` }}
+              </option>
+            </select>
+          </label>
+          <!-- Grid is the exception here: the normal sheet already shows the real
+               placements, so the placeholder is opt-in and comes with its own size. -->
+          <label class="print-opt" :title="printGridHint || 'Instead of the placements, print an empty grid of one plate size to fill in by hand'">
+            <input type="checkbox" v-model="printGrid" />
+            Plate grid
+          </label>
+          <label v-if="printGrid" class="print-opt">
+            <select v-model="printGridBpKey" class="print-select" title="Placeholder plate type">
+              <option value="">— size —</option>
+              <option v-for="o in printGridOptions" :key="o.key" :value="o.key">{{ o.label }}</option>
+            </select>
+          </label>
+          <label
+            class="print-opt"
+            :class="{ disabled: summaryForcedOff }"
+            :title="summaryForcedOff
+              ? 'A plate grid sheet prints the drawing only: the summary is off'
+              : 'Where the baseplate summary goes in the PDF'"
+          >
+            Summary
+            <select v-model="printSummary" class="print-select" :disabled="summaryForcedOff">
+              <option value="inline">On page</option>
+              <option value="separate-page">Own page</option>
+              <option value="none">None</option>
+            </select>
+          </label>
+        </div>
+        <span v-if="printGridHint" class="print-hint">{{ printGridHint }}</span>
         <button class="pdf-btn" :disabled="pdfExporting" @click="exportPdf" title="Export layout as PDF">
           {{ pdfExporting ? 'Exporting…' : 'Export PDF' }}
         </button>
@@ -1437,6 +1516,60 @@ async function fixLayout() {
   padding: 0.3rem 0.8rem; cursor: pointer; font-weight: 600; white-space: nowrap;
 }
 .fix-btn:hover { background: #e0a800; }
+
+.print-opts {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.2rem 0.5rem;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  background: #fafafa;
+  white-space: nowrap;
+}
+
+.print-opts-title {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: #999;
+  text-transform: uppercase;
+}
+
+.print-opt {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.8rem;
+  color: #444;
+}
+
+.print-opt.disabled { opacity: 0.45; }
+.print-select:disabled { cursor: not-allowed; }
+
+.print-hint {
+  font-size: 0.75rem;
+  color: #b26a00;
+  max-width: 14rem;
+  line-height: 1.2;
+}
+
+.print-opt input[type="checkbox"] {
+  margin: 0 0.1rem 0 0;
+  width: 15px;
+  height: 15px;
+  cursor: pointer;
+}
+
+.print-select {
+  font-size: 0.8rem;
+  padding: 0.1rem 0.2rem;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  background: #fff;
+  color: #333;
+  cursor: pointer;
+}
 
 .pdf-btn {
   background: #f0f0f0; border: 1px solid #ccc; border-radius: 4px;
