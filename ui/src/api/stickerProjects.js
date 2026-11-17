@@ -28,6 +28,8 @@ export function toItemPayload(items) {
     depthStuds: item.depthStuds,
     copies: item.copies,
     fit: item.fit,
+    // How the artwork sits inside the label; `null` lets the server apply the `Auto` default.
+    orientation: item.orientation ?? null,
     notes: item.notes ?? null,
   }))
 }

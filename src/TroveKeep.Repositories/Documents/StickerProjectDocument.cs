@@ -36,5 +36,13 @@ public class StickerItemDocument
     public int DepthStuds { get; set; }
     public int Copies { get; set; } = 1;
     public StickerFit Fit { get; set; } = StickerFit.Contain;
+
+    /// <summary>
+    /// Artwork orientation, persisted as its enum NAME (like the API does) so the stored document
+    /// stays readable. A missing field deserialises to the default <see cref="StickerOrientation.Auto"/>.
+    /// </summary>
+    [BsonRepresentation(BsonType.String)]
+    public StickerOrientation Orientation { get; set; } = StickerOrientation.Auto;
+
     public string? Notes { get; set; }
 }

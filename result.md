@@ -1,21 +1,21 @@
-# Task: stickers-frontend
+# Task: stickers-orientation
 - esito: success
 - modello: deepseek/deepseek-flash:high
-- file modificati: ui/src/api/stickerImages.js (nuovo), ui/src/api/stickerProjects.js (nuovo), ui/src/api/stickers.js (rimosso), ui/src/composables/useStickerSheet.js, ui/src/utils/stickerSheets.js, ui/src/utils/stickerImages.js, ui/src/utils/stickerPdf.js, ui/src/views/stickers/StickerLibraryView.vue, ui/src/views/stickers/StickerProjectListView.vue (nuovo), ui/src/views/stickers/StickerProjectView.vue (nuovo), ui/src/components/stickers/StickerImagePicker.vue (nuovo), ui/src/components/stickers/StickerPrintPanel.vue (nuovo), ui/src/router/index.js, ui/src/components/AppNav.vue, ui/tests/stickerFits.test.mjs (nuovo), CLAUDE.md, README.md, result.md
-- test eseguiti: cd ui && npm ci --prefer-offline (node_modules assente, 60 pacchetti da cache locale), cd ui && npm test (77/77 verdi, incluso sfcBindings su tutte e 5 le SFC sticker), cd ui && npm run build (successo), grep "api/stickers" e vecchia shape in ui/ (nessun risultato)
-- problemi aperti: i quattro fit e il PDF sono verificati headless (geometria dei rettangoli sorgente/destinazione + canvas stub), la resa pixel reale va provata in browser stampando un foglio; il salvataggio debounced (600 ms) viene flushato alla navigazione ma non alla chiusura brutale della tab
+- file modificati: CLAUDE.md, README.md, src/TroveKeep.Api/Controllers/StickerProjectsController.cs, src/TroveKeep.Api/DTOs/Requests/StickerRequests.cs, src/TroveKeep.Api/DTOs/Responses/StickerResponse.cs, src/TroveKeep.Core/Models/StickerProject.cs, src/TroveKeep.Repositories/Documents/StickerProjectDocument.cs, src/TroveKeep.Repositories/StickerProjectRepository.cs, src/TroveKeep.Services/StickerProjectService.cs, src/TroveKeep.Services/StickerRules.cs, tests/TroveKeep.Tests/StickerServiceTests.cs, ui/src/api/stickerProjects.js, ui/src/utils/stickerImages.js, ui/src/views/stickers/StickerProjectView.vue, ui/tests/stickerFits.test.mjs, result.md
+- test eseguiti: dotnet build (0 warning, 0 errori), dotnet test (50/50 verdi), cd ui && npm test (84/84 verdi, sfcBindings incluso), cd ui && npm run build (successo), controllo ad-hoc della resa con canvas 2D simulato (rotazione artwork verificata pixel per pixel)
+- problemi aperti: `Fit` è in realtà persistito come valore numerico dell'enum, quindi `Orientation` è salvato esplicitamente come stringa (`BsonRepresentation(BsonType.String)`) per rispettare la specifica "store as string"; `ui/src/api/stickerImages.js` non è stato toccato perché l'orientamento appartiene all'item di progetto, non alla riga di libreria (viaggia in `toItemPayload` di `stickerProjects.js`); la resa pixel reale va comunque controllata in browser stampando un foglio
 - riepilogo:
-  Riscritta la SPA sticker sul modello a tre livelli. `/stickers` è ora solo la libreria artwork
-  (griglia, rinomina inline, upload multiplo con nome dal file, sostituisci/rimuovi immagine,
-  elimina con messaggio del server quando l'immagine è usata), `/sticker-projects` elenca i
-  progetti (nome, item, label totali, date, crea/elimina con ConfirmDialog) e `/sticker-projects/:id`
-  è l'editor: picker artwork con thumbnail, footprint 1×1..2×8 o custom, copie, fit con etichette
-  umane, note; lista item con copie/fit/note modificabili in place, remove, PUT debounced della
-  lista intera con gli id, stato Saving…/Saved/errore, 409 → reload + messaggio, 400 (footprint
-  duplicato) surfaceato; pannello di stampa (opzioni layout + totale copie + Generate PDF) spostato
-  qui. `useStickerSheet` conserva solo le opzioni persistite; le copie sono campo dell'item.
-  I fit (Contain default / Cover / Fill / Center) sono cotti nel raster: `computeFitGeometry`
-  calcola i rettangoli src/dst, il loader disegna in una canvas la cui dimensione in px deriva
-  dalla `graphic` del piano (`stickerGraphicMm`, condiviso col packer) ed è chiavata per item +
-  orientamento, con la variante ruotata pre-rotata (crop rotation-aware) e alias jsPDF invariata.
-  Rotte e nav aggiornate, Viewer readonly (canWriteAnywhere), Guest esclusi; CLAUDE.md/README allineati.
+  Aggiunto `StickerOrientation { Auto, Landscape, Portrait }` (default `Auto`) a `StickerItem` nel
+  Core, con documentazione che lo distingue da `allowRotate`. Backend: parsing per nome
+  (`StickerRules.ParseOrientation`, sconosciuto → 400, assente → `Auto`), validazione
+  `Enum.IsDefined` nel servizio, mapping del documento Mongo, `Orientation` in request e response.
+  Frontend: `ORIENTATION_OPTIONS` ("As uploaded" / "Horizontal" / "Vertical"),
+  `isStickerOrientation`/`normalizeOrientation`, `resolveEffectiveSource` che scambia gli assi
+  PRIMA del fit (ordine ruota-poi-adatta), `computeFitGeometry` con parametro orientamento e
+  `drawStickerRaster` che applica la rotazione dell'artwork con una trasformazione canvas attorno
+  al rettangolo dell'etichetta (la rotazione del packer resta `rotateStickerRaster` sul raster
+  finito: le due compongono). UI: selettore orientamento nel form "add item" e nella riga
+  dell'item, persistito dal PUT debounced; etichetta in sola lettura per chi non può scrivere.
+  Test: backend 6 nuovi casi (parse, default, rifiuto, round-trip create/update/response, mm
+  invariati); frontend 7 nuovi test (opzioni, resolveEffectiveSource, i quattro fit con orientamento,
+  raster ruotato, Auto invariato, mm invariati, composizione con la rotazione del packer).

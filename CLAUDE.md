@@ -4,7 +4,7 @@
 
 **Backend:** `dotnet build` · `cd src/TroveKeep.Api && dotnet run` (http://localhost:5221, OpenAPI at `/openapi/v1.json`)
 
-**Frontend:** `cd ui && npm run dev` (http://localhost:5173, proxies /api → 5221) · `npm run build` · `npm run preview` · `npm test` (dependency-free `node:test` unit tests in `ui/tests/`: the planner marquee, selection and rigid-group-drag maths, plus the sticker-sheet packing, the four artwork fits and the PDF renderer)
+**Frontend:** `cd ui && npm run dev` (http://localhost:5173, proxies /api → 5221) · `npm run build` · `npm run preview` · `npm test` (dependency-free `node:test` unit tests in `ui/tests/`: the planner marquee, selection and rigid-group-drag maths, plus the sticker-sheet packing, the four artwork fits, the per-item artwork orientation and the PDF renderer)
 
 **Tests:** `dotnet test` (xUnit, `tests/TroveKeep.Tests` — the collection-scope write rules, the global-write filter and the sticker image/project business rules) · `cd ui && npm test`.
 
@@ -71,12 +71,20 @@ A Viewer (or a user with no collection) still reads and prints stickers.
   - `StickerProject` = `{ Name (trimmed, 1..80), Items, CreatedAt, UpdatedAt, Version }`; the item
     list is replaced wholesale on update (supplied item `Id`s are kept, new ones get a fresh Guid)
     and may be empty — a project is created first, items are added later.
-  - `StickerItem` = `{ Id, ImageId, WidthStuds, DepthStuds (1..32 each), Copies (1..999), Fit, Notes? }`.
-    One stud is 8 mm (`StickerItem.StudMm`), so a 2×4 tile is a 16×32 mm label; the response DTOs
-    send `WidthMm`/`DepthMm` so the SPA never repeats the constant.
+  - `StickerItem` = `{ Id, ImageId, WidthStuds, DepthStuds (1..32 each), Copies (1..999), Fit,
+    Orientation, Notes? }`. One stud is 8 mm (`StickerItem.StudMm`), so a 2×4 tile is a 16×32 mm
+    label; the response DTOs send `WidthMm`/`DepthMm` so the SPA never repeats the constant.
   - `StickerFit` enum `{ Contain (default), Cover, Fill, Center }` is serialised as its **name** and is
     **orthogonal to rotation**: the footprint is always in studs, `Fit` only says how the artwork
     fills the label graphic area (the sheet engine decides the page rotation).
+  - `StickerOrientation` enum `{ Auto (default), Landscape, Portrait }` is the **per-item artwork
+    orientation**, also serialised as its name (unknown/missing → `Auto`; no migration, the missing
+    field deserialises to the default). It turns the **artwork inside the label**, never the label:
+    a 2×4 tile stays 16 × 32 mm. `Auto` means "as uploaded", not "never turned". It is **orthogonal
+    to the sheet option `allowRotate`** (the packer turning a whole label by 90° when that is the
+    only way it fits the page): the two rotations act on different things and compose. Ordering is
+    fixed — **rotate first, then fit** — so `Contain` on a landscape image placed `Portrait`
+    letterboxes on the correct axis and `Cover` crops the already-turned image.
   - Rules (`StickerProjectService`, `InvalidOperationException` → 400): an item's `ImageId` must
     exist, and a second item with the same `ImageId + WidthStuds + DepthStuds` in one project is
     refused (two rows are indistinguishable to the user). Deleting a `StickerImage` used by project
@@ -121,10 +129,10 @@ Current chain: `001` baseplate type fields · `002` set images by set id · `003
   create (name only), delete. `/sticker-projects/:id` — the project editor
   (`views/stickers/StickerProjectView.vue`): rename, add an item (artwork picker
   `components/stickers/StickerImagePicker.vue`, footprint presets 1×1..2×8 or custom studs, copies,
-  fit, notes), item list with in-place copies/fit/notes, remove, and the A4 print panel
-  (`components/stickers/StickerPrintPanel.vue`). All three are hidden to a Guest (who only reaches
-  `/table-planner`) and read-only to a Viewer: mutating controls need `canWriteAnywhere`. API clients
-  `ui/src/api/stickerImages.js` and `ui/src/api/stickerProjects.js`.
+  fit, artwork orientation, notes), item list with in-place copies/fit/orientation/notes, remove, and
+  the A4 print panel (`components/stickers/StickerPrintPanel.vue`). All three are hidden to a Guest
+  (who only reaches `/table-planner`) and read-only to a Viewer: mutating controls need
+  `canWriteAnywhere`. API clients `ui/src/api/stickerImages.js` and `ui/src/api/stickerProjects.js`.
   The editor persists the **whole item list** with one `PUT` (debounced, item ids included, so rows
   survive), shows a save state and handles a 409 by reloading; the server's 400 for a duplicate
   `image + footprint` and for deleting a still-used image is surfaced verbatim.
@@ -140,8 +148,12 @@ Current chain: `001` baseplate type fields · `002` set images by set id · `003
   `doc.addImage` cannot crop: `computeFitGeometry` returns the source and destination rectangles and
   the loader draws them into a canvas whose pixel size comes from the plan's `graphic` rectangle
   (`stickerGraphicMm`, shared with the packer), keyed per **item + orientation** so jsPDF still
-  aliases repeated copies. The loader's canvas factory and artwork loader are injectable, so the four
-  fits and the rotated case are unit-tested headless (`tests/stickerFits.test.mjs`).
+  aliases repeated copies. The item's `Orientation` is resolved **before** the fit
+  (`resolveEffectiveSource` swaps the source axes when it disagrees with the raster's natural one)
+  and the raster applies the 90° turn with a canvas transform around the label rectangle; the
+  packer's label turn is then `rotateStickerRaster` on the finished upright raster, so the two
+  compose. The loader's canvas factory and artwork loader are injectable, so the four fits, the two
+  artwork orientations and the rotated case are unit-tested headless (`tests/stickerFits.test.mjs`).
 - **Multi-selection in both planners** (`RoomPlannerView`, `AggregateBpPlannerView`) is **volatile**: it
   lives in a `Set` in component state and is never serialised into `layout`/`placedBaseplates`.
   Ctrl/Cmd+click toggles, Shift+click adds, dragging on empty canvas draws a marquee

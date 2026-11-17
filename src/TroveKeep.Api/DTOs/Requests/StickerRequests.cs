@@ -11,7 +11,9 @@ public record UpdateStickerImageRequest(string Name, int Version = 0);
 
 /// <summary>
 /// One item of a sticker project. <c>Fit</c> is the enum NAME ("Contain" | "Cover" | "Fill" |
-/// "Center") and defaults to <c>Contain</c> when omitted; <c>Id</c> is optional and, when present, is
+/// "Center") and defaults to <c>Contain</c> when omitted; <c>Orientation</c> is the enum NAME
+/// ("Auto" | "Landscape" | "Portrait") and defaults to <c>Auto</c> when omitted — it turns the
+/// artwork inside the label, never the label itself. <c>Id</c> is optional and, when present, is
 /// kept so a client can track the row across an update.
 /// </summary>
 public record StickerItemRequest(
@@ -21,6 +23,7 @@ public record StickerItemRequest(
     int DepthStuds,
     int Copies = 1,
     string? Fit = null,
+    string? Orientation = null,
     string? Notes = null);
 
 /// <summary>A new sticker project. The item list may be empty: a project is filled later.</summary>

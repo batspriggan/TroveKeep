@@ -4,8 +4,8 @@ namespace TroveKeep.Services;
 
 /// <summary>
 /// The shared business limits of the sticker feature: one name rule for the image library and the
-/// projects, the stud range of an item footprint, the copy range, and the fit parser. Kept in one
-/// place so the image and project services cannot drift apart.
+/// projects, the stud range of an item footprint, the copy range, and the fit/orientation parsers.
+/// Kept in one place so the image and project services cannot drift apart.
 /// </summary>
 public static class StickerRules
 {
@@ -44,5 +44,25 @@ public static class StickerRules
 
         throw new InvalidOperationException(
             $"Unknown sticker fit '{value}'. Use Contain, Cover, Fill or Center.");
+    }
+
+    /// <summary>
+    /// Parses the orientation name sent by the client ("Auto", "Landscape", "Portrait"). Absent or
+    /// empty means <see cref="StickerOrientation.Auto"/>; anything else is a 400-mapped error. It is
+    /// the item's artwork orientation, not the packer's <c>allowRotate</c>.
+    /// </summary>
+    public static StickerOrientation ParseOrientation(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return StickerOrientation.Auto;
+
+        var trimmed = value.Trim();
+        foreach (var name in Enum.GetNames<StickerOrientation>())
+        {
+            if (string.Equals(name, trimmed, StringComparison.OrdinalIgnoreCase))
+                return Enum.Parse<StickerOrientation>(name);
+        }
+
+        throw new InvalidOperationException(
+            $"Unknown sticker orientation '{value}'. Use Auto, Landscape or Portrait.");
     }
 }

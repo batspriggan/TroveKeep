@@ -83,6 +83,10 @@ public class StickerProjectService : IStickerProjectService
                 throw new InvalidOperationException(
                     $"Unknown sticker fit '{(int)item.Fit}'. Use Contain, Cover, Fill or Center.");
 
+            if (!Enum.IsDefined(item.Orientation))
+                throw new InvalidOperationException(
+                    $"Unknown sticker orientation '{(int)item.Orientation}'. Use Auto, Landscape or Portrait.");
+
             if (item.WidthStuds < StickerRules.MinStuds || item.WidthStuds > StickerRules.MaxStuds)
                 throw new InvalidOperationException(
                     $"The sticker width must be between {StickerRules.MinStuds} and {StickerRules.MaxStuds} studs.");
@@ -108,6 +112,8 @@ public class StickerProjectService : IStickerProjectService
                 Copies = item.Copies,
                 // Fit is orthogonal metadata with a safe default: never a reason to refuse an item.
                 Fit = item.Fit,
+                // Same for the artwork orientation: it turns the image, never the label.
+                Orientation = item.Orientation,
                 Notes = string.IsNullOrWhiteSpace(item.Notes) ? null : item.Notes.Trim(),
             });
         }

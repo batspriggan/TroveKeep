@@ -33,12 +33,13 @@ public class StickerProject
 
 /// <summary>
 /// One entry of a <see cref="StickerProject"/>: which artwork to print, how large (in studs), how
-/// many copies, and how the artwork fills the label.
+/// many copies, how the artwork is turned inside the label, and how it fills the label.
 ///
 /// <para>
-/// The footprint is always expressed in studs — never millimetres and never rotated: the fit
-/// describes how the artwork fills the label graphic area, and the sheet engine decides the page
-/// rotation. One stud is <see cref="StudMm"/> millimetres, so a 2×4 tile is a 16 mm × 32 mm label.
+/// The footprint is always expressed in studs — never millimetres and never rotated: neither the
+/// fit nor the <see cref="StickerOrientation"/> changes the physical label, they only describe how
+/// the artwork fills the label graphic area. The sheet engine decides the page rotation. One stud
+/// is <see cref="StudMm"/> millimetres, so a 2×4 tile is a 16 mm × 32 mm label.
 /// </para>
 /// </summary>
 public class StickerItem
@@ -64,6 +65,12 @@ public class StickerItem
     /// <summary>How the artwork fills the label; defaults to <see cref="StickerFit.Contain"/>.</summary>
     public StickerFit Fit { get; set; } = StickerFit.Contain;
 
+    /// <summary>
+    /// How the artwork is turned inside the label (the turning happens <b>before</b> the fit);
+    /// defaults to <see cref="StickerOrientation.Auto"/>, i.e. keep the artwork as uploaded.
+    /// </summary>
+    public StickerOrientation Orientation { get; set; } = StickerOrientation.Auto;
+
     /// <summary>Free-form remark for the operator (never printed).</summary>
     public string? Notes { get; set; }
 }
@@ -84,4 +91,28 @@ public enum StickerFit
 
     /// <summary>Natural size, centred, not scaled.</summary>
     Center,
+}
+
+/// <summary>
+/// How an item's artwork is turned inside its label. Orthogonal to the footprint (the label keeps
+/// its millimetres) and to the fit: the artwork is turned first, the fit is applied afterwards, so
+/// <see cref="StickerFit.Contain"/> on a landscape image placed <see cref="Portrait"/> letterboxes on
+/// the correct axis and <see cref="StickerFit.Cover"/> crops the already-turned image.
+///
+/// <para>
+/// NOT to be confused with the sheet option <c>allowRotate</c>: that one lets the packer turn a
+/// whole label by 90° when it is the only way it fits the A4 page, and it stays a layout option.
+/// The two rotations are independent and compose.
+/// </para>
+/// </summary>
+public enum StickerOrientation
+{
+    /// <summary>Keep the artwork's own orientation (the default). Not "no rotation": as uploaded.</summary>
+    Auto,
+
+    /// <summary>Force the artwork to lie horizontally (wider than tall).</summary>
+    Landscape,
+
+    /// <summary>Force the artwork to stand vertically (taller than wide).</summary>
+    Portrait,
 }
