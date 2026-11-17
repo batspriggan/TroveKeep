@@ -1,21 +1,28 @@
-# Task: stickers-orientation
+# Task: sticker-packing
 - esito: success
 - modello: deepseek/deepseek-flash:high
-- file modificati: CLAUDE.md, README.md, src/TroveKeep.Api/Controllers/StickerProjectsController.cs, src/TroveKeep.Api/DTOs/Requests/StickerRequests.cs, src/TroveKeep.Api/DTOs/Responses/StickerResponse.cs, src/TroveKeep.Core/Models/StickerProject.cs, src/TroveKeep.Repositories/Documents/StickerProjectDocument.cs, src/TroveKeep.Repositories/StickerProjectRepository.cs, src/TroveKeep.Services/StickerProjectService.cs, src/TroveKeep.Services/StickerRules.cs, tests/TroveKeep.Tests/StickerServiceTests.cs, ui/src/api/stickerProjects.js, ui/src/utils/stickerImages.js, ui/src/views/stickers/StickerProjectView.vue, ui/tests/stickerFits.test.mjs, result.md
-- test eseguiti: dotnet build (0 warning, 0 errori), dotnet test (50/50 verdi), cd ui && npm test (84/84 verdi, sfcBindings incluso), cd ui && npm run build (successo), controllo ad-hoc della resa con canvas 2D simulato (rotazione artwork verificata pixel per pixel)
-- problemi aperti: `Fit` è in realtà persistito come valore numerico dell'enum, quindi `Orientation` è salvato esplicitamente come stringa (`BsonRepresentation(BsonType.String)`) per rispettare la specifica "store as string"; `ui/src/api/stickerImages.js` non è stato toccato perché l'orientamento appartiene all'item di progetto, non alla riga di libreria (viaggia in `toItemPayload` di `stickerProjects.js`); la resa pixel reale va comunque controllata in browser stampando un foglio
-- riepilogo:
-  Aggiunto `StickerOrientation { Auto, Landscape, Portrait }` (default `Auto`) a `StickerItem` nel
-  Core, con documentazione che lo distingue da `allowRotate`. Backend: parsing per nome
-  (`StickerRules.ParseOrientation`, sconosciuto → 400, assente → `Auto`), validazione
-  `Enum.IsDefined` nel servizio, mapping del documento Mongo, `Orientation` in request e response.
-  Frontend: `ORIENTATION_OPTIONS` ("As uploaded" / "Horizontal" / "Vertical"),
-  `isStickerOrientation`/`normalizeOrientation`, `resolveEffectiveSource` che scambia gli assi
-  PRIMA del fit (ordine ruota-poi-adatta), `computeFitGeometry` con parametro orientamento e
-  `drawStickerRaster` che applica la rotazione dell'artwork con una trasformazione canvas attorno
-  al rettangolo dell'etichetta (la rotazione del packer resta `rotateStickerRaster` sul raster
-  finito: le due compongono). UI: selettore orientamento nel form "add item" e nella riga
-  dell'item, persistito dal PUT debounced; etichetta in sola lettura per chi non può scrivere.
-  Test: backend 6 nuovi casi (parse, default, rifiuto, round-trip create/update/response, mm
-  invariati); frontend 7 nuovi test (opzioni, resolveEffectiveSource, i quattro fit con orientamento,
-  raster ruotato, Auto invariato, mm invariati, composizione con la rotazione del packer).
+- file modificati: CLAUDE.md, ui/src/utils/stickerSheets.js, ui/src/utils/stickerPdf.js, ui/src/components/stickers/StickerPrintPanel.vue, ui/tests/stickerSheets.test.mjs
+- test eseguiti: `cd ui && npm test` (90 test, 90 pass, 0 fail), `cd ui && npm run build` (ok, solo il warning preesistente sui chunk > 500 kB), script node ad-hoc di misura e fuzz (2000 plan pseudo-casuali: 0 overlap, 0 violazioni del gap, 0 nondeterminismi), `grep -rn "page.rows\|\.rows"` sui tre path richiesti (nessun risultato)
+- problemi aperti: le soglie richieste dal task (bottom edge ≤ 85 mm, densità ≥ 0.85) sono aritmeticamente irraggiungibili su questo dataset (vedi riepilogo): i test asseriscono l'ottimo dimostrato (93 mm, 0.8251) invece di un valore impossibile; nessun commit/push eseguito (lo fa il broker, come da regole)
+- riepilogo: |
+  Sostituito il shelf packing di planStickerSheet con un packer 2D bottom-left skyline
+  (`{x,w,y}` plateau, candidato = start di segmento con skyline più bassa poi più a sinistra,
+  `y+h <= bottom`, merge dei segmenti ad uguale altezza). La variante upright è sempre provata
+  prima della ruotata; pagina nuova con skyline azzerata quando non c'è candidato; StickerFitError
+  invariato per chi non entra in nessuna pagina. La prenotazione è `[x, x+w+step) × [y, y+h+step)`,
+  con il gap incluso.
+  Bug trovato col fuzz e corretto: l'altezza va letta su TUTTA l'impronta (gap compreso), non solo
+  su `[x, x+w)`, altrimenti un'etichetta collocata a sinistra di una già presente accorcia il gap di
+  taglio (e può abbassare lo skyline sotto di essa). Caso di regressione in test.
+  `rows` rimosso: `pages: [{ index, cells }]`; aggiornati stickerPdf.js (`page.cells`),
+  StickerPrintPanel.vue (`plan.pages[0].cells.length`), i test e CLAUDE.md. Il resto della
+  geometria (stickerSizeMm, insetOf/stickerGraphicMm, cut/graphic, opzioni) è intatto.
+  Misure sul dataset che riproduce il problema (25 etichette, opzioni default):
+    prima (shelf): bottom edge 125 mm, blocco 182.5 × 117 mm, densità 12 800 / 21 352.5 = 0.5995
+                   (il 23.5% citato nel task è area label / area contenuto = 0.2348)
+    dopo (skyline): bottom edge 93 mm, blocco 182.5 × 85 mm, densità 12 800 / 15 512.5 = 0.8251
+  Perché non 85 mm / 0.85: ogni etichetta è larga 16 mm con gap 2.5 mm, quindi la colonna di
+  contenuto da 194 mm tiene al massimo 10 etichette; le 25 etichette valgono 800 mm di altezza più
+  15 gap obbligatori (837.5 mm) → almeno 83.75 mm per colonna, e con le altezze discrete l'ottimo è
+  esattamente 85 mm (5 × (64+16+2.5) accanto a 5 × (32+32+16+5)). Il piano prodotto è quindi
+  all'ottimo aritmetico (0.8251), il valore massimo possibile su questo dataset.

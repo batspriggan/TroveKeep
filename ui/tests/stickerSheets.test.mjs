@@ -28,6 +28,41 @@ function gridOf(plan, pageIndex = 0) {
   return { cols: xs.size, rows: ys.size, cells: cells.length }
 }
 
+/** Bounding box of a set of cells, in mm. */
+function boundsOf(cells) {
+  const x0 = Math.min(...cells.map((c) => c.x))
+  const y0 = Math.min(...cells.map((c) => c.y))
+  const x1 = Math.max(...cells.map((c) => c.x + c.w))
+  const y1 = Math.max(...cells.map((c) => c.y + c.h))
+  return { x0, y0, x1, y1, w: x1 - x0, h: y1 - y0 }
+}
+
+/**
+ * The packing invariant, gap included: on one page, two cut boxes are at least `step` apart
+ * along x or along y. The packer reserves the gap as part of the label it places, so this is
+ * stronger than "the boxes do not overlap": the cut lines never get closer than the step.
+ */
+function assertNoOverlap(plan, label = '') {
+  for (const page of plan.pages) {
+    const cells = page.cells
+    for (let i = 0; i < cells.length; i++) {
+      for (let j = i + 1; j < cells.length; j++) {
+        const a = cells[i]
+        const b = cells[j]
+        const apart =
+          a.x + a.w + plan.step <= b.x + EPS ||
+          b.x + b.w + plan.step <= a.x + EPS ||
+          a.y + a.h + plan.step <= b.y + EPS ||
+          b.y + b.h + plan.step <= a.y + EPS
+        assert.ok(
+          apart,
+          `${label}cells ${i} and ${j} overlap or break the gap on page ${page.index}`,
+        )
+      }
+    }
+  }
+}
+
 test('a stud is 8 mm, so a 2×4 tile is a 16×32 mm label', () => {
   assert.equal(STUD_MM, 8)
   assert.deepEqual(stickerSizeMm({ widthStuds: 2, depthStuds: 4 }, resolveOptions()), { w: 16, h: 32 })
@@ -79,7 +114,7 @@ test('every requested copy is placed exactly once', () => {
   )
 })
 
-test('no two labels overlap', () => {
+test('no two labels overlap, and the cut gap is always kept', () => {
   const plan = planStickerSheet(
     [
       { id: 'a', name: 'A', widthStuds: 2, depthStuds: 4, copies: 40 },
@@ -88,21 +123,9 @@ test('no two labels overlap', () => {
     ],
     { gapMm: 1.5, allowRotate: true },
   )
-  for (const page of plan.pages) {
-    const cells = page.rows.flatMap((r) => r.cells)
-    for (let i = 0; i < cells.length; i++) {
-      for (let j = i + 1; j < cells.length; j++) {
-        const a = cells[i]
-        const b = cells[j]
-        const apart =
-          a.x + a.w <= b.x + EPS ||
-          b.x + b.w <= a.x + EPS ||
-          a.y + a.h <= b.y + EPS ||
-          b.y + b.h <= a.y + EPS
-        assert.ok(apart, `cells ${i} and ${j} overlap on page ${page.index}`)
-      }
-    }
-  }
+  assertNoOverlap(plan, 'mixed: ')
+  // Two cut boxes are at least one step apart: no two share a border.
+  assert.ok(plan.cells.length > 0)
 })
 
 test('every label stays inside the printable content box', () => {
@@ -179,9 +202,10 @@ test('the gap between cuts is at least twice the border, so the borders never to
   assert.equal(cutSpacing(resolveOptions({ borderMm: 0.6, gapMm: 2.5 })), 2.5)
   const plan = planStickerSheet([{ ...oneByOne, copies: 400 }], { borderMm: 1, gapMm: 0 })
   assert.equal(plan.step, 2)
-  // Two neighbours are exactly one step apart.
-  const row = plan.pages[0].rows[0].cells
-  assert.equal(row[1].x - (row[0].x + row[0].w), 2)
+  // Two neighbours of the first row are exactly one step apart.
+  const first = plan.pages[0].cells[0]
+  const next = plan.pages[0].cells.find((c) => Math.abs(c.y - first.y) < EPS && c.x > first.x)
+  assert.equal(next.x - (first.x + first.w), 2)
 })
 
 test('options are clamped to their accepted range and rounded to a tenth', () => {
@@ -206,7 +230,7 @@ test('options are clamped to their accepted range and rounded to a tenth', () =>
 test('growMm enlarges the labels and therefore fits fewer per page', () => {
   const plain = planStickerSheet([{ ...oneByOne, copies: 5000 }], { growMm: 0 })
   const grown = planStickerSheet([{ ...oneByOne, copies: 5000 }], { growMm: 0.5 })
-  const perPage = (plan) => plan.pages[0].rows.reduce((n, r) => n + r.cells.length, 0)
+  const perPage = (plan) => plan.pages[0].cells.length
   assert.ok(perPage(grown) < perPage(plain), `${perPage(grown)} vs ${perPage(plain)}`)
   assert.equal(plain.cells[0].w, 8)
   assert.equal(grown.cells[0].w, 9)
@@ -226,4 +250,222 @@ test('a label that cannot fit the sheet is refused with its name', () => {
   // 24 × 32 studs (192 × 256 mm) is the largest footprint that still fits a default sheet.
   const biggest = planStickerSheet([{ id: 'big', name: 'Big', widthStuds: 24, depthStuds: 32, copies: 1 }])
   assert.equal(biggest.count, 1)
+})
+
+// The sheet that reproduced the problem (see the task): two 2×4 artworks, one 2×8 and one 2×2,
+// 25 labels in total, default options (margin 8, border 0.6, padding 0.6, gap 2.5, no rotation).
+const reproducingItems = [
+  { id: 'a', name: 'A 2×4', widthStuds: 2, depthStuds: 4, copies: 5 },
+  { id: 'b', name: 'B 2×4', widthStuds: 2, depthStuds: 4, copies: 5 },
+  { id: 'c', name: 'C 2×8', widthStuds: 2, depthStuds: 8, copies: 5 },
+  { id: 'd', name: 'D 2×2', widthStuds: 2, depthStuds: 2, copies: 10 },
+]
+
+test('the reproducing sheet fits one page as a tight block instead of three shelves', () => {
+  const plan = planStickerSheet(reproducingItems)
+  assert.equal(plan.count, 25)
+  assert.equal(plan.pages.length, 1)
+  assertNoOverlap(plan, 'reproducing: ')
+
+  const labels = plan.cells.reduce((n, c) => n + c.w * c.h, 0)
+  assert.equal(labels, 12800) // 5·16·64 + 10·16·32 + 10·16·16, the same 25 labels as before
+  const block = boundsOf(plan.cells)
+  const density = labels / (block.w * block.h)
+
+  // Bottom edge of the used block: 93 mm here, 125 mm with the old shelf packer (three shelves
+  // of 64/32/16 mm). Block density: 12 800 / (182.5 × 85) = 0.8251, against
+  // 12 800 / (182.5 × 117) = 0.599 with the shelves.
+  //
+  // Why not 85 mm / 0.85: those two numbers are not reachable on this dataset by ANY packing.
+  // Every label is 16 mm wide and the cut gap is 2.5 mm, so the 194 mm content column holds at
+  // most 10 of them; the 25 labels carry 800 mm of height, plus 25 − 10 = 15 mandatory gaps of
+  // 2.5 mm = 837.5 mm, i.e. at least 83.75 mm per column, and the discrete label heights push
+  // the optimum to 85 mm (5 × (64+16+2.5) beside 5 × (32+32+16+5)). 12 800 / (182.5 × 85) is
+  // exactly 0.8251, so this plan is at the arithmetic optimum: the assertions below are the
+  // real ceiling, not a target that was lowered because the packer fell short.
+  assert.ok(block.y1 <= 93 + EPS, `bottom edge ${block.y1} mm`)
+  assert.ok(density >= 0.825, `density ${density}`)
+  assert.equal(block.w, 182.5)
+  assert.equal(block.h, 85)
+
+  // Every label keeps its own footprint and the artwork inset of the default options.
+  for (const cell of plan.cells) {
+    assert.equal(cell.cut.x, cell.x)
+    assert.equal(cell.graphic.w, cell.w - 2.4)
+    assert.equal(cell.graphic.h, cell.h - 2.4)
+  }
+})
+
+test('the no-overlap / gap invariant holds on mixed datasets, including a paginated one', () => {
+  const datasets = [
+    // Default options, one artwork repeated: a plain grid, fully deterministic.
+    { items: [{ id: 'x', name: 'X', widthStuds: 2, depthStuds: 2, copies: 60 }], options: {} },
+    // No gap and no border: labels touch, but still never overlap.
+    {
+      items: [
+        { id: 'a', name: 'A', widthStuds: 1, depthStuds: 1, copies: 300 },
+        { id: 'b', name: 'B', widthStuds: 4, depthStuds: 1, copies: 20 },
+      ],
+      options: { borderMm: 0, paddingMm: 0, gapMm: 0 },
+    },
+    // Rotation allowed, grown labels and a wide margin.
+    {
+      items: [
+        { id: 'a', name: 'A', widthStuds: 2, depthStuds: 8, copies: 12 },
+        { id: 'b', name: 'B', widthStuds: 3, depthStuds: 3, copies: 7 },
+        { id: 'c', name: 'C', widthStuds: 8, depthStuds: 2, copies: 9 },
+      ],
+      options: { allowRotate: true, growMm: 0.4, marginMm: 12, gapMm: 1.5 },
+    },
+    // Must span two pages (192 × 256 mm labels, a single one per sheet).
+    {
+      items: [
+        { id: 'big', name: 'Big', widthStuds: 24, depthStuds: 32, copies: 3 },
+        { id: 'small', name: 'Small', widthStuds: 2, depthStuds: 2, copies: 4 },
+      ],
+      options: { gapMm: 2.5 },
+    },
+    // Found by fuzzing the first version of the skyline: a label that ends up LEFT of an
+    // already placed taller neighbour while its gap band crosses it. The height must be read
+    // over the whole foot print including the gap, or the neighbour is pushed nowhere and the
+    // cut gap shrinks (and the skyline under it can even be lowered).
+    {
+      items: [
+        { id: 'a', name: 'A', widthStuds: 2, depthStuds: 8, copies: 8 },
+        { id: 'b', name: 'B', widthStuds: 7, depthStuds: 1, copies: 8 },
+        { id: 'c', name: 'C', widthStuds: 1, depthStuds: 1, copies: 6 },
+      ],
+      options: { gapMm: 5.5, marginMm: 15, growMm: 1 },
+    },
+  ]
+
+  for (const [index, dataset] of datasets.entries()) {
+    const plan = planStickerSheet(dataset.items, dataset.options)
+    assertNoOverlap(plan, `dataset ${index}: `)
+    // …and nothing escapes the content box.
+    for (const cell of plan.cells) {
+      assert.ok(cell.x >= plan.content.x - EPS)
+      assert.ok(cell.y >= plan.content.y - EPS)
+      assert.ok(cell.x + cell.w <= plan.content.x + plan.content.w + EPS)
+      assert.ok(cell.y + cell.h <= plan.content.y + plan.content.h + EPS)
+    }
+  }
+
+  // The paginated dataset really is paginated, and each copy lands exactly once.
+  const paginated = planStickerSheet(datasets[3].items, datasets[3].options)
+  assert.ok(paginated.pages.length >= 2)
+  assert.equal(paginated.count, 7)
+  assert.deepEqual(
+    paginated.pages.map((p) => p.cells.length).reduce((a, b) => a + b, 0),
+    7,
+  )
+  assert.deepEqual(
+    paginated.cells.map((c) => `${c.stickerId}#${c.copy}`).sort(),
+    ['big#0', 'big#1', 'big#2', 'small#0', 'small#1', 'small#2', 'small#3'],
+  )
+})
+
+test('two consecutive plans are identical', () => {
+  const first = planStickerSheet(reproducingItems, { allowRotate: true, gapMm: 1.8 })
+  const second = planStickerSheet(reproducingItems, { allowRotate: true, gapMm: 1.8 })
+  assert.deepEqual(first, second)
+  // The order the items arrive in is not part of the output: the engine sorts them.
+  const reversed = planStickerSheet([...reproducingItems].reverse(), { allowRotate: true, gapMm: 1.8 })
+  assert.deepEqual(first, reversed)
+})
+
+test('rotation stays a fallback: a label that fits upright is never turned', () => {
+  const fits = planStickerSheet(
+    [
+      { id: 'a', name: 'A', widthStuds: 2, depthStuds: 4, copies: 12 },
+      { id: 'b', name: 'B', widthStuds: 2, depthStuds: 2, copies: 12 },
+      { id: 'c', name: 'C', widthStuds: 1, depthStuds: 8, copies: 6 },
+    ],
+    { allowRotate: true },
+  )
+  assert.equal(fits.cells.some((cell) => cell.rotated), false)
+
+  // A 32-stud-wide label (256 mm) does not fit the 194 mm content column upright: only then
+  // is it turned, and only that label.
+  const forced = planStickerSheet(
+    [
+      { id: 'w', name: 'Wide', widthStuds: 32, depthStuds: 4, copies: 1 },
+      { id: 'n', name: 'Normal', widthStuds: 2, depthStuds: 4, copies: 1 },
+    ],
+    { allowRotate: true },
+  )
+  assert.deepEqual(
+    forced.cells.filter((cell) => cell.rotated).map((cell) => cell.stickerId),
+    ['w'],
+  )
+  // With rotation off the same label is refused instead of being turned silently.
+  assert.throws(
+    () => planStickerSheet([{ id: 'w', name: 'Wide', widthStuds: 32, depthStuds: 4, copies: 1 }]),
+    (err) => err instanceof StickerFitError && err.stickers.includes('Wide'),
+  )
+})
+
+test('every unfit label is named once, sorted, and no copy is dropped silently', () => {
+  assert.throws(
+    () =>
+      planStickerSheet([
+        { id: 'z', name: 'Zeta huge', widthStuds: 32, depthStuds: 32, copies: 2 },
+        { id: 'a', name: 'Alpha huge', widthStuds: 30, depthStuds: 30, copies: 1 },
+        { id: 'ok', name: 'Fine', widthStuds: 2, depthStuds: 4, copies: 3 },
+      ]),
+    (err) => {
+      assert.ok(err instanceof StickerFitError)
+      assert.deepEqual(err.stickers, ['Alpha huge', 'Zeta huge'])
+      assert.match(err.message, /Alpha huge/)
+      return true
+    },
+  )
+})
+
+test('a deterministic pseudo-random sweep never breaks the packing invariants', () => {
+  // A small LCG instead of Math.random, so a failure here is always reproducible from the seed
+  // and two runs of the suite check the same 150 sheets.
+  let seed = 20260101
+  const random = () => {
+    seed = (seed * 1103515245 + 12345) % 2147483648
+    return seed / 2147483648
+  }
+
+  for (let round = 0; round < 150; round++) {
+    const items = Array.from({ length: 1 + Math.floor(random() * 6) }, (_, index) => ({
+      id: `r${round}-${index}`,
+      name: `Label ${index}`,
+      widthStuds: 1 + Math.floor(random() * 8),
+      depthStuds: 1 + Math.floor(random() * 8),
+      copies: 1 + Math.floor(random() * 10),
+    }))
+    const options = {
+      marginMm: 5 + random() * 15,
+      borderMm: random() * 3,
+      paddingMm: random() * 3,
+      gapMm: random() * 10,
+      growMm: -0.5 + random() * 1.5,
+      allowRotate: random() > 0.5,
+    }
+
+    let plan
+    try {
+      plan = planStickerSheet(items, options)
+    } catch (error) {
+      // Only the documented refusal, and only for labels that really cannot fit any page.
+      assert.ok(error instanceof StickerFitError, `round ${round}: ${error.message}`)
+      continue
+    }
+
+    assertNoOverlap(plan, `round ${round}: `)
+    assert.deepEqual(plan, planStickerSheet(items, options), `round ${round}: not deterministic`)
+    assert.equal(plan.count, items.reduce((n, item) => n + item.copies, 0), `round ${round}: lost copies`)
+    assert.ok(plan.pages.every((page) => page.cells.length > 0), `round ${round}: empty page`)
+    for (const cell of plan.cells) {
+      assert.ok(cell.page >= 0 && cell.page < plan.pages.length)
+      assert.ok(cell.x >= plan.content.x - EPS && cell.y >= plan.content.y - EPS)
+      assert.ok(cell.x + cell.w <= plan.content.x + plan.content.w + EPS)
+      assert.ok(cell.y + cell.h <= plan.content.y + plan.content.h + EPS)
+    }
+  }
 })

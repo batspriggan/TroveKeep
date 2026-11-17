@@ -91,7 +91,7 @@ const planError = computed(() => layout.value.error?.message ?? '')
 
 const perPageLabel = computed(() => {
   if (!plan.value || plan.value.pages.length === 0) return ''
-  const first = plan.value.pages[0].rows.reduce((n, row) => n + row.cells.length, 0)
+  const first = plan.value.pages[0].cells.length
   return `${first} labels on the first sheet`
 })
 

@@ -2,6 +2,10 @@
 // one sits. Pure functions, no DOM and no jsPDF, so the packing maths is unit-testable
 // (see ui/tests/stickerSheets.test.mjs) and the PDF renderer only draws what this returns.
 //
+// The packing is a 2D bottom-left skyline: the free edge of the used area is a list of
+// horizontal segments `{ x, w, y }`, and every label goes where that edge is lowest (then
+// leftmost). No shelves: the space under a short label is reused by the next one.
+//
 // Everything is in millimetres at 1:1 scale: a LEGO stud is 8 mm, so a 2×4 tile is a
 // 16 mm × 32 mm label. The sheet is the physical A4 the operator prints on, and "print at
 // 100%, do not fit to page" is the only way the label really matches the tile.
@@ -132,9 +136,9 @@ export class StickerFitError extends Error {
 const byId = (a, b) => String(a.id).localeCompare(String(b.id))
 
 /**
- * Deterministic packing order: deepest first (a shelf is as tall as its first cell, so the
- * tall labels open the rows), then widest, then by name and finally by id so two runs on
- * the same library always produce the same sheet byte for byte.
+ * Deterministic packing order: deepest first (the tall labels open the skyline, so the
+ * low edge stays flat), then widest, then by name and finally by id so two runs on the
+ * same library always produce the same sheet byte for byte.
  */
 function sortUnits(a, b) {
   return (
@@ -155,6 +159,78 @@ function variantsOf(unit, options) {
   return [upright, { w: unit.h, h: unit.w, rotated: true }]
 }
 
+/** The skyline of a still empty page: one segment covering the whole content width. */
+function emptySkyline(content) {
+  return [{ x: content.x, w: content.w, y: content.y }]
+}
+
+/** Highest skyline over `[x, x + w)`: the lowest `y` a box of that width can rest at. */
+function skylineHeightAt(segments, x, w) {
+  const end = x + w
+  let y = -Infinity
+  for (const seg of segments) {
+    if (seg.x + seg.w <= x + EPS || seg.x >= end - EPS) continue
+    if (seg.y > y) y = seg.y
+  }
+  return y
+}
+
+/**
+ * Bottom-left placement of one box (`w` × `h`) on the skyline: among the segment starts that
+ * keep the box inside the page, the one with the lowest resulting skyline — leftmost wins a
+ * tie. Returns `null` when no candidate fits inside the printable area.
+ *
+ * The height is read over the **whole foot print including the gap** (`[x, x + w + step)`),
+ * not only over the box: a label placed just left of an already placed one would otherwise
+ * reserve a band that overlaps its neighbour (breaking the cut gap) and could even *lower*
+ * the skyline under it. Reading the full band keeps the skyline monotone, so a neighbour in
+ * the gap band means "go above it" — one axis of clearance is enough.
+ */
+function findPlacement(segments, w, h, content, bottom, step) {
+  const right = content.x + content.w
+  let best = null
+  for (const seg of segments) {
+    const x = seg.x
+    if (x + w > right + EPS) continue
+    const bandEnd = Math.min(x + w + step, right)
+    const y = skylineHeightAt(segments, x, bandEnd - x)
+    if (!Number.isFinite(y) || y + h > bottom + EPS) continue
+    if (!best || y < best.y - EPS || (Math.abs(y - best.y) <= EPS && x < best.x)) best = { x, y }
+  }
+  return best
+}
+
+/**
+ * Raises the skyline over `[x, xEnd)` to `y`, splitting the segments it crosses. Adjacent
+ * segments that end up at the same height are merged again, so the list never grows without
+ * a matching plateau.
+ */
+function reserveSkyline(segments, x, xEnd, y) {
+  const kept = []
+  for (const seg of segments) {
+    const segEnd = seg.x + seg.w
+    if (segEnd <= x + EPS || seg.x >= xEnd - EPS) {
+      kept.push({ ...seg })
+      continue
+    }
+    if (seg.x < x - EPS) kept.push({ x: seg.x, w: x - seg.x, y: seg.y })
+    if (segEnd > xEnd + EPS) kept.push({ x: xEnd, w: segEnd - xEnd, y: seg.y })
+  }
+  kept.push({ x, w: xEnd - x, y })
+  kept.sort((a, b) => a.x - b.x)
+
+  const merged = []
+  for (const seg of kept) {
+    const last = merged[merged.length - 1]
+    if (last && Math.abs(last.y - seg.y) <= EPS && Math.abs(last.x + last.w - seg.x) <= EPS) {
+      last.w += seg.w
+    } else {
+      merged.push({ ...seg })
+    }
+  }
+  return merged
+}
+
 /**
  * Lays the requested copies out on as many A4 pages as needed.
  *
@@ -162,10 +238,12 @@ function variantsOf(unit, options) {
  * sticker whose artwork is missing are the caller's business — the plan only places what
  * it is given.
  *
- * Returns `{ options, content, step, cells, pages, count, perSticker }` where every cell is
- * `{ stickerId, name, copy, page, x, y, w, h, rotated, cut, graphic }`:
+ * Returns `{ options, page, content, step, cells, pages, count, perSticker }` where every
+ * cell is `{ stickerId, name, copy, page, x, y, w, h, rotated, cut, graphic }`:
  *   cut     — the box to cut around (this is the label itself, `growMm` included)
  *   graphic — the area the artwork may use: `cut` inset by `borderMm + paddingMm`
+ * and every page is `{ index, cells }`: the cells of that page, in the order they were placed.
+ * There are no rows (shelves): a page is the flat list of its labels.
  *
  * Throws `StickerFitError` naming the stickers that do not fit the sheet in any
  * orientation; the engine never silently drops a copy.
@@ -209,8 +287,17 @@ export function planStickerSheet(items, overrides = {}) {
   const cells = []
   const unfit = []
 
-  let page = { index: 0, rows: [], nextY: content.y }
-  let row = null
+  /** Page currently being filled, or `null` before the first one is opened. */
+  let page = null
+  /** Free edge of that page, as a left-to-right list of `{ x, w, y }` plateaus. */
+  let skyline = []
+
+  // A page is only published once a label lands on it, so a plan never reports an empty
+  // sheet (and an unfit label cannot leave one behind).
+  const openPage = () => {
+    page = { index: pages.length, cells: [] }
+    skyline = emptySkyline(content)
+  }
 
   const makeCell = (unit, variant, x, y) => {
     const inset = artworkInset(variant.w, variant.h)
@@ -232,65 +319,50 @@ export function planStickerSheet(items, overrides = {}) {
         h: variant.h - 2 * inset,
       },
     }
+    if (!pages.includes(page)) pages.push(page)
+    page.cells.push(cell)
     cells.push(cell)
     return cell
   }
 
-  const finishRow = () => {
-    if (row) page.rows.push(row)
-    row = null
-  }
-
-  const finishPage = () => {
-    finishRow()
-    if (page.rows.length) {
-      pages.push(page)
-      page = { index: page.index + 1, rows: [], nextY: content.y }
+  /** Upright first, rotated only when the upright variant has nowhere to go. */
+  const placeOnPage = (variants) => {
+    for (const variant of variants) {
+      const at = findPlacement(skyline, variant.w, variant.h, content, bottom, step)
+      if (at) return { variant, ...at }
     }
+    return null
   }
 
   for (const unit of units) {
     const variants = variantsOf(unit, options)
 
-    // 1. Continue the open shelf: the label must fit in the remaining width and be no
-    //    taller than the shelf (which is as tall as the cell that opened it).
-    if (row) {
-      const variant = variants.find(
-        (v) => row.nextX + v.w <= right + EPS && v.h <= row.height + EPS,
-      )
-      if (variant) {
-        const cell = makeCell(unit, variant, row.nextX, row.y)
-        row.cells.push(cell)
-        row.nextX = cell.x + cell.w + step
-        continue
-      }
+    // 1. Bottom-left corner of the free area on the current page.
+    let at = page ? placeOnPage(variants) : null
+
+    // 2. No room left on this page: open a fresh one and retry there. An empty page that
+    //    still cannot hold the label is the end of the line (an empty page is not opened).
+    if (!at && (!page || page.cells.length > 0)) {
+      openPage()
+      at = placeOnPage(variants)
     }
 
-    // 2. Open a new shelf (on the current page when it still fits vertically).
-    const startShelf = (variants, y) =>
-      variants.find((v) => v.w <= content.w + EPS && y + v.h <= bottom + EPS)
-
-    finishRow()
-    let variant = startShelf(variants, page.nextY)
-
-    // 3. Shelf does not fit this page: move on to a fresh one.
-    if (!variant) {
-      finishPage()
-      variant = startShelf(variants, page.nextY)
-    }
-
-    // 4. Not even an empty page holds it in any orientation: refuse the whole sheet.
-    if (!variant) {
+    // 3. Not even an empty page holds it in any orientation: refuse the whole sheet.
+    if (!at) {
       unfit.push(unit.name)
       continue
     }
 
-    const cell = makeCell(unit, variant, content.x, page.nextY)
-    row = { y: cell.y, height: cell.h, nextX: cell.x + cell.w + step, cells: [cell] }
-    page.nextY = cell.y + cell.h + step
+    makeCell(unit, at.variant, at.x, at.y)
+    // The gap belongs to the placed label: a neighbour at `x + w + step` (or `y + h + step`)
+    // keeps `step` between the two cut lines.
+    skyline = reserveSkyline(
+      skyline,
+      at.x,
+      Math.min(at.x + at.variant.w + step, right),
+      at.y + at.variant.h + step,
+    )
   }
-
-  finishPage()
 
   if (unfit.length > 0) throw new StickerFitError(unfit)
 
@@ -311,10 +383,7 @@ export function planStickerSheet(items, overrides = {}) {
     page: { widthMm: PAGE.width, heightMm: PAGE.height },
     content,
     step,
-    pages: pages.map((p) => ({
-      index: p.index,
-      rows: p.rows.map((r) => ({ y: r.y, height: r.height, cells: r.cells })),
-    })),
+    pages: pages.map((p) => ({ index: p.index, cells: p.cells })),
     cells,
     count: cells.length,
     perSticker,
