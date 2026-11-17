@@ -6,7 +6,7 @@
 
 **Frontend:** `cd ui && npm run dev` (http://localhost:5173, proxies /api → 5221) · `npm run build` · `npm run preview` · `npm test` (dependency-free `node:test` unit tests in `ui/tests/`: the planner marquee, selection and rigid-group-drag maths, plus the sticker-sheet packing and PDF renderer)
 
-**Tests:** `dotnet test` (xUnit, `tests/TroveKeep.Tests` — the collection-scope write rules, the global-write filter and the sticker-library business rules) · `cd ui && npm test`.
+**Tests:** `dotnet test` (xUnit, `tests/TroveKeep.Tests` — the collection-scope write rules, the global-write filter and the sticker image/project business rules) · `cd ui && npm test`.
 
 ## Conventions
 
@@ -45,7 +45,7 @@ an admin may write everywhere. It is enforced in one place — the global `Colle
 cannot write; `ICollectionWriteTargetResolver` derives that collection from the route id (loaded
 through the scoped repository), else from `DefaultCollectionId` (creates), else the endpoint is a
 declared exclusion (Auth, Setup, Mode, Users, Settings, Archives, Labels, Scanner, Search,
-Stickers) — plus `CollectionsController`, which checks `CanManageMembers` per action (admin or
+StickerImages, StickerProjects) — plus `CollectionsController`, which checks `CanManageMembers` per action (admin or
 Owner, never an Editor). Levels come from `collection_members` via `ICollectionMembershipCache`,
 primed once per request by `CollectionMembershipMiddleware` — not from a cookie claim, so a demotion
 takes effect immediately. The SPA mirrors this (`useActiveCollection().canWrite`,
@@ -55,19 +55,38 @@ takes effect immediately. The SPA mirrors this (`useActiveCollection().canWrite`
 `ICollectionScope.CanWriteAnywhere` (admin, or Editor/Owner of **at least one** collection) is the
 rule, and `CollectionWriteAnywhereFilter` answers **403** for the non-GET requests,
 `[ServiceFilter(typeof(CollectionWriteAnywhereFilter))]` per action. Today only the sticker library
-uses it (`StickersController`), which is also why it is in `ExcludedControllers` of the resolver:
-the row is global, the dedicated filter authorizes it. A Viewer (or a user with no collection)
-still reads and prints stickers.
+uses it (`StickerImagesController`, `StickerProjectsController`), which is also why both are in
+`ExcludedControllers` of the resolver: the rows are global, the dedicated filter authorizes them.
+A Viewer (or a user with no collection) still reads and prints stickers.
 
 ## Domain
 
 - Primary entities: `LegoSet`, `BulkPiece` — storage tracked in `storage_allocations` collection (separate, not embedded).
-- **`Sticker`** — the sticker library (`stickers` collection) is **global**: no `CollectionId`, no
-  `ICollectionScope` filter, no migration. `{ Name (trimmed, 1..80 chars), WidthStuds, DepthStuds
-  (1..32 each), ImageCached, CreatedAt, UpdatedAt, Version }`; artwork lives in `set_images` as
-  `ImageReferenceType.Sticker` keyed by the sticker id, deleted with the row (best effort). One stud
-  is 8 mm (`Sticker.StudMm`), so a 2×4 tile is a 16×32 mm label. Writes need
-  `CanWriteAnywhere` (admin or Editor/Owner anywhere), reads are open to every regular account.
+- **Sticker feature — three levels, all global**: `StickerImage` (`sticker_images`), `StickerProject`
+  (`sticker_projects`) and `StickerItem` (**embedded** in the project, no own collection). Neither an
+  image nor a project carries a `CollectionId`, and neither uses an `ICollectionScope` filter.
+  - `StickerImage` = `{ Name (trimmed, 1..80), ImageCached, CreatedAt, UpdatedAt, Version }`: the
+    artwork shelf, **no stud fields**. Bytes live in `set_images` as
+    `ImageReferenceType.StickerImage` keyed by the image id, deleted with the row (best effort).
+  - `StickerProject` = `{ Name (trimmed, 1..80), Items, CreatedAt, UpdatedAt, Version }`; the item
+    list is replaced wholesale on update (supplied item `Id`s are kept, new ones get a fresh Guid)
+    and may be empty — a project is created first, items are added later.
+  - `StickerItem` = `{ Id, ImageId, WidthStuds, DepthStuds (1..32 each), Copies (1..999), Fit, Notes? }`.
+    One stud is 8 mm (`StickerItem.StudMm`), so a 2×4 tile is a 16×32 mm label; the response DTOs
+    send `WidthMm`/`DepthMm` so the SPA never repeats the constant.
+  - `StickerFit` enum `{ Contain (default), Cover, Fill, Center }` is serialised as its **name** and is
+    **orthogonal to rotation**: the footprint is always in studs, `Fit` only says how the artwork
+    fills the label graphic area (the sheet engine decides the page rotation).
+  - Rules (`StickerProjectService`, `InvalidOperationException` → 400): an item's `ImageId` must
+    exist, and a second item with the same `ImageId + WidthStuds + DepthStuds` in one project is
+    refused (two rows are indistinguishable to the user). Deleting a `StickerImage` used by project
+    items is refused with 400 naming the usage count (`IStickerProjectRepository.CountUsagesAsync`).
+  - Endpoints: `/api/sticker-images` (CRUD + `{id}/image` GET/POST/DELETE) and `/api/sticker-projects`
+    (CRUD). Writes need `CanWriteAnywhere` (admin, or Editor/Owner anywhere), reads are open to every
+    regular account (`User,Admin`).
+  - **No migration**: this redesign landed on an unpublished branch, so the old one-level `stickers`
+    collection and `ImageReferenceType.Sticker` were removed outright and old sticker data is
+    discarded on purpose.
 - `StorageAllocation`: `{ StorageId, Type (Box|Drawer), Quantity }`
 - Storage: `Box`, `DrawerContainer`, `Drawer` (embedded in container, keyed by position — no own Id).
 - LegoSets → Boxes only; BulkPieces → Boxes or Drawers.
@@ -97,6 +116,9 @@ Current chain: `001` baseplate type fields · `002` set images by set id · `003
 - Baseplate API client: `ui/src/api/baseplates.js` (not `tableplanner.js`).
 - `/stickers` — global sticker library + A4 sheet composer (`views/stickers/StickerLibraryView.vue`),
   hidden to a Guest (who only reaches `/table-planner`). API client `ui/src/api/stickers.js`.
+  **The SPA is still one-level**: it talks to the removed `/api/stickers` routes, so a separate
+  frontend task must rewrite it against `/api/sticker-images` and `/api/sticker-projects`
+  (image library + projects with embedded items).
   The sheet is composed **client-side at 1:1** (`ui/src/utils/stickerSheets.js` = pure packing and
   geometry in mm, `stickerPdf.js` = jsPDF drawing, `stickerImages.js` = browser canvas resampling at
   600 dpi; `composables/useStickerSheet.js` = options in `localStorage` + **volatile** copies). The

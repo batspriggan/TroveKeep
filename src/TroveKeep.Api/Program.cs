@@ -183,8 +183,9 @@ builder.Services.AddScoped<ISetPhotoRepository, SetPhotoRepository>();
 builder.Services.AddScoped<ITableTemplateRepository, TableTemplateRepository>();
 builder.Services.AddScoped<IRoomRepository, RoomRepository>();
 builder.Services.AddScoped<IBaseplateRepository, BaseplateRepository>();
-// The sticker library is instance-wide (no CollectionId): a flat repository, like images.
-builder.Services.AddScoped<IStickerRepository, StickerRepository>();
+// The sticker library is instance-wide (no CollectionId): flat repositories, like images.
+builder.Services.AddScoped<IStickerImageRepository, StickerImageRepository>();
+builder.Services.AddScoped<IStickerProjectRepository, StickerProjectRepository>();
 
 // Services
 builder.Services.AddScoped<ICurrentUser, CurrentUser>();
@@ -211,7 +212,8 @@ builder.Services.AddScoped<ISetPhotoService, SetPhotoService>();
 builder.Services.AddScoped<IBackupService, BackupService>();
 builder.Services.AddScoped<IRoomExportService, RoomExportService>();
 builder.Services.AddScoped<ITableTemplateService, TableTemplateService>();
-builder.Services.AddScoped<IStickerService, StickerService>();
+builder.Services.AddScoped<IStickerImageService, StickerImageService>();
+builder.Services.AddScoped<IStickerProjectService, StickerProjectService>();
 builder.Services.AddScoped<IRoomService, RoomService>();
 builder.Services.AddScoped<IBaseplateService, BaseplateService>();
 builder.Services.AddScoped<IPlanningService, PlanningService>();

@@ -5,9 +5,9 @@ using TroveKeep.Core.Interfaces.Services;
 namespace TroveKeep.Api.Filters;
 
 /// <summary>
-/// Action filter for controllers whose rows belong to <em>no</em> collection — today only
-/// <c>StickersController</c> (the library is instance-wide, so there is no target collection whose
-/// access level could authorize the write).
+/// Action filter for controllers whose rows belong to <em>no</em> collection — today the sticker
+/// library (<c>StickerImagesController</c>, <c>StickerProjectsController</c>): it is instance-wide,
+/// so there is no target collection whose access level could authorize the write.
 ///
 /// <para>
 /// <see cref="CollectionWriteGuardFilter"/> answers "may you write <em>this collection</em>?"; for a
