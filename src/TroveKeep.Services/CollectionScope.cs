@@ -23,6 +23,26 @@ public class CollectionScope : ICollectionScope
     public bool CanAccessAll => _currentUser.IsAdmin;
 
     /// <summary>
+    /// "May write anywhere" for instance-wide rows (the sticker library). An admin writes
+    /// everywhere; everybody else needs at least one membership with a write level, computed from
+    /// the request-scoped membership cache so a demotion takes effect immediately. Before the
+    /// cache is loaded (a code path outside the request pipeline) no level is known, so nothing is
+    /// writable — same conservative behaviour as <see cref="AccessFor"/>. Note this is
+    /// deliberately <em>not</em> narrowed by the active-collection selection: the library is
+    /// global, and picking a collection only filters listings.
+    /// </summary>
+    public bool CanWriteAnywhere
+    {
+        get
+        {
+            if (CanAccessAll) return true;
+            if (!_memberships.IsLoaded) return false;
+            return _memberships.AccessByCollection.Values.Any(
+                level => level is CollectionAccess.Editor or CollectionAccess.Owner);
+        }
+    }
+
+    /// <summary>
     /// True when this request carries a usable explicit selection: an active collection that the
     /// caller may access. <see cref="CanAccess"/> is always true for an admin, so for an admin a
     /// syntactically valid header counts even if the collection no longer exists. We deliberately

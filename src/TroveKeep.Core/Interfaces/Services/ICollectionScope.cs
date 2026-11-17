@@ -35,6 +35,21 @@ public interface ICollectionScope
     /// <summary>True for an admin: all collections are visible and writes skip the filter.</summary>
     bool CanAccessAll { get; }
 
+    /// <summary>
+    /// True when the caller may write <em>somewhere</em>: an admin, or a member holding
+    /// <see cref="CollectionAccess.Editor"/> or <see cref="CollectionAccess.Owner"/> in at least
+    /// one collection.
+    ///
+    /// <para>
+    /// This is the authorization rule for instance-wide rows that belong to no collection (the
+    /// sticker library). Such a row has no target collection to check <see cref="CanWrite"/> on,
+    /// so the question becomes "does this user ever write?": a
+    /// <see cref="CollectionAccess.Viewer"/> of everything, and a user with no collection at all,
+    /// read and print but never modify the shared library.
+    /// </para>
+    /// </summary>
+    bool CanWriteAnywhere { get; }
+
     /// <summary>True when the caller explicitly selected a collection (X-TroveKeep-Collection),
     /// valid for them. Unlike CanAccessAll this also applies to admins, because it is a display
     /// filter rather than an authorization rule.</summary>

@@ -1,13 +1,28 @@
-# Task: runs-r-20261107t102126-c22d-work-1-fix-2
+# Task: sticker-packing
 - esito: success
 - modello: deepseek/deepseek-flash:high
-- file modificati: ui/src/utils/selection.js (nuovo), ui/tests/selection.test.mjs (nuovo), ui/src/views/tableplanner/RoomPlannerView.vue, ui/src/views/tableplanner/AggregateBpPlannerView.vue, CLAUDE.md
-- test eseguiti: `cd ui && npm test` (node:test, 28/28 verdi: 11 in `marquee.test.mjs` + 17 in `selection.test.mjs`), `cd ui && npm run build` (vite build ok), controlli statici del piano 12(a) (`grep -c selectedAggregateId … = 0`, `grep -cE "selectedId\b" … = 0`, `git status --porcelain src/` vuoto)
-- problemi aperti: nessuno
-- riepilogo: La multi-selezione era già implementata e corretta nei giri precedenti (`ff7b568`, `d4a39e0`); il buco rimasto era la verificabilità: tutta la logica (chi seleziona cosa, come si muove un gruppo) viveva in handler del mouse dentro due SFC, quindi l'unica prova possibile era la checklist manuale in browser, vietata dalle regole.
-  1) Nuovo `ui/src/utils/selection.js` (puro, zero dipendenze, usa `marquee.js`): `closeOverUnits` (un tavolo → tutto l'aggregato, una piastra → tutta l'istanza MOC), `nextSelection` (replace / Shift-add / Ctrl-Cmd-toggle dell'unità intera, Set nuovo e immutabile per la reattività Vue), `collectUnitKeys` (marquee con intersezione stretta, una sola piastra toccata basta per l'unità), `bboxOf`, `rectsOverlap` stretto e `planRigidDrag`.
-  2) `planRigidDrag` è l'unico posto che decide un trascinamento multiplo: UN delta per tutto il gruppo (rigidità garantita), delta agganciato alla griglia (0.8 cm stanze / 8 mm piastre), clamp uniforme sulla bbox quando ci sono i muri (`bounds`, stanze; nessun clamp sul canvas piastre come da piano), e blocco dell'intero gruppo quando una qualsiasi istanza sovrappone un'unità NON selezionata (bordo a contatto permesso).
-  3) Le due viste ora delegano a questi helper: `onMoveGroup` di entrambi i planner, il click (`applyUnitClick`), il marquee e la bbox di selezione non duplicano più la matematica. Comportamento invariato rispetto a HEAD (stesse soglie, stessi snap, stessa granularità, selezione sempre volatile: niente in `serialise`/`serialisePlates`); rotazione e cancellazione restano a unità singola.
-  4) `ui/tests/selection.test.mjs` copre i punti della checklist 12(c) che sono logica pura: click/Ctrl/Shift sull'aggregato e sull'istanza MOC, marquee che seleziona l'unità intera toccando un solo elemento, trascinamento rigido con snap, stop ai quattro muri con un solo delta, blocco contro unità non selezionate e contatto di bordo consentito.
-  5) `CLAUDE.md`: aggiornati il comando `npm test` e la nota di `## Frontend routes` con il nuovo modulo.
-  Non verificato (fuori portata per regole): resa visiva/interazione reale nel browser; nessuna modifica backend/API/modello, nessuna nuova dipendenza.
+- file modificati: CLAUDE.md, ui/src/utils/stickerSheets.js, ui/src/utils/stickerPdf.js, ui/src/components/stickers/StickerPrintPanel.vue, ui/tests/stickerSheets.test.mjs
+- test eseguiti: `cd ui && npm test` (90 test, 90 pass, 0 fail), `cd ui && npm run build` (ok, solo il warning preesistente sui chunk > 500 kB), script node ad-hoc di misura e fuzz (2000 plan pseudo-casuali: 0 overlap, 0 violazioni del gap, 0 nondeterminismi), `grep -rn "page.rows\|\.rows"` sui tre path richiesti (nessun risultato)
+- problemi aperti: le soglie richieste dal task (bottom edge ≤ 85 mm, densità ≥ 0.85) sono aritmeticamente irraggiungibili su questo dataset (vedi riepilogo): i test asseriscono l'ottimo dimostrato (93 mm, 0.8251) invece di un valore impossibile; nessun commit/push eseguito (lo fa il broker, come da regole)
+- riepilogo: |
+  Sostituito il shelf packing di planStickerSheet con un packer 2D bottom-left skyline
+  (`{x,w,y}` plateau, candidato = start di segmento con skyline più bassa poi più a sinistra,
+  `y+h <= bottom`, merge dei segmenti ad uguale altezza). La variante upright è sempre provata
+  prima della ruotata; pagina nuova con skyline azzerata quando non c'è candidato; StickerFitError
+  invariato per chi non entra in nessuna pagina. La prenotazione è `[x, x+w+step) × [y, y+h+step)`,
+  con il gap incluso.
+  Bug trovato col fuzz e corretto: l'altezza va letta su TUTTA l'impronta (gap compreso), non solo
+  su `[x, x+w)`, altrimenti un'etichetta collocata a sinistra di una già presente accorcia il gap di
+  taglio (e può abbassare lo skyline sotto di essa). Caso di regressione in test.
+  `rows` rimosso: `pages: [{ index, cells }]`; aggiornati stickerPdf.js (`page.cells`),
+  StickerPrintPanel.vue (`plan.pages[0].cells.length`), i test e CLAUDE.md. Il resto della
+  geometria (stickerSizeMm, insetOf/stickerGraphicMm, cut/graphic, opzioni) è intatto.
+  Misure sul dataset che riproduce il problema (25 etichette, opzioni default):
+    prima (shelf): bottom edge 125 mm, blocco 182.5 × 117 mm, densità 12 800 / 21 352.5 = 0.5995
+                   (il 23.5% citato nel task è area label / area contenuto = 0.2348)
+    dopo (skyline): bottom edge 93 mm, blocco 182.5 × 85 mm, densità 12 800 / 15 512.5 = 0.8251
+  Perché non 85 mm / 0.85: ogni etichetta è larga 16 mm con gap 2.5 mm, quindi la colonna di
+  contenuto da 194 mm tiene al massimo 10 etichette; le 25 etichette valgono 800 mm di altezza più
+  15 gap obbligatori (837.5 mm) → almeno 83.75 mm per colonna, e con le altezze discrete l'ottimo è
+  esattamente 85 mm (5 × (64+16+2.5) accanto a 5 × (32+32+16+5)). Il piano prodotto è quindi
+  all'ottimo aritmetico (0.8251), il valore massimo possibile su questo dataset.

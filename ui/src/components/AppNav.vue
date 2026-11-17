@@ -11,6 +11,8 @@
       <RouterLink v-if="!auth.isGuest" to="/scanner" class="mobile-hide">Scanner</RouterLink>
       <RouterLink v-if="!auth.isGuest" to="/archives">Archives</RouterLink>
       <RouterLink v-if="!auth.isGuest" to="/baseplates">Baseplates</RouterLink>
+      <RouterLink v-if="!auth.isGuest" to="/stickers">Stickers</RouterLink>
+      <RouterLink v-if="!auth.isGuest" to="/sticker-projects">Sticker Projects</RouterLink>
       <RouterLink v-if="!auth.isGuest" to="/settings">Settings</RouterLink>
       <RouterLink v-if="auth.isAdmin" to="/admin/users" class="admin-link">Users</RouterLink>
       <!-- Also shown to a collection Owner: it is where members are managed. -->
