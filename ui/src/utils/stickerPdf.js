@@ -22,9 +22,7 @@ export function drawStickerSheet(doc, plan, images = {}) {
 
   plan.pages.forEach((page, index) => {
     if (index > 0) doc.addPage()
-    for (const row of page.rows) {
-      for (const cell of row.cells) drawCell(doc, cell, images, border)
-    }
+    for (const cell of page.cells) drawCell(doc, cell, images, border)
   })
   return doc
 }

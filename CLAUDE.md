@@ -144,6 +144,20 @@ Current chain: `001` baseplate type fields · `002` set images by set id · `003
   border + padding), gap between labels (`max(gapMm, 2 × borderMm)`), a size trim, and an optional
   90° rotation used only as a fallback. A label larger than the printable area is a
   `StickerFitError` naming it, never a silently dropped copy.
+  **Packing** (`planStickerSheet`) is a **2D bottom-left skyline**, not shelves: the free edge of the
+  page is a list of `{ x, w, y }` plateaus starting as one segment over the content width, and each
+  copy (in the deterministic order `sortUnits`: height desc, width desc, name, id, copy) goes to the
+  segment start that keeps the skyline lowest, then leftmost, with `y + h <= bottom`; the height is
+  read over the **whole foot print including the gap** (`[x, x + w + step)`), so a label dropped just
+  left of an already placed neighbour goes above it instead of breaking the cut gap (and the
+  skyline stays monotone). The placed
+  label reserves `[x, x + w + step) × [y, y + h + step)`, so `step` stays the distance between cut
+  lines and a short label's leftover space is reused by the next one; equal-height segments are
+  merged. Rotation is tried only after the upright variant has no candidate, a page that cannot take
+  the label is closed and a fresh skyline retried, and only a label that fits no empty page is unfit.
+  The plan exposes `pages: [{ index, cells }]` (no `rows`/shelves any more) plus the flat `cells`,
+  `count`, `perSticker`, `content`, `step`, `options`; `stickerPdf.js` draws `page.cells`.
+  Deterministic: two runs on the same input produce an identical plan.
   **Fits** (`Contain` default / `Cover` / `Fill` / `Center`) are baked into the raster, because
   `doc.addImage` cannot crop: `computeFitGeometry` returns the source and destination rectangles and
   the loader draws them into a canvas whose pixel size comes from the plan's `graphic` rectangle
