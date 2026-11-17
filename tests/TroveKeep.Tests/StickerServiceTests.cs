@@ -6,56 +6,128 @@ using Xunit;
 namespace TroveKeep.Tests;
 
 /// <summary>
-/// Business rules of the sticker library: a non-empty name of at most 80 characters and a
-/// footprint between 1 and 32 studs on each side. No database: the repository is faked.
+/// Business rules of the sticker feature: a name of at most 80 characters for images and projects,
+/// a footprint between 1 and 32 studs per side, 1..999 copies, no duplicate footprint for the same
+/// artwork inside a project, no reference to artwork that does not exist, no deleting artwork a
+/// project still prints, and <see cref="StickerFit.Contain"/> as the default fit.
+/// No database: the repositories are faked.
 /// </summary>
 public class StickerServiceTests
 {
-    private static (StickerService Service, FakeStickerRepository Repo) Build()
-    {
-        var repo = new FakeStickerRepository();
-        return (new StickerService(repo, new FakeImageRepository()), repo);
-    }
+    // ---- image library ------------------------------------------------------------------------
 
     [Fact]
-    public async Task TrimsTheNameAndAcceptsATileFootprint()
+    public async Task TrimsTheImageNameAndStartsWithoutArtwork()
     {
-        var (service, _) = Build();
+        var images = new FakeStickerImageRepository();
+        var service = BuildImageService(images);
 
-        var created = await service.CreateAsync(new Sticker
-        {
-            Name = "  Red apple  ",
-            WidthStuds = 2,
-            DepthStuds = 2,
-        });
+        var created = await service.CreateAsync(new StickerImage { Name = "  Red apple  " });
 
         Assert.Equal("Red apple", created.Name);
-        Assert.Equal(2, created.WidthStuds);
-        Assert.Equal(2, created.DepthStuds);
-        // A new sticker has no artwork until one is uploaded.
         Assert.False(created.ImageCached);
     }
 
     [Theory]
     [InlineData("")]
     [InlineData("   ")]
-    public async Task RefusesAnEmptyName(string name)
+    public async Task RefusesAnEmptyImageName(string name)
     {
-        var (service, _) = Build();
+        var service = BuildImageService();
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            service.CreateAsync(new Sticker { Name = name, WidthStuds = 1, DepthStuds = 1 }));
+            service.CreateAsync(new StickerImage { Name = name }));
     }
 
     [Fact]
-    public async Task RefusesANameLongerThanEightyCharacters()
+    public async Task RefusesAnImageNameLongerThanEightyCharacters()
     {
-        var (service, _) = Build();
+        var service = BuildImageService();
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            service.CreateAsync(new Sticker
+            service.CreateAsync(new StickerImage
             {
-                Name = new string('x', StickerService.MaxNameLength + 1),
-                WidthStuds = 1,
-                DepthStuds = 1,
+                Name = new string('x', StickerRules.MaxNameLength + 1),
+            }));
+    }
+
+    [Fact]
+    public async Task DeletingAnImageAlsoDeletesItsArtwork()
+    {
+        var images = new FakeImageRepository();
+        var repo = new FakeStickerImageRepository();
+        var service = new StickerImageService(repo, new FakeStickerProjectRepository(), images);
+
+        var image = await service.CreateAsync(new StickerImage { Name = "Leaf" });
+        Assert.True(await service.DeleteAsync(image.Id));
+
+        Assert.Equal(image.Id.ToString(), images.DeletedReference);
+        Assert.Equal(ImageReferenceType.StickerImage, images.DeletedType);
+    }
+
+    [Fact]
+    public async Task RefusesToDeleteAnImageThatAProjectItemStillPrints()
+    {
+        var repo = new FakeStickerImageRepository();
+        var projects = new FakeStickerProjectRepository();
+        var service = new StickerImageService(repo, projects, new FakeImageRepository());
+
+        var image = await service.CreateAsync(new StickerImage { Name = "Leaf" });
+        projects.Rows.Add(new StickerProject
+        {
+            Id = Guid.NewGuid(),
+            Name = "Sheet",
+            Items =
+            [
+                new StickerItem { Id = Guid.NewGuid(), ImageId = image.Id, WidthStuds = 1, DepthStuds = 2 },
+                new StickerItem { Id = Guid.NewGuid(), ImageId = image.Id, WidthStuds = 2, DepthStuds = 2 },
+            ],
+        });
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => service.DeleteAsync(image.Id));
+        Assert.Contains(image.Id.ToString(), error.Message);
+        Assert.Contains("2 project item(s)", error.Message);
+        // The row is untouched: the user removes the items first.
+        Assert.NotNull(await service.GetByIdAsync(image.Id));
+    }
+
+    [Fact]
+    public async Task UpdatingAMissingImageIsA404()
+    {
+        var service = BuildImageService();
+        await Assert.ThrowsAsync<KeyNotFoundException>(() =>
+            service.UpdateAsync(Guid.NewGuid(), new StickerImage { Name = "X" }));
+    }
+
+    // ---- projects -----------------------------------------------------------------------------
+
+    [Fact]
+    public async Task TrimsTheProjectNameAndAcceptsAnEmptyItemList()
+    {
+        var (service, _) = BuildProjectService();
+
+        var created = await service.CreateAsync(new StickerProject { Name = "  Kitchen tiles  " });
+
+        Assert.Equal("Kitchen tiles", created.Name);
+        Assert.Empty(created.Items);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task RefusesAnEmptyProjectName(string name)
+    {
+        var (service, _) = BuildProjectService();
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            service.CreateAsync(new StickerProject { Name = name }));
+    }
+
+    [Fact]
+    public async Task RefusesAProjectNameLongerThanEightyCharacters()
+    {
+        var (service, _) = BuildProjectService();
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            service.CreateAsync(new StickerProject
+            {
+                Name = new string('x', StickerRules.MaxNameLength + 1),
             }));
     }
 
@@ -65,79 +137,301 @@ public class StickerServiceTests
     [InlineData(33, 1)]
     [InlineData(1, 33)]
     [InlineData(-2, 4)]
-    public async Task RefusesAFootprintOutsideOneToThirtyTwoStuds(int width, int depth)
+    public async Task RefusesAnItemFootprintOutsideOneToThirtyTwoStuds(int width, int depth)
     {
-        var (service, _) = Build();
+        var (service, images) = BuildProjectService();
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            service.CreateAsync(new Sticker { Name = "Nope", WidthStuds = width, DepthStuds = depth }));
+            service.CreateAsync(new StickerProject
+            {
+                Name = "Nope",
+                Items = [new StickerItem { ImageId = images.Add("Art"), WidthStuds = width, DepthStuds = depth }],
+            }));
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1000)]
+    [InlineData(-1)]
+    public async Task RefusesACopyCountOutsideOneToNineHundredNinetyNine(int copies)
+    {
+        var (service, images) = BuildProjectService();
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            service.CreateAsync(new StickerProject
+            {
+                Name = "Nope",
+                Items =
+                [
+                    new StickerItem
+                    {
+                        ImageId = images.Add("Art"),
+                        WidthStuds = 1,
+                        DepthStuds = 1,
+                        Copies = copies,
+                    },
+                ],
+            }));
     }
 
     [Fact]
-    public async Task AcceptsTheExtremesOfTheFootprint()
+    public async Task AcceptsTheExtremesOfTheFootprintAndTheCopyCount()
     {
-        var (service, _) = Build();
-        var small = await service.CreateAsync(new Sticker { Name = "1", WidthStuds = 1, DepthStuds = 1 });
-        var big = await service.CreateAsync(new Sticker { Name = "2", WidthStuds = 32, DepthStuds = 32 });
+        var (service, images) = BuildProjectService();
 
-        Assert.Equal(1, small.WidthStuds);
-        Assert.Equal(32, big.DepthStuds);
+        var created = await service.CreateAsync(new StickerProject
+        {
+            Name = "Extremes",
+            Items =
+            [
+                new StickerItem { ImageId = images.Add("A"), WidthStuds = 1, DepthStuds = 1, Copies = 1 },
+                new StickerItem { ImageId = images.Add("B"), WidthStuds = 32, DepthStuds = 32, Copies = 999 },
+            ],
+        });
+
+        Assert.Equal(2, created.Items.Count);
+        Assert.Equal(1, created.Items[0].WidthStuds);
+        Assert.Equal(999, created.Items[1].Copies);
     }
 
     [Fact]
-    public async Task UpdatingAMissingStickerIsA404()
+    public async Task RejectsAnItemWhoseImageDoesNotExist()
     {
-        var (service, _) = Build();
+        var (service, _) = BuildProjectService();
+        var missing = Guid.NewGuid();
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            service.CreateAsync(new StickerProject
+            {
+                Name = "Broken",
+                Items = [new StickerItem { ImageId = missing, WidthStuds = 1, DepthStuds = 1 }],
+            }));
+
+        Assert.Contains(missing.ToString(), error.Message);
+    }
+
+    [Fact]
+    public async Task RejectsASecondItemWithTheSameImageAndFootprint()
+    {
+        var (service, images) = BuildProjectService();
+        var imageId = images.Add("Art");
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            service.CreateAsync(new StickerProject
+            {
+                Name = "Twice",
+                Items =
+                [
+                    new StickerItem { ImageId = imageId, WidthStuds = 2, DepthStuds = 4 },
+                    new StickerItem { ImageId = imageId, WidthStuds = 2, DepthStuds = 4, Copies = 3 },
+                ],
+            }));
+
+        Assert.Contains("already has an item", error.Message);
+    }
+
+    [Fact]
+    public async Task AcceptsTheSameImageWithADifferentFootprint()
+    {
+        var (service, images) = BuildProjectService();
+        var imageId = images.Add("Art");
+
+        var created = await service.CreateAsync(new StickerProject
+        {
+            Name = "Two sizes",
+            Items =
+            [
+                new StickerItem { ImageId = imageId, WidthStuds = 1, DepthStuds = 1 },
+                new StickerItem { ImageId = imageId, WidthStuds = 2, DepthStuds = 4 },
+            ],
+        });
+
+        Assert.Equal(2, created.Items.Count);
+    }
+
+    [Fact]
+    public async Task FitDefaultsToContain()
+    {
+        var (service, images) = BuildProjectService();
+
+        var created = await service.CreateAsync(new StickerProject
+        {
+            Name = "Default fit",
+            Items = [new StickerItem { ImageId = images.Add("Art"), WidthStuds = 1, DepthStuds = 1 }],
+        });
+
+        Assert.Equal(StickerFit.Contain, created.Items[0].Fit);
+    }
+
+    [Fact]
+    public async Task KeepsSuppliedItemIdsAndGivesFreshOnesToNewItems()
+    {
+        var (service, images) = BuildProjectService();
+        var imageId = images.Add("Art");
+        var supplied = Guid.NewGuid();
+
+        var created = await service.CreateAsync(new StickerProject
+        {
+            Name = "Ids",
+            Items =
+            [
+                new StickerItem { Id = supplied, ImageId = imageId, WidthStuds = 1, DepthStuds = 1 },
+                new StickerItem { ImageId = imageId, WidthStuds = 2, DepthStuds = 2 },
+            ],
+        });
+
+        Assert.Equal(supplied, created.Items[0].Id);
+        Assert.NotEqual(Guid.Empty, created.Items[1].Id);
+    }
+
+    [Fact]
+    public async Task UpdatingAProjectReplacesTheItemListWholesale()
+    {
+        var (service, images) = BuildProjectService();
+        var imageId = images.Add("Art");
+
+        var created = await service.CreateAsync(new StickerProject
+        {
+            Name = "Before",
+            Items = [new StickerItem { ImageId = imageId, WidthStuds = 1, DepthStuds = 1 }],
+        });
+
+        var updated = await service.UpdateAsync(created.Id, new StickerProject
+        {
+            Name = "After",
+            Items = [new StickerItem { ImageId = imageId, WidthStuds = 2, DepthStuds = 2, Copies = 4 }],
+        });
+
+        Assert.Equal("After", updated.Name);
+        Assert.Single(updated.Items);
+        Assert.Equal(2, updated.Items[0].WidthStuds);
+        Assert.Equal(4, updated.Items[0].Copies);
+    }
+
+    [Fact]
+    public async Task UpdatingAMissingProjectIsA404()
+    {
+        var (service, _) = BuildProjectService();
         await Assert.ThrowsAsync<KeyNotFoundException>(() =>
-            service.UpdateAsync(Guid.NewGuid(), new Sticker { Name = "X", WidthStuds = 1, DepthStuds = 1 }));
+            service.UpdateAsync(Guid.NewGuid(), new StickerProject { Name = "X" }));
     }
 
     [Fact]
-    public async Task DeletingAStickerAlsoDeletesItsArtwork()
+    public async Task TrimsTheItemNotesAndKeepsNullForBlank()
     {
-        var repo = new FakeStickerRepository();
-        var images = new FakeImageRepository();
-        var service = new StickerService(repo, images);
+        var (service, images) = BuildProjectService();
+        var imageId = images.Add("Art");
 
-        var sticker = await service.CreateAsync(new Sticker { Name = "Leaf", WidthStuds = 1, DepthStuds = 2 });
-        Assert.True(await service.DeleteAsync(sticker.Id));
+        var created = await service.CreateAsync(new StickerProject
+        {
+            Name = "Notes",
+            Items =
+            [
+                new StickerItem { ImageId = imageId, WidthStuds = 1, DepthStuds = 1, Notes = "  door  " },
+                new StickerItem { ImageId = imageId, WidthStuds = 2, DepthStuds = 2, Notes = "   " },
+            ],
+        });
 
-        Assert.Equal(sticker.Id.ToString(), images.DeletedReference);
-        Assert.Equal(ImageReferenceType.Sticker, images.DeletedType);
+        Assert.Equal("door", created.Items[0].Notes);
+        Assert.Null(created.Items[1].Notes);
+    }
+
+    // ---- helpers ------------------------------------------------------------------------------
+
+    private static StickerImageService BuildImageService(FakeStickerImageRepository? repo = null) =>
+        new(repo ?? new FakeStickerImageRepository(),
+            new FakeStickerProjectRepository(),
+            new FakeImageRepository());
+
+    private static (StickerProjectService Service, FakeStickerImageRepository Images) BuildProjectService()
+    {
+        var projects = new FakeStickerProjectRepository();
+        var images = new FakeStickerImageRepository();
+        return (new StickerProjectService(projects, images), images);
     }
 }
 
-internal sealed class FakeStickerRepository : IStickerRepository
+internal sealed class FakeStickerImageRepository : IStickerImageRepository
 {
-    private readonly Dictionary<Guid, Sticker> _rows = new();
+    private readonly List<StickerImage> _rows = [];
 
-    public Task<IEnumerable<Sticker>> GetAllAsync() => Task.FromResult<IEnumerable<Sticker>>(_rows.Values);
+    public IReadOnlyList<StickerImage> Rows => _rows;
 
-    public Task<Sticker?> GetByIdAsync(Guid id) =>
-        Task.FromResult(_rows.TryGetValue(id, out var row) ? row : null);
-
-    public Task<Sticker> CreateAsync(Sticker sticker)
+    /// <summary>Registers an image and returns its id, for tests that only care about the reference.</summary>
+    public Guid Add(string name)
     {
-        sticker.Id = sticker.Id == Guid.Empty ? Guid.NewGuid() : sticker.Id;
-        sticker.Version = 0;
-        _rows[sticker.Id] = sticker;
-        return Task.FromResult(sticker);
+        var image = new StickerImage { Id = Guid.NewGuid(), Name = name };
+        _rows.Add(image);
+        return image.Id;
     }
 
-    public Task<Sticker?> UpdateAsync(Sticker sticker)
+    public Task<IEnumerable<StickerImage>> GetAllAsync() => Task.FromResult<IEnumerable<StickerImage>>(_rows);
+
+    public Task<StickerImage?> GetByIdAsync(Guid id) =>
+        Task.FromResult(_rows.FirstOrDefault(r => r.Id == id));
+
+    public Task<StickerImage> CreateAsync(StickerImage image)
     {
-        if (!_rows.ContainsKey(sticker.Id)) return Task.FromResult<Sticker?>(null);
-        _rows[sticker.Id] = sticker;
-        return Task.FromResult<Sticker?>(sticker);
+        image.Id = image.Id == Guid.Empty ? Guid.NewGuid() : image.Id;
+        image.Version = 0;
+        _rows.Add(image);
+        return Task.FromResult(image);
     }
 
-    public Task<bool> DeleteAsync(Guid id) => Task.FromResult(_rows.Remove(id));
-
-    public Task<Sticker?> UpdateImageCachedAsync(Guid id, bool cached)
+    public Task<StickerImage?> UpdateAsync(StickerImage image)
     {
-        if (!_rows.TryGetValue(id, out var row)) return Task.FromResult<Sticker?>(null);
+        var index = _rows.FindIndex(r => r.Id == image.Id);
+        if (index < 0) return Task.FromResult<StickerImage?>(null);
+        _rows[index] = image;
+        return Task.FromResult<StickerImage?>(image);
+    }
+
+    public Task<bool> DeleteAsync(Guid id)
+    {
+        var removed = _rows.RemoveAll(r => r.Id == id) > 0;
+        return Task.FromResult(removed);
+    }
+
+    public Task<StickerImage?> UpdateImageCachedAsync(Guid id, bool cached)
+    {
+        var row = _rows.FirstOrDefault(r => r.Id == id);
+        if (row is null) return Task.FromResult<StickerImage?>(null);
         row.ImageCached = cached;
-        return Task.FromResult<Sticker?>(row);
+        return Task.FromResult<StickerImage?>(row);
     }
+}
+
+internal sealed class FakeStickerProjectRepository : IStickerProjectRepository
+{
+    public List<StickerProject> Rows { get; } = [];
+
+    public Task<IEnumerable<StickerProject>> GetAllAsync() => Task.FromResult<IEnumerable<StickerProject>>(Rows);
+
+    public Task<StickerProject?> GetByIdAsync(Guid id) =>
+        Task.FromResult(Rows.FirstOrDefault(r => r.Id == id));
+
+    public Task<StickerProject> CreateAsync(StickerProject project)
+    {
+        project.Id = project.Id == Guid.Empty ? Guid.NewGuid() : project.Id;
+        project.Version = 0;
+        Rows.Add(project);
+        return Task.FromResult(project);
+    }
+
+    public Task<StickerProject?> UpdateAsync(StickerProject project)
+    {
+        var index = Rows.FindIndex(r => r.Id == project.Id);
+        if (index < 0) return Task.FromResult<StickerProject?>(null);
+        Rows[index] = project;
+        return Task.FromResult<StickerProject?>(project);
+    }
+
+    public Task<bool> DeleteAsync(Guid id)
+    {
+        var removed = Rows.RemoveAll(r => r.Id == id) > 0;
+        return Task.FromResult(removed);
+    }
+
+    public Task<int> CountUsagesAsync(Guid imageId) =>
+        Task.FromResult(Rows.Sum(p => p.Items.Count(i => i.ImageId == imageId)));
 }
 
 internal sealed class FakeImageRepository : IImageRepository

@@ -18,6 +18,6 @@ public enum ImageReferenceType
     Box,
     DrawerContainer,
     Baseplate,
-    /// <summary>Sticker-library artwork, keyed by the sticker id (global, no collection).</summary>
-    Sticker
+    /// <summary>Sticker image-library artwork, keyed by the sticker image id (global, no collection).</summary>
+    StickerImage
 }

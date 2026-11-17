@@ -84,6 +84,36 @@ export function stickerSizeMm(sticker, options = DEFAULT_OPTIONS) {
   }
 }
 
+/**
+ * Inset that separates the cutting line from the artwork: the black cut border plus the
+ * configurable inner border, capped so a tiny label still keeps a drawable area.
+ *
+ * Single source of truth for the `graphic` rectangle: the packer uses it per cell and
+ * `stickerGraphicMm` uses it for the artwork raster, so the rasterised pixels always have the
+ * aspect ratio the PDF draws into.
+ */
+function insetOf(options, widthMm, heightMm) {
+  return Math.min(options.borderMm + options.paddingMm, Math.max(0, (Math.min(widthMm, heightMm) - 0.1) / 2))
+}
+
+/**
+ * The box of one label and the artwork area inside it, in millimetres (`growMm` included).
+ *
+ * This is what the packer puts in `cell.cut`/`cell.graphic`; exposing it separately lets the
+ * raster loader compute the very same rectangle before (or without) a plan, so the loader and
+ * the PDF can never disagree by a millimetre.
+ */
+export function stickerGraphicMm(sticker, options = {}) {
+  const opts = resolveOptions(options)
+  const size = stickerSizeMm(sticker, opts)
+  const inset = insetOf(opts, size.w, size.h)
+  return {
+    cut: { w: size.w, h: size.h },
+    graphic: { w: size.w - 2 * inset, h: size.h - 2 * inset },
+    inset,
+  }
+}
+
 /** Thrown when one or more stickers cannot fit the sheet at all (too big, any orientation). */
 export class StickerFitError extends Error {
   constructor(names) {
@@ -173,8 +203,7 @@ export function planStickerSheet(items, overrides = {}) {
 
   // Artwork is centred in its own cut box: the inset is the black border plus the
   // configurable inner border, capped so a tiny label still has a drawable area.
-  const artworkInset = (w, h) =>
-    Math.min(options.borderMm + options.paddingMm, Math.max(0, (Math.min(w, h) - 0.1) / 2))
+  const artworkInset = (w, h) => insetOf(options, w, h)
 
   const pages = []
   const cells = []

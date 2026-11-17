@@ -46,10 +46,11 @@ namespace TroveKeep.Api.Filters;
 ///   <item><c>LabelsController</c> — print dispatch (reads entities, persists nothing) and the global label-server settings.</item>
 ///   <item><c>ScannerController</c>, <c>SearchController</c> — read-only, no write endpoints.</item>
 ///   <item>
-///     <c>StickersController</c> — the sticker library is global (a sticker carries no
-///     <c>CollectionId</c>), so there is no target collection to authorize against. Its writes are
-///     authorized by the dedicated <see cref="CollectionWriteAnywhereFilter"/> (admin, or Editor/Owner
-///     of at least one collection) instead of the level of a target collection.
+///     <c>StickerImagesController</c>, <c>StickerProjectsController</c> — the sticker library is
+///     global (neither an image nor a project carries a <c>CollectionId</c>), so there is no target
+///     collection to authorize against. Their writes are authorized by the dedicated
+///     <see cref="CollectionWriteAnywhereFilter"/> (admin, or Editor/Owner of at least one collection)
+///     instead of the level of a target collection.
 ///   </item>
 ///   <item>
 ///     <c>CollectionsController</c> — handled by the controller itself, because the rule is not
@@ -71,7 +72,7 @@ public sealed class CollectionWriteTargetResolver : ICollectionWriteTargetResolv
         new(StringComparer.OrdinalIgnoreCase)
         {
             "Auth", "Setup", "Mode", "Users", "Settings", "Archives", "Labels",
-            "Scanner", "Search", "Collections", "Stickers",
+            "Scanner", "Search", "Collections", "StickerImages", "StickerProjects",
         };
 
     /// <summary>Write-shaped actions that only read, keyed "Controller.Action".</summary>

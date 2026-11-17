@@ -9,10 +9,11 @@ import { planStickerSheet } from './stickerSheets.js'
  * Draws the plan on `doc` (any object with the jsPDF drawing API: `addPage`, `rect`,
  * `addImage`, `setDrawColor`, `setLineWidth`), one PDF page per packed page.
  *
- * `images` maps a sticker id to `{ dataUrl, format, rotatedDataUrl?, rotatedFormat? }`:
- * the artwork rasterised at the label's aspect ratio. A cell whose artwork is missing is
- * still cut (a bordered empty label) rather than silently skipped, so the sheet the
- * operator sees matches the plan.
+ * `images` maps a **project item id** to `{ dataUrl, format, rotatedDataUrl?, rotatedFormat? }`:
+ * the artwork rasterised into the label's graphic rectangle, with the item's fit already baked in
+ * (`doc.addImage` cannot crop, so `stickerImages.js` does it — see `computeFitGeometry`). A cell
+ * whose artwork is missing is still cut (a bordered empty label) rather than silently skipped, so
+ * the sheet the operator sees matches the plan.
  */
 export function drawStickerSheet(doc, plan, images = {}) {
   const border = plan.options?.borderMm ?? 0
@@ -46,8 +47,8 @@ function drawCell(doc, cell, images, border) {
   const format = (cell.rotated && image.rotatedFormat) || image.format || 'PNG'
   if (!dataUrl) return
 
-  // One alias per (sticker, orientation): jsPDF stores the raster once in the PDF and every
-  // further copy references it, so a sheet of 400 copies of one sticker is not 400 images.
+  // One alias per (item, orientation): jsPDF stores the raster once in the PDF and every
+  // further copy references it, so a sheet of 400 copies of one label is not 400 images.
   const alias = `${cell.stickerId}${cell.rotated ? '-r' : ''}`
   doc.addImage(dataUrl, format, cell.graphic.x, cell.graphic.y, cell.graphic.w, cell.graphic.h, alias)
 }
@@ -76,6 +77,7 @@ export function stickerFileDate(date = new Date()) {
 
 /**
  * Packs the selection, builds the PDF and hands it to the browser download.
+ * `images` is what `loadStickerImages` returned (keyed by item id).
  * Returns `{ fileName, pages, count }` so the caller can report what was generated.
  */
 export function downloadStickerPdf(selection, options, images = {}, { date = new Date(), documentFactory } = {}) {

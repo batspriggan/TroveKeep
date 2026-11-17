@@ -10,7 +10,8 @@ using TroveKeep.Core.Models;
 namespace TroveKeep.Api.Controllers;
 
 /// <summary>
-/// The global sticker library used by the sticker sheet generator.
+/// The global sticker image library: the artwork that sticker projects print, with no size of its
+/// own (the footprint lives on the project item).
 ///
 /// <para>
 /// <b>Reads</b> are open to every regular account (a Viewer may browse and print the library — its
@@ -21,54 +22,49 @@ namespace TroveKeep.Api.Controllers;
 /// </summary>
 [Authorize(Roles = "User,Admin")]
 [ApiController]
-[Route("api/stickers")]
-public class StickersController : ControllerBase
+[Route("api/sticker-images")]
+public class StickerImagesController : ControllerBase
 {
     /// <summary>Upload limit for artwork (the SPA downsamples before uploading).</summary>
     private const long MaxImageBytes = 10_000_000;
 
-    private readonly IStickerService _service;
+    private readonly IStickerImageService _service;
     private readonly IImageService _imageService;
 
-    public StickersController(IStickerService service, IImageService imageService)
+    public StickerImagesController(IStickerImageService service, IImageService imageService)
     {
         _service = service;
         _imageService = imageService;
     }
 
     [HttpGet]
-    [ProducesResponseType(typeof(IEnumerable<StickerResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(IEnumerable<StickerImageResponse>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetAll()
     {
-        var stickers = await _service.GetAllAsync();
-        return Ok(stickers.Select(MapToResponse));
+        var images = await _service.GetAllAsync();
+        return Ok(images.Select(MapToResponse));
     }
 
     [HttpGet("{id:guid}")]
-    [ProducesResponseType(typeof(StickerResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(StickerImageResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetById(Guid id)
     {
-        var sticker = await _service.GetByIdAsync(id);
-        if (sticker is null) return NotFound();
-        return Ok(MapToResponse(sticker));
+        var image = await _service.GetByIdAsync(id);
+        if (image is null) return NotFound();
+        return Ok(MapToResponse(image));
     }
 
     [HttpPost]
     [ServiceFilter(typeof(CollectionWriteAnywhereFilter))]
-    [ProducesResponseType(typeof(StickerResponse), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(StickerImageResponse), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
-    public async Task<IActionResult> Create([FromBody] CreateStickerRequest request)
+    public async Task<IActionResult> Create([FromBody] CreateStickerImageRequest request)
     {
         try
         {
-            var created = await _service.CreateAsync(new Sticker
-            {
-                Name = request.Name,
-                WidthStuds = request.WidthStuds,
-                DepthStuds = request.DepthStuds,
-            });
+            var created = await _service.CreateAsync(new StickerImage { Name = request.Name });
             return StatusCode(StatusCodes.Status201Created, MapToResponse(created));
         }
         catch (InvalidOperationException ex)
@@ -79,19 +75,17 @@ public class StickersController : ControllerBase
 
     [HttpPut("{id:guid}")]
     [ServiceFilter(typeof(CollectionWriteAnywhereFilter))]
-    [ProducesResponseType(typeof(StickerResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(StickerImageResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status409Conflict)]
-    public async Task<IActionResult> Update(Guid id, [FromBody] UpdateStickerRequest request)
+    public async Task<IActionResult> Update(Guid id, [FromBody] UpdateStickerImageRequest request)
     {
         try
         {
-            var updated = await _service.UpdateAsync(id, new Sticker
+            var updated = await _service.UpdateAsync(id, new StickerImage
             {
                 Name = request.Name,
-                WidthStuds = request.WidthStuds,
-                DepthStuds = request.DepthStuds,
                 Version = request.Version,
             });
             return Ok(MapToResponse(updated));
@@ -101,19 +95,31 @@ public class StickersController : ControllerBase
         catch (InvalidOperationException ex) { return BadRequest(new { error = ex.Message }); }
     }
 
+    /// <summary>
+    /// Deletes an image. Refused with a 400 when a project item still prints it (the message names
+    /// how many items use it), so the sheet can never point at vanished artwork.
+    /// </summary>
     [HttpDelete("{id:guid}")]
     [ServiceFilter(typeof(CollectionWriteAnywhereFilter))]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Delete(Guid id)
     {
-        var deleted = await _service.DeleteAsync(id);
-        if (!deleted) return NotFound();
-        return NoContent();
+        try
+        {
+            var deleted = await _service.DeleteAsync(id);
+            if (!deleted) return NotFound();
+            return NoContent();
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
     }
 
     /// <summary>
-    /// The artwork of a sticker. Answers 404 when the row carries no image
+    /// The artwork of an image. Answers 404 when the row carries no artwork
     /// (<c>imageCached = false</c>), so clients can use <c>ImageCached</c> to avoid the request
     /// entirely and still get a clean miss.
     /// </summary>
@@ -122,10 +128,10 @@ public class StickersController : ControllerBase
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetImage(Guid id)
     {
-        var sticker = await _service.GetByIdAsync(id);
-        if (sticker is null || !sticker.ImageCached) return NotFound();
+        var image = await _service.GetByIdAsync(id);
+        if (image is null || !image.ImageCached) return NotFound();
 
-        var img = await _imageService.GetImageAsync(id.ToString(), ImageReferenceType.Sticker);
+        var img = await _imageService.GetImageAsync(id.ToString(), ImageReferenceType.StickerImage);
         if (img is null) return NotFound();
 
         return File(img.Data, img.ContentType);
@@ -140,13 +146,13 @@ public class StickersController : ControllerBase
     [HttpPost("{id:guid}/image")]
     [ServiceFilter(typeof(CollectionWriteAnywhereFilter))]
     [RequestSizeLimit(MaxImageBytes)]
-    [ProducesResponseType(typeof(StickerResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(StickerImageResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> UploadImage(Guid id, IFormFile file)
     {
-        var sticker = await _service.GetByIdAsync(id);
-        if (sticker is null) return NotFound();
+        var image = await _service.GetByIdAsync(id);
+        if (image is null) return NotFound();
         if (file is null || file.Length == 0)
             return BadRequest(new { error = "No file provided." });
         if (file.Length > MaxImageBytes)
@@ -164,7 +170,7 @@ public class StickersController : ControllerBase
             return BadRequest(new { error = "Unsupported image format: upload a PNG or a JPEG file." });
 
         using var content = new MemoryStream(data);
-        await _imageService.StoreUploadAsync(id.ToString(), ImageReferenceType.Sticker, content, contentType);
+        await _imageService.StoreUploadAsync(id.ToString(), ImageReferenceType.StickerImage, content, contentType);
         var updated = await _service.UpdateImageCachedAsync(id, true);
         return Ok(MapToResponse(updated));
     }
@@ -172,22 +178,20 @@ public class StickersController : ControllerBase
     /// <summary>Removes the artwork. Answers 200 with the updated row (see <see cref="UploadImage"/>).</summary>
     [HttpDelete("{id:guid}/image")]
     [ServiceFilter(typeof(CollectionWriteAnywhereFilter))]
-    [ProducesResponseType(typeof(StickerResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(StickerImageResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> DeleteImage(Guid id)
     {
-        var sticker = await _service.GetByIdAsync(id);
-        if (sticker is null) return NotFound();
+        var image = await _service.GetByIdAsync(id);
+        if (image is null) return NotFound();
 
-        await _imageService.DeleteAsync(id.ToString(), ImageReferenceType.Sticker);
+        await _imageService.DeleteAsync(id.ToString(), ImageReferenceType.StickerImage);
         var updated = await _service.UpdateImageCachedAsync(id, false);
         return Ok(MapToResponse(updated));
     }
 
-    private static StickerResponse MapToResponse(Sticker s) =>
-        new(s.Id, s.Name, s.WidthStuds, s.DepthStuds,
-            s.WidthStuds * Sticker.StudMm, s.DepthStuds * Sticker.StudMm,
-            s.ImageCached, s.CreatedAt, s.UpdatedAt, s.Version);
+    private static StickerImageResponse MapToResponse(StickerImage image) =>
+        new(image.Id, image.Name, image.ImageCached, image.CreatedAt, image.UpdatedAt, image.Version);
 
     /// <summary>
     /// Accepts a PNG or JPEG payload. The declared content type must be one of the two and the
