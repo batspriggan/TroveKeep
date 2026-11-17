@@ -194,6 +194,8 @@ import {
 
 const auth = useAuth()
 const sheet = useStickerSheet()
+/** Layout options from the shared composer state; the template binds them by name. */
+const options = sheet.options
 
 const stickers = ref([])
 const loading = ref(true)
