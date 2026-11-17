@@ -1,4 +1,7 @@
 <Solution>
+  <Folder Name="/tests/">
+    <Project Path="tests/TroveKeep.Tests/TroveKeep.Tests.csproj" />
+  </Folder>
   <Folder Name="/src/">
     <Project Path="src/TroveKeep.Api/TroveKeep.Api.csproj" />
     <Project Path="src/TroveKeep.Core/TroveKeep.Core.csproj" />

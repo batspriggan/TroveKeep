@@ -183,6 +183,8 @@ builder.Services.AddScoped<ISetPhotoRepository, SetPhotoRepository>();
 builder.Services.AddScoped<ITableTemplateRepository, TableTemplateRepository>();
 builder.Services.AddScoped<IRoomRepository, RoomRepository>();
 builder.Services.AddScoped<IBaseplateRepository, BaseplateRepository>();
+// The sticker library is instance-wide (no CollectionId): a flat repository, like images.
+builder.Services.AddScoped<IStickerRepository, StickerRepository>();
 
 // Services
 builder.Services.AddScoped<ICurrentUser, CurrentUser>();
@@ -190,6 +192,8 @@ builder.Services.AddScoped<ICurrentUser, CurrentUser>();
 builder.Services.AddScoped<ICollectionMembershipCache, CollectionMembershipCache>();
 builder.Services.AddScoped<ICollectionScope, CollectionScope>();
 builder.Services.AddScoped<ICollectionWriteTargetResolver, CollectionWriteTargetResolver>();
+// Rule for instance-wide (collection-less) writes, applied per controller: see the filter.
+builder.Services.AddScoped<CollectionWriteAnywhereFilter>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<ICollectionService, CollectionService>();
@@ -207,6 +211,7 @@ builder.Services.AddScoped<ISetPhotoService, SetPhotoService>();
 builder.Services.AddScoped<IBackupService, BackupService>();
 builder.Services.AddScoped<IRoomExportService, RoomExportService>();
 builder.Services.AddScoped<ITableTemplateService, TableTemplateService>();
+builder.Services.AddScoped<IStickerService, StickerService>();
 builder.Services.AddScoped<IRoomService, RoomService>();
 builder.Services.AddScoped<IBaseplateService, BaseplateService>();
 builder.Services.AddScoped<IPlanningService, PlanningService>();

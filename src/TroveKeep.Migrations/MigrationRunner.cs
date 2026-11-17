@@ -14,7 +14,7 @@ public class MigrationRunner
     private static readonly string[] BackupCollections =
     [
         "legosets", "bulkpieces", "boxes", "drawercontainers", "drawers",
-        "table_templates", "rooms", "baseplates", "set_photos",
+        "table_templates", "rooms", "baseplates", "set_photos", "stickers",
         "storage_allocations", "set_images",
         "users", "collections", "collection_members",
         "rebrickable_colors", "rebrickable_sets", "rebrickable_parts",

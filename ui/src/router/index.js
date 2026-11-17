@@ -20,6 +20,7 @@ import ScannerView from '../views/ScannerView.vue'
 import ArchivesView from '../views/ArchivesView.vue'
 import SettingsView from '../views/SettingsView.vue'
 import BaseplateListView from '../views/baseplates/BaseplateListView.vue'
+import StickerLibraryView from '../views/stickers/StickerLibraryView.vue'
 import UserAdminView from '../views/admin/UserAdminView.vue'
 import CollectionAdminView from '../views/admin/CollectionAdminView.vue'
 import TablePlannerView from '../views/TablePlannerView.vue'
@@ -50,6 +51,9 @@ const routes = [
   // the view hides the admin-only controls.
   { path: '/admin/collections', component: CollectionAdminView, meta: { collectionAdmin: true } },
   { path: '/baseplates', component: BaseplateListView },
+  // Global sticker library + A4 sheet composer. A Guest never gets here: the guard below
+  // sends them to the Table Planner, their only destination.
+  { path: '/stickers', component: StickerLibraryView },
   { path: '/table-planner', component: TablePlannerView },
   { path: '/table-planner/rooms/:id', component: RoomPlannerView, meta: { fullscreen: true } },
   { path: '/table-planner/baseplates', component: AggregatePlannerListView },

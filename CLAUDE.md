@@ -4,9 +4,9 @@
 
 **Backend:** `dotnet build` · `cd src/TroveKeep.Api && dotnet run` (http://localhost:5221, OpenAPI at `/openapi/v1.json`)
 
-**Frontend:** `cd ui && npm run dev` (http://localhost:5173, proxies /api → 5221) · `npm run build` · `npm run preview` · `npm test` (dependency-free `node:test` unit tests in `ui/tests/`, currently the planner marquee, selection and rigid-group-drag maths)
+**Frontend:** `cd ui && npm run dev` (http://localhost:5173, proxies /api → 5221) · `npm run build` · `npm run preview` · `npm test` (dependency-free `node:test` unit tests in `ui/tests/`: the planner marquee, selection and rigid-group-drag maths, plus the sticker-sheet packing and PDF renderer)
 
-No .NET test projects; the UI has plain `node:test` files under `ui/tests/` only.
+**Tests:** `dotnet test` (xUnit, `tests/TroveKeep.Tests` — the collection-scope write rules, the global-write filter and the sticker-library business rules) · `cd ui && npm test`.
 
 ## Conventions
 
@@ -21,12 +21,14 @@ Layered .NET 10 backend + Vue 3/Vite SPA. All projects: `net10.0`, `Nullable=ena
 ```
 Api → Services → Core
 Api → Repositories → Core
+Tests → Api, Services, Core
 ```
 
 - **Core** — domain models + interfaces; no external deps
 - **Repositories** — MongoDB (`MongoDB.Driver`); implements Core interfaces
 - **Services** — business logic; depends only on Core interfaces
 - **Api** — controllers, DTOs, DI wiring (`Microsoft.AspNetCore.OpenApi`)
+- **Tests** — xUnit (`tests/TroveKeep.Tests`); pure-logic tests with hand-written fakes, no database and no HTTP server
 
 **MongoDB:** `appsettings.json` → `MongoDb.ConnectionString/DatabaseName`; client+db as singletons; BSON Guid = Standard.
 
@@ -42,16 +44,30 @@ an admin may write everywhere. It is enforced in one place — the global `Colle
 (`IAsyncActionFilter`) answers **403** for every non-GET request whose target collection the caller
 cannot write; `ICollectionWriteTargetResolver` derives that collection from the route id (loaded
 through the scoped repository), else from `DefaultCollectionId` (creates), else the endpoint is a
-declared exclusion (Auth, Setup, Mode, Users, Settings, Archives, Labels, Scanner, Search) — plus
-`CollectionsController`, which checks `CanManageMembers` per action (admin or Owner, never an
-Editor). Levels come from `collection_members` via `ICollectionMembershipCache`, primed once per
-request by `CollectionMembershipMiddleware` — not from a cookie claim, so a demotion takes effect
-immediately. The SPA mirrors this (`useActiveCollection().canWrite`, `canManageMembers`) to hide
-controls, but the UI is not the boundary.
+declared exclusion (Auth, Setup, Mode, Users, Settings, Archives, Labels, Scanner, Search,
+Stickers) — plus `CollectionsController`, which checks `CanManageMembers` per action (admin or
+Owner, never an Editor). Levels come from `collection_members` via `ICollectionMembershipCache`,
+primed once per request by `CollectionMembershipMiddleware` — not from a cookie claim, so a demotion
+takes effect immediately. The SPA mirrors this (`useActiveCollection().canWrite`,
+`canManageMembers`) to hide controls, but the UI is not the boundary.
+
+**Instance-wide data has no target collection**, so it cannot be authorized per collection:
+`ICollectionScope.CanWriteAnywhere` (admin, or Editor/Owner of **at least one** collection) is the
+rule, and `CollectionWriteAnywhereFilter` answers **403** for the non-GET requests,
+`[ServiceFilter(typeof(CollectionWriteAnywhereFilter))]` per action. Today only the sticker library
+uses it (`StickersController`), which is also why it is in `ExcludedControllers` of the resolver:
+the row is global, the dedicated filter authorizes it. A Viewer (or a user with no collection)
+still reads and prints stickers.
 
 ## Domain
 
 - Primary entities: `LegoSet`, `BulkPiece` — storage tracked in `storage_allocations` collection (separate, not embedded).
+- **`Sticker`** — the sticker library (`stickers` collection) is **global**: no `CollectionId`, no
+  `ICollectionScope` filter, no migration. `{ Name (trimmed, 1..80 chars), WidthStuds, DepthStuds
+  (1..32 each), ImageCached, CreatedAt, UpdatedAt, Version }`; artwork lives in `set_images` as
+  `ImageReferenceType.Sticker` keyed by the sticker id, deleted with the row (best effort). One stud
+  is 8 mm (`Sticker.StudMm`), so a 2×4 tile is a 16×32 mm label. Writes need
+  `CanWriteAnywhere` (admin or Editor/Owner anywhere), reads are open to every regular account.
 - `StorageAllocation`: `{ StorageId, Type (Box|Drawer), Quantity }`
 - Storage: `Box`, `DrawerContainer`, `Drawer` (embedded in container, keyed by position — no own Id).
 - LegoSets → Boxes only; BulkPieces → Boxes or Drawers.
@@ -79,6 +95,16 @@ Current chain: `001` baseplate type fields · `002` set images by set id · `003
 - `/baseplates` — baseplate library (`views/baseplates/BaseplateListView.vue`). **Top-level nav entry, always visible** — *not* gated by `tablePlannerEnabled`.
 - `/table-planner` — rooms · `/table-planner/rooms/:id` — room canvas · `/table-planner/baseplates` — aggregate list · `/table-planner/baseplates/:roomId/:repId` — baseplate placement canvas · `/table-planner/build-check` — multi-configuration feasibility. All `/table-planner/*` are gated by `tablePlannerEnabled`.
 - Baseplate API client: `ui/src/api/baseplates.js` (not `tableplanner.js`).
+- `/stickers` — global sticker library + A4 sheet composer (`views/stickers/StickerLibraryView.vue`),
+  hidden to a Guest (who only reaches `/table-planner`). API client `ui/src/api/stickers.js`.
+  The sheet is composed **client-side at 1:1** (`ui/src/utils/stickerSheets.js` = pure packing and
+  geometry in mm, `stickerPdf.js` = jsPDF drawing, `stickerImages.js` = browser canvas resampling at
+  600 dpi; `composables/useStickerSheet.js` = options in `localStorage` + **volatile** copies). The
+  copy quantities are never persisted: a print run is a one-off. Layout options: sheet margin, cut
+  border (stroke inset by half so the outer edge is the cut line), **inner border** (artwork inset =
+  border + padding), gap between labels (`max(gapMm, 2 × borderMm)`), a size trim, and an optional
+  90° rotation used only as a fallback. A label larger than the printable area is a
+  `StickerFitError` naming it, never a silently dropped copy.
 - **Multi-selection in both planners** (`RoomPlannerView`, `AggregateBpPlannerView`) is **volatile**: it
   lives in a `Set` in component state and is never serialised into `layout`/`placedBaseplates`.
   Ctrl/Cmd+click toggles, Shift+click adds, dragging on empty canvas draws a marquee

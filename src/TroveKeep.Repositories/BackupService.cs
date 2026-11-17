@@ -29,6 +29,8 @@ public class BackupService : IBackupService
         var partsInventory = await _db.GetCollection<PartInventoryArchiveDocument>("rebrickable_parts_inventory").Find(_ => true).ToListAsync();
         var archiveMeta = await _db.GetCollection<ArchiveMetaDocument>("archive_meta").Find(_ => true).ToListAsync();
         var images = await _db.GetCollection<ImageDocument>("set_images").Find(_ => true).ToListAsync();
+        // Global sticker library (artwork travels with "images": ImageReferenceType.Sticker).
+        var stickers = await _db.GetCollection<StickerDocument>("stickers").Find(_ => true).ToListAsync();
 
         var backup = new
         {
@@ -42,6 +44,7 @@ public class BackupService : IBackupService
             tableTemplates,
             rooms,
             baseplates,
+            stickers,
             colors,
             sets,
             parts,
@@ -76,6 +79,7 @@ public class BackupService : IBackupService
         await _db.GetCollection<TableTemplateDocument>("table_templates").DeleteManyAsync(_ => true);
         await _db.GetCollection<RoomDocument>("rooms").DeleteManyAsync(_ => true);
         await _db.GetCollection<BaseplateDocument>("baseplates").DeleteManyAsync(_ => true);
+        await _db.GetCollection<StickerDocument>("stickers").DeleteManyAsync(_ => true);
         // Rebrickable catalog
         await _db.GetCollection<ColorDocument>("rebrickable_colors").DeleteManyAsync(_ => true);
         await _db.GetCollection<SetArchiveDocument>("rebrickable_sets").DeleteManyAsync(_ => true);
@@ -102,6 +106,9 @@ public class BackupService : IBackupService
             await _db.GetCollection<RoomDocument>("rooms").InsertManyAsync(backup.Rooms);
         if (backup.Baseplates?.Count > 0)
             await _db.GetCollection<BaseplateDocument>("baseplates").InsertManyAsync(backup.Baseplates);
+        // Nullable: a v2-era backup predates the sticker library and stays importable.
+        if (backup.Stickers?.Count > 0)
+            await _db.GetCollection<StickerDocument>("stickers").InsertManyAsync(backup.Stickers);
         // Restore Rebrickable catalog
         if (backup.Colors?.Count > 0)
             await _db.GetCollection<ColorDocument>("rebrickable_colors").InsertManyAsync(backup.Colors);
@@ -129,6 +136,7 @@ public class BackupService : IBackupService
         public List<TableTemplateDocument>? TableTemplates { get; set; }
         public List<RoomDocument>? Rooms { get; set; }
         public List<BaseplateDocument>? Baseplates { get; set; }
+        public List<StickerDocument>? Stickers { get; set; }
         public List<ColorDocument>? Colors { get; set; }
         public List<SetArchiveDocument>? Sets { get; set; }
         public List<PartArchiveDocument>? Parts { get; set; }

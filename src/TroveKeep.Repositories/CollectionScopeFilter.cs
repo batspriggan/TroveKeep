@@ -15,6 +15,9 @@ internal sealed class UnscopedCollectionScope : ICollectionScope
 
     public bool CanAccessAll => true;
 
+    /// <summary>Unscoped graph (migrations): every write is allowed.</summary>
+    public bool CanWriteAnywhere => true;
+
     public bool HasExplicitCollectionSelection => false;
 
     public IReadOnlyCollection<Guid> VisibleCollectionIds => Array.Empty<Guid>();

@@ -46,6 +46,12 @@ namespace TroveKeep.Api.Filters;
 ///   <item><c>LabelsController</c> — print dispatch (reads entities, persists nothing) and the global label-server settings.</item>
 ///   <item><c>ScannerController</c>, <c>SearchController</c> — read-only, no write endpoints.</item>
 ///   <item>
+///     <c>StickersController</c> — the sticker library is global (a sticker carries no
+///     <c>CollectionId</c>), so there is no target collection to authorize against. Its writes are
+///     authorized by the dedicated <see cref="CollectionWriteAnywhereFilter"/> (admin, or Editor/Owner
+///     of at least one collection) instead of the level of a target collection.
+///   </item>
+///   <item>
 ///     <c>CollectionsController</c> — handled by the controller itself, because the rule is not
 ///     <see cref="ICollectionScope.CanWrite"/>: collection create/delete/edit is admin-only
 ///     (<c>[Authorize(Roles = "Admin")]</c>) while member management needs
@@ -65,7 +71,7 @@ public sealed class CollectionWriteTargetResolver : ICollectionWriteTargetResolv
         new(StringComparer.OrdinalIgnoreCase)
         {
             "Auth", "Setup", "Mode", "Users", "Settings", "Archives", "Labels",
-            "Scanner", "Search", "Collections",
+            "Scanner", "Search", "Collections", "Stickers",
         };
 
     /// <summary>Write-shaped actions that only read, keyed "Controller.Action".</summary>
