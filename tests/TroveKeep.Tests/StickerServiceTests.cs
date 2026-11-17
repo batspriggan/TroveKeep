@@ -1,3 +1,7 @@
+using Microsoft.AspNetCore.Mvc;
+using TroveKeep.Api.Controllers;
+using TroveKeep.Api.DTOs.Requests;
+using TroveKeep.Api.DTOs.Responses;
 using TroveKeep.Core.Interfaces.Repositories;
 using TroveKeep.Core.Models;
 using TroveKeep.Services;
@@ -9,7 +13,8 @@ namespace TroveKeep.Tests;
 /// Business rules of the sticker feature: a name of at most 80 characters for images and projects,
 /// a footprint between 1 and 32 studs per side, 1..999 copies, no duplicate footprint for the same
 /// artwork inside a project, no reference to artwork that does not exist, no deleting artwork a
-/// project still prints, and <see cref="StickerFit.Contain"/> as the default fit.
+/// project still prints, <see cref="StickerFit.Contain"/> as the default fit, and
+/// <see cref="StickerOrientation.Auto"/> as the default artwork orientation.
 /// No database: the repositories are faked.
 /// </summary>
 public class StickerServiceTests
@@ -334,6 +339,126 @@ public class StickerServiceTests
         Assert.Null(created.Items[1].Notes);
     }
 
+    // ---- artwork orientation ------------------------------------------------------------------
+
+    [Theory]
+    [InlineData("Auto", StickerOrientation.Auto)]
+    [InlineData("Landscape", StickerOrientation.Landscape)]
+    [InlineData(" Portrait ", StickerOrientation.Portrait)]
+    [InlineData("portrait", StickerOrientation.Portrait)]
+    [InlineData("", StickerOrientation.Auto)]
+    [InlineData(null, StickerOrientation.Auto)]
+    public void ParsesTheOrientationNameAndFallsBackToAuto(string? value, StickerOrientation expected)
+    {
+        Assert.Equal(expected, StickerRules.ParseOrientation(value));
+    }
+
+    [Fact]
+    public void RefusesAnUnknownOrientationName()
+    {
+        var error = Assert.Throws<InvalidOperationException>(() => StickerRules.ParseOrientation("Sideways"));
+        Assert.Contains("Sideways", error.Message);
+        Assert.Contains("Auto", error.Message);
+    }
+
+    [Fact]
+    public async Task OrientationDefaultsToAutoAndKeepsTheSuppliedValue()
+    {
+        var (service, images) = BuildProjectService();
+        var imageId = images.Add("Art");
+
+        var created = await service.CreateAsync(new StickerProject
+        {
+            Name = "Orientation",
+            Items =
+            [
+                new StickerItem { ImageId = imageId, WidthStuds = 1, DepthStuds = 2 },
+                new StickerItem
+                {
+                    ImageId = imageId,
+                    WidthStuds = 2,
+                    DepthStuds = 4,
+                    Orientation = StickerOrientation.Portrait,
+                },
+            ],
+        });
+
+        Assert.Equal(StickerOrientation.Auto, created.Items[0].Orientation);
+        Assert.Equal(StickerOrientation.Portrait, created.Items[1].Orientation);
+    }
+
+    [Fact]
+    public async Task RefusesAnOrientationThatIsNotAStickerOrientation()
+    {
+        var (service, images) = BuildProjectService();
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            service.CreateAsync(new StickerProject
+            {
+                Name = "Garbage",
+                Items =
+                [
+                    new StickerItem
+                    {
+                        ImageId = images.Add("Art"),
+                        WidthStuds = 1,
+                        DepthStuds = 1,
+                        Orientation = (StickerOrientation)42,
+                    },
+                ],
+            }));
+
+        Assert.Contains("orientation", error.Message);
+    }
+
+    [Fact]
+    public async Task AnUnknownOrientationInTheRequestIsABadRequest()
+    {
+        var (controller, images) = BuildProjectController();
+
+        var result = await controller.Create(new CreateStickerProjectRequest("Sheet",
+            [new StickerItemRequest(null, images.Add("Art"), 1, 2, 1, "Contain", "Sideways")]));
+
+        var badRequest = Assert.IsType<BadRequestObjectResult>(result);
+        Assert.Contains("Sideways", badRequest.Value?.ToString());
+    }
+
+    [Fact]
+    public async Task OrientationTravelsFromTheRequestToTheResponseOnCreateAndUpdate()
+    {
+        var (controller, images) = BuildProjectController();
+        var imageId = images.Add("Art");
+
+        // Omitted orientation → Auto, i.e. the artwork is printed as uploaded.
+        var createdAt = await controller.Create(new CreateStickerProjectRequest("Sheet",
+            [new StickerItemRequest(null, imageId, 1, 2)]));
+        var created = Assert.IsType<StickerProjectResponse>(
+            Assert.IsType<ObjectResult>(createdAt).Value);
+        var item = Assert.Single(created.Items);
+        Assert.Equal("Auto", item.Orientation);
+
+        // The orientation is metadata about the artwork, so the label keeps its millimetres.
+        Assert.Equal(1 * StickerItem.StudMm, item.WidthMm);
+        Assert.Equal(2 * StickerItem.StudMm, item.DepthMm);
+
+        var updatedAt = await controller.Update(created.Id, new UpdateStickerProjectRequest("Sheet",
+            [new StickerItemRequest(item.Id, imageId, 1, 2, 2, "Cover", "Portrait", "windscreen")],
+            created.Version));
+        var updated = Assert.IsType<StickerProjectResponse>(
+            Assert.IsType<OkObjectResult>(updatedAt).Value);
+        var updatedItem = Assert.Single(updated.Items);
+        Assert.Equal("Portrait", updatedItem.Orientation);
+        Assert.Equal("Cover", updatedItem.Fit);
+        Assert.Equal(item.WidthMm, updatedItem.WidthMm);
+        Assert.Equal(item.DepthMm, updatedItem.DepthMm);
+
+        // …and it is read back from the same response mapping.
+        var readAt = await controller.GetById(created.Id);
+        var read = Assert.IsType<StickerProjectResponse>(
+            Assert.IsType<OkObjectResult>(readAt).Value);
+        Assert.Equal("Portrait", Assert.Single(read.Items).Orientation);
+    }
+
     // ---- helpers ------------------------------------------------------------------------------
 
     private static StickerImageService BuildImageService(FakeStickerImageRepository? repo = null) =>
@@ -346,6 +471,12 @@ public class StickerServiceTests
         var projects = new FakeStickerProjectRepository();
         var images = new FakeStickerImageRepository();
         return (new StickerProjectService(projects, images), images);
+    }
+
+    private static (StickerProjectsController Controller, FakeStickerImageRepository Images) BuildProjectController()
+    {
+        var (service, images) = BuildProjectService();
+        return (new StickerProjectsController(service, images), images);
     }
 }
 

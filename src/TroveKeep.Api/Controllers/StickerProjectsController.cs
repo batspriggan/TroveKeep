@@ -116,7 +116,10 @@ public class StickerProjectsController : ControllerBase
     private async Task<IReadOnlyDictionary<Guid, StickerImage>> LoadImagesAsync() =>
         (await _images.GetAllAsync()).ToDictionary(i => i.Id);
 
-    /// <summary>Maps the request items onto domain items, parsing the fit name (400 on garbage).</summary>
+    /// <summary>
+    /// Maps the request items onto domain items, parsing the fit and orientation names (400 on
+    /// garbage; an omitted orientation means <c>Auto</c>, i.e. the artwork as uploaded).
+    /// </summary>
     private static List<StickerItem> ToModels(List<StickerItemRequest>? items) =>
         (items ?? []).Select(i => new StickerItem
         {
@@ -126,6 +129,7 @@ public class StickerProjectsController : ControllerBase
             DepthStuds = i.DepthStuds,
             Copies = i.Copies,
             Fit = StickerRules.ParseFit(i.Fit),
+            Orientation = StickerRules.ParseOrientation(i.Orientation),
             Notes = i.Notes,
         }).ToList();
 
@@ -153,6 +157,7 @@ public class StickerProjectsController : ControllerBase
             item.DepthStuds * StickerItem.StudMm,
             item.Copies,
             item.Fit.ToString(),
+            item.Orientation.ToString(),
             item.Notes);
     }
 }

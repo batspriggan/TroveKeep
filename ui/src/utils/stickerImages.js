@@ -68,6 +68,55 @@ export function fitLabel(value) {
 }
 
 /**
+ * How the ARTWORK is turned inside the label. The values are the backend enum names
+ * (`StickerOrientation`), serialised as names, so they travel unchanged through the API.
+ *
+ * This is the per-item orientation and has nothing to do with the sheet option `allowRotate`:
+ * that one lets the packer turn a whole label by 90° when it is the only way it fits the page.
+ * The two rotations are independent and compose (see `drawStickerRaster`).
+ */
+export const ORIENTATION_OPTIONS = [
+  {
+    value: 'Auto',
+    label: 'As uploaded',
+    hint: 'Keep the artwork as it is — the raster’s own orientation',
+  },
+  {
+    value: 'Landscape',
+    label: 'Horizontal',
+    hint: 'Turn the artwork to lie horizontally (wider than tall)',
+  },
+  {
+    value: 'Portrait',
+    label: 'Vertical',
+    hint: 'Turn the artwork to stand vertically (taller than wide)',
+  },
+]
+
+/** The backend default; also what an unknown stored value falls back to. */
+export const DEFAULT_ORIENTATION = 'Auto'
+
+const ORIENTATION_VALUES = ORIENTATION_OPTIONS.map((option) => option.value)
+
+/** True for one of the three backend orientation names. */
+export function isStickerOrientation(value) {
+  return ORIENTATION_VALUES.includes(value)
+}
+
+/** The orientation to use: the given one when it is known, `Auto` otherwise. */
+export function normalizeOrientation(value) {
+  return isStickerOrientation(value) ? value : DEFAULT_ORIENTATION
+}
+
+/** Human label of an orientation ("Portrait" → "Vertical"), for the read-only views. */
+export function orientationLabel(value) {
+  return (
+    ORIENTATION_OPTIONS.find((option) => option.value === normalizeOrientation(value))?.label ??
+    DEFAULT_ORIENTATION
+  )
+}
+
+/**
  * URL of an artwork file. Accepts a library row (`id`) or a project item (`imageId`); the
  * `updatedAt` cache buster applies when the caller has it, so a replaced file is re-fetched.
  */
@@ -98,19 +147,50 @@ export function sourcePixelSize(source) {
 }
 
 /**
+ * The artwork's size AFTER the item's orientation is applied — the source the fit is computed
+ * against. This is an explicit step so the order is visible: <b>rotate first, then fit</b>.
+ *
+ * `Auto` means "as uploaded", not "never turned": it keeps the raster's own orientation.
+ * `Landscape`/`Portrait` turn the artwork 90° only when it disagrees with the raster's natural
+ * orientation (a square artwork has none, so it is never turned). The label itself never changes
+ * size — only the artwork inside it is turned.
+ *
+ * Returns `{ w, h, turned }`: the effective size plus whether a 90° turn has to be applied by
+ * the drawing step (`drawStickerRaster`).
+ */
+export function resolveEffectiveSource(source, orientation = DEFAULT_ORIENTATION) {
+  const natural = sourcePixelSize(source)
+  const wanted = normalizeOrientation(orientation)
+  const naturalIsLandscape = natural.w > natural.h
+  const naturalIsPortrait = natural.h > natural.w
+  const turned =
+    (wanted === 'Landscape' && naturalIsPortrait) || (wanted === 'Portrait' && naturalIsLandscape)
+
+  return turned
+    ? { w: natural.h, h: natural.w, turned: true }
+    : { w: natural.w, h: natural.h, turned: false }
+}
+
+/**
  * Geometry of one artwork inside the label area, as the two rectangles `ctx.drawImage` takes:
  * `{ sx, sy, sw, sh }` in source pixels and `{ dx, dy, dw, dh }` in destination pixels.
  *
  * `destination` is the label's graphic rectangle in raster pixels, `source` the artwork's
- * natural size. Pure arithmetic, so all four fits are pinned by unit tests:
+ * natural size. `orientation` is the item's artwork orientation: the effective source is resolved
+ * FIRST (`resolveEffectiveSource`, i.e. the artwork is turned) and the fit is computed afterwards
+ * against the turned axes. Pure arithmetic, so all four fits are pinned by unit tests:
  *
  *   Fill    — destination fully covered, source fully used (the aspect ratio may change)
  *   Contain — source fully used, destination letterboxed (the whole artwork, never cropped)
  *   Cover   — destination fully covered, source cropped on the overflowing axis
  *   Center  — 1:1 pixels (the artwork prints at its own resolution), centred, cropped when larger
+ *
+ * The returned source rectangle is in the EFFECTIVE (turned) source frame; `drawStickerRaster`
+ * maps it back onto the original bitmap when it applies the turn.
  */
-export function computeFitGeometry(fit, source, destination) {
-  const src = sourcePixelSize(source)
+export function computeFitGeometry(fit, source, destination, orientation = DEFAULT_ORIENTATION) {
+  // Rotate first, then fit: the turned axes are what the four fits see.
+  const src = resolveEffectiveSource(source, orientation)
   const dst = {
     w: Math.max(1, Math.round(destination?.w ?? 0)),
     h: Math.max(1, Math.round(destination?.h ?? 0)),
@@ -193,13 +273,37 @@ export function stickerLabelAreas(items, options = {}, plan = null) {
 }
 
 /**
+ * The source rectangle of the ORIGINAL bitmap that corresponds to a geometry computed in the
+ * turned (effective) frame. A 90° clockwise turn maps the original pixel `(x, y)` to the effective
+ * `(height - y, x)`, so the effective rectangle `(sx, sy, sw, sh)` comes back as the original
+ * rectangle `(sy, height - sx - sw, sh, sw)`.
+ */
+export function turnedSourceRect(source, geometry) {
+  const natural = sourcePixelSize(source)
+  return {
+    sx: geometry.sy,
+    sy: natural.h - geometry.sx - geometry.sw,
+    sw: geometry.sh,
+    sh: geometry.sw,
+  }
+}
+
+/**
  * Draws the artwork of one item into a fresh raster of `size` pixels.
  *
  * `background` (white for JPEG, which has no alpha; `null` to keep transparency) is painted
  * first, so a `Contain` letterbox is white for a JPEG and transparent for a PNG.
+ *
+ * Two rotations exist in this feature and they are applied in two different places:
+ *   * the item's `orientation` turns the ARTWORK inside the label — here, by rotating the drawing
+ *     frame around the centre of the label rectangle;
+ *   * the packer's `allowRotate` turns the WHOLE LABEL — afterwards, by `rotateStickerRaster` on
+ *     the finished upright raster (see `loadStickerImages`).
+ * Because they act on different things they compose: a `Portrait` artwork on a label the packer
+ * turned comes out turned twice, not cancelled out.
  */
 export function drawStickerRaster(
-  { fit, source, size, background = null },
+  { fit, source, size, background = null, orientation = DEFAULT_ORIENTATION },
   { canvasFactory = browserCanvasFactory } = {},
 ) {
   const canvas = canvasFactory(size.w, size.h)
@@ -208,9 +312,27 @@ export function drawStickerRaster(
     ctx.fillStyle = background
     ctx.fillRect(0, 0, size.w, size.h)
   }
-  const geometry = computeFitGeometry(fit, source, size)
-  ctx.drawImage(source, geometry.sx, geometry.sy, geometry.sw, geometry.sh,
-    geometry.dx, geometry.dy, geometry.dw, geometry.dh)
+
+  const geometry = computeFitGeometry(fit, source, size, orientation)
+  const { turned } = resolveEffectiveSource(source, orientation)
+
+  if (!turned) {
+    // No artwork turn: exactly the rectangle the fit computed, in one call.
+    ctx.drawImage(source, geometry.sx, geometry.sy, geometry.sw, geometry.sh,
+      geometry.dx, geometry.dy, geometry.dw, geometry.dh)
+    return canvas
+  }
+
+  // Artwork turn: the fit was computed in the turned frame, so the frame is rotated 90° clockwise
+  // around the centre of the label rectangle and the effective source rectangle is mapped back
+  // onto the original bitmap. After the turn the local width runs down the canvas and the local
+  // height across it, hence the swapped destination numbers below; the canvas rectangle stays the
+  // label's own `dw × dh`, so the label itself never changes size.
+  const rect = turnedSourceRect(source, geometry)
+  ctx.translate(geometry.dx + geometry.dw / 2, geometry.dy + geometry.dh / 2)
+  ctx.rotate(Math.PI / 2)
+  ctx.drawImage(source, rect.sx, rect.sy, rect.sw, rect.sh,
+    -geometry.dh / 2, -geometry.dw / 2, geometry.dh, geometry.dw)
   return canvas
 }
 
@@ -264,10 +386,12 @@ export async function fetchStickerArtwork(item, signal) {
  * `{ dataUrl, format, rotatedDataUrl?, rotatedFormat? }`.
  *
  * The key is the *item*, not the image: two items may print the same artwork with a different
- * footprint or fit and therefore need a different raster. jsPDF still aliases repeated copies of
- * one item (the PDF alias is `itemId` / `itemId-r`), so 400 copies of one label embed the image
- * once. A PNG keeps its transparency (the label sheet is transparent polyethylene); anything else
- * is flattened onto white and exported as a quality-0.95 JPEG.
+ * footprint, fit or artwork orientation and therefore need a different raster (the item id is the
+ * key, so an item differing only by `orientation` never shares a raster; the orientation is also
+ * carried in the entry). jsPDF still aliases repeated copies of one item (the PDF alias is
+ * `itemId` / `itemId-r`), so 400 copies of one label embed the image once. A PNG keeps its
+ * transparency (the label sheet is transparent polyethylene); anything else is flattened onto
+ * white and exported as a quality-0.95 JPEG.
  *
  * `plan` is optional but recommended: it is where the raster sizes come from, so a rotated label
  * gets a raster for the rotated rectangle.
@@ -295,11 +419,14 @@ export async function loadStickerImages(
       const format = isPng ? 'PNG' : 'JPEG'
       const area = areas.get(String(item.id))
       const size = labelRasterPx(area.upright.wMm, area.upright.hMm)
+      // `orientation` turns the artwork inside the label; the packer's turn is applied to the
+      // finished raster below, so the two rotations compose instead of cancelling out.
+      const orientation = normalizeOrientation(item.orientation)
       const canvas = drawStickerRaster(
-        { fit: normalizeFit(item.fit), source, size, background: isPng ? null : '#ffffff' },
+        { fit: normalizeFit(item.fit), source, size, background: isPng ? null : '#ffffff', orientation },
         { canvasFactory },
       )
-      const entry = { dataUrl: toDataUrl(canvas, format), format }
+      const entry = { dataUrl: toDataUrl(canvas, format), format, orientation }
       if (area.rotated) {
         const turned = rotateStickerRaster(canvas, { canvasFactory })
         entry.rotatedDataUrl = toDataUrl(turned, format)

@@ -64,6 +64,15 @@
             </select>
           </div>
           <div class="form-field">
+            <label>Artwork orientation</label>
+            <select v-model="draft.orientation">
+              <option v-for="orientation in ORIENTATION_OPTIONS" :key="orientation.value"
+                      :value="orientation.value">
+                {{ orientation.label }} — {{ orientation.hint }}
+              </option>
+            </select>
+          </div>
+          <div class="form-field">
             <label>Notes (optional)</label>
             <input v-model="draft.notes" maxlength="500" placeholder="e.g. windscreen side" />
           </div>
@@ -110,6 +119,17 @@
               <span v-else class="muted">{{ fitLabel(item.fit) }}</span>
             </div>
 
+            <div class="fit-cell">
+              <select v-if="canWrite" :value="normalizeOrientation(item.orientation)"
+                      @change="setOrientation(item, $event.target.value)">
+                <option v-for="orientation in ORIENTATION_OPTIONS" :key="orientation.value"
+                        :value="orientation.value">
+                  {{ orientation.label }}
+                </option>
+              </select>
+              <span v-else class="muted">{{ orientationLabel(item.orientation) }}</span>
+            </div>
+
             <div class="notes-cell">
               <input v-if="canWrite" :value="item.notes ?? ''" maxlength="500" placeholder="Notes"
                      @change="setNotes(item, $event.target.value)" />
@@ -122,7 +142,8 @@
 
         <p v-if="canWrite" class="hint">
           Changes are saved automatically. The artwork footprint and copy count are what the sheet
-          prints: one label per copy.
+          prints: one label per copy. The artwork orientation only turns the artwork inside the
+          label — the label keeps its millimetres.
         </p>
       </section>
 
@@ -139,7 +160,17 @@ import StickerImagePicker from '../../components/stickers/StickerImagePicker.vue
 import StickerPrintPanel from '../../components/stickers/StickerPrintPanel.vue'
 import { useAuth } from '../../composables/useAuth.js'
 import { STUD_MM } from '../../utils/stickerSheets.js'
-import { DEFAULT_FIT, FIT_OPTIONS, fitLabel, normalizeFit, stickerArtworkUrl } from '../../utils/stickerImages.js'
+import {
+  DEFAULT_FIT,
+  DEFAULT_ORIENTATION,
+  FIT_OPTIONS,
+  ORIENTATION_OPTIONS,
+  fitLabel,
+  normalizeFit,
+  normalizeOrientation,
+  orientationLabel,
+  stickerArtworkUrl,
+} from '../../utils/stickerImages.js'
 import { getStickerImages } from '../../api/stickerImages.js'
 import { getStickerProject, toItemPayload, updateStickerProject } from '../../api/stickerProjects.js'
 
@@ -180,6 +211,7 @@ const draft = reactive({
   depthStuds: 4,
   copies: 1,
   fit: DEFAULT_FIT,
+  orientation: DEFAULT_ORIENTATION,
   notes: '',
 })
 
@@ -311,6 +343,7 @@ async function addItem() {
     depthStuds: clampStuds(preset ? preset.depthStuds : draft.depthStuds),
     copies: clampCopies(draft.copies),
     fit: normalizeFit(draft.fit),
+    orientation: normalizeOrientation(draft.orientation),
     notes: draft.notes.trim() || null,
   }
 
@@ -343,6 +376,11 @@ function stepCopies(item, delta) {
 
 function setFit(item, value) {
   item.fit = normalizeFit(value)
+  scheduleSave()
+}
+
+function setOrientation(item, value) {
+  item.orientation = normalizeOrientation(value)
   scheduleSave()
 }
 
