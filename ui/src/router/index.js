@@ -21,6 +21,8 @@ import ArchivesView from '../views/ArchivesView.vue'
 import SettingsView from '../views/SettingsView.vue'
 import BaseplateListView from '../views/baseplates/BaseplateListView.vue'
 import StickerLibraryView from '../views/stickers/StickerLibraryView.vue'
+import StickerProjectListView from '../views/stickers/StickerProjectListView.vue'
+import StickerProjectView from '../views/stickers/StickerProjectView.vue'
 import UserAdminView from '../views/admin/UserAdminView.vue'
 import CollectionAdminView from '../views/admin/CollectionAdminView.vue'
 import TablePlannerView from '../views/TablePlannerView.vue'
@@ -51,9 +53,12 @@ const routes = [
   // the view hides the admin-only controls.
   { path: '/admin/collections', component: CollectionAdminView, meta: { collectionAdmin: true } },
   { path: '/baseplates', component: BaseplateListView },
-  // Global sticker library + A4 sheet composer. A Guest never gets here: the guard below
-  // sends them to the Table Planner, their only destination.
+  // Global sticker library + sticker projects. A Guest never gets here: the guard below sends
+  // them to the Table Planner, their only destination. A Viewer may browse, open and print —
+  // the views hide every mutating control (the backend answers 403 anyway).
   { path: '/stickers', component: StickerLibraryView },
+  { path: '/sticker-projects', component: StickerProjectListView },
+  { path: '/sticker-projects/:id', component: StickerProjectView },
   { path: '/table-planner', component: TablePlannerView },
   { path: '/table-planner/rooms/:id', component: RoomPlannerView, meta: { fullscreen: true } },
   { path: '/table-planner/baseplates', component: AggregatePlannerListView },

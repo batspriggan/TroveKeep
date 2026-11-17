@@ -4,7 +4,7 @@
 
 **Backend:** `dotnet build` · `cd src/TroveKeep.Api && dotnet run` (http://localhost:5221, OpenAPI at `/openapi/v1.json`)
 
-**Frontend:** `cd ui && npm run dev` (http://localhost:5173, proxies /api → 5221) · `npm run build` · `npm run preview` · `npm test` (dependency-free `node:test` unit tests in `ui/tests/`: the planner marquee, selection and rigid-group-drag maths, plus the sticker-sheet packing and PDF renderer)
+**Frontend:** `cd ui && npm run dev` (http://localhost:5173, proxies /api → 5221) · `npm run build` · `npm run preview` · `npm test` (dependency-free `node:test` unit tests in `ui/tests/`: the planner marquee, selection and rigid-group-drag maths, plus the sticker-sheet packing, the four artwork fits and the PDF renderer)
 
 **Tests:** `dotnet test` (xUnit, `tests/TroveKeep.Tests` — the collection-scope write rules, the global-write filter and the sticker image/project business rules) · `cd ui && npm test`.
 
@@ -114,19 +114,34 @@ Current chain: `001` baseplate type fields · `002` set images by set id · `003
 - `/baseplates` — baseplate library (`views/baseplates/BaseplateListView.vue`). **Top-level nav entry, always visible** — *not* gated by `tablePlannerEnabled`.
 - `/table-planner` — rooms · `/table-planner/rooms/:id` — room canvas · `/table-planner/baseplates` — aggregate list · `/table-planner/baseplates/:roomId/:repId` — baseplate placement canvas · `/table-planner/build-check` — multi-configuration feasibility. All `/table-planner/*` are gated by `tablePlannerEnabled`.
 - Baseplate API client: `ui/src/api/baseplates.js` (not `tableplanner.js`).
-- `/stickers` — global sticker library + A4 sheet composer (`views/stickers/StickerLibraryView.vue`),
-  hidden to a Guest (who only reaches `/table-planner`). API client `ui/src/api/stickers.js`.
-  **The SPA is still one-level**: it talks to the removed `/api/stickers` routes, so a separate
-  frontend task must rewrite it against `/api/sticker-images` and `/api/sticker-projects`
-  (image library + projects with embedded items).
+- `/stickers` — global sticker **image library** (`views/stickers/StickerLibraryView.vue`): thumbnail
+  grid, inline rename, delete, multi-file upload (name from the filename), replace image. No studs,
+  no copies, no print controls. `/sticker-projects` — project list
+  (`views/stickers/StickerProjectListView.vue`): name, item count, total labels, created/updated,
+  create (name only), delete. `/sticker-projects/:id` — the project editor
+  (`views/stickers/StickerProjectView.vue`): rename, add an item (artwork picker
+  `components/stickers/StickerImagePicker.vue`, footprint presets 1×1..2×8 or custom studs, copies,
+  fit, notes), item list with in-place copies/fit/notes, remove, and the A4 print panel
+  (`components/stickers/StickerPrintPanel.vue`). All three are hidden to a Guest (who only reaches
+  `/table-planner`) and read-only to a Viewer: mutating controls need `canWriteAnywhere`. API clients
+  `ui/src/api/stickerImages.js` and `ui/src/api/stickerProjects.js`.
+  The editor persists the **whole item list** with one `PUT` (debounced, item ids included, so rows
+  survive), shows a save state and handles a 409 by reloading; the server's 400 for a duplicate
+  `image + footprint` and for deleting a still-used image is surfaced verbatim.
   The sheet is composed **client-side at 1:1** (`ui/src/utils/stickerSheets.js` = pure packing and
   geometry in mm, `stickerPdf.js` = jsPDF drawing, `stickerImages.js` = browser canvas resampling at
-  600 dpi; `composables/useStickerSheet.js` = options in `localStorage` + **volatile** copies). The
-  copy quantities are never persisted: a print run is a one-off. Layout options: sheet margin, cut
+  600 dpi; `composables/useStickerSheet.js` = layout options in `localStorage` only — the copies are a
+  persisted field of the project item, not volatile state). Layout options: sheet margin, cut
   border (stroke inset by half so the outer edge is the cut line), **inner border** (artwork inset =
   border + padding), gap between labels (`max(gapMm, 2 × borderMm)`), a size trim, and an optional
   90° rotation used only as a fallback. A label larger than the printable area is a
   `StickerFitError` naming it, never a silently dropped copy.
+  **Fits** (`Contain` default / `Cover` / `Fill` / `Center`) are baked into the raster, because
+  `doc.addImage` cannot crop: `computeFitGeometry` returns the source and destination rectangles and
+  the loader draws them into a canvas whose pixel size comes from the plan's `graphic` rectangle
+  (`stickerGraphicMm`, shared with the packer), keyed per **item + orientation** so jsPDF still
+  aliases repeated copies. The loader's canvas factory and artwork loader are injectable, so the four
+  fits and the rotated case are unit-tested headless (`tests/stickerFits.test.mjs`).
 - **Multi-selection in both planners** (`RoomPlannerView`, `AggregateBpPlannerView`) is **volatile**: it
   lives in a `Set` in component state and is never serialised into `layout`/`placedBaseplates`.
   Ctrl/Cmd+click toggles, Shift+click adds, dragging on empty canvas draws a marquee
