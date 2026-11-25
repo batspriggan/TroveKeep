@@ -1,3 +1,4 @@
+using System.Globalization;
 using Microsoft.AspNetCore.Mvc;
 using TroveKeep.Api.Controllers;
 using TroveKeep.Api.DTOs.Requests;
@@ -459,6 +460,221 @@ public class StickerServiceTests
         Assert.Equal("Portrait", Assert.Single(read.Items).Orientation);
     }
 
+    // ---- mounts: tiles and brick stacks -------------------------------------------------------
+
+    [Theory]
+    [InlineData("Tile", StickerMount.Tile)]
+    [InlineData("brickstack", StickerMount.BrickStack)]
+    [InlineData(" BrickStack ", StickerMount.BrickStack)]
+    [InlineData("", StickerMount.Tile)]
+    [InlineData(null, StickerMount.Tile)]
+    public void ParsesTheMountNameAndFallsBackToTile(string? value, StickerMount expected)
+    {
+        Assert.Equal(expected, StickerRules.ParseMount(value));
+    }
+
+    [Fact]
+    public void RefusesAnUnknownMountName()
+    {
+        var error = Assert.Throws<InvalidOperationException>(() => StickerRules.ParseMount("Glued"));
+        Assert.Contains("Glued", error.Message);
+        Assert.Contains("Tile", error.Message);
+    }
+
+    [Fact]
+    public async Task ABrickStackPrintsTheHeightInMillimetres()
+    {
+        var (controller, images) = BuildProjectController();
+
+        var created = await CreateAsync(controller,
+            new StickerItemRequest(null, images.Add("Art"), 8, 0, Mount: "BrickStack", BrickHeight: 6m));
+        var item = Assert.Single(created.Items);
+
+        Assert.Equal("BrickStack", item.Mount);
+        Assert.Equal(6m, item.BrickHeight);
+        Assert.Equal(64m, item.WidthMm);
+        // 6 bricks × 9.6 mm = 57.6 mm: the second label dimension is the stack height.
+        Assert.Equal(57.6m, item.DepthMm);
+    }
+
+    [Fact]
+    public async Task ABrickHeightIsRoundedToTwoDecimals()
+    {
+        var (controller, images) = BuildProjectController();
+        var imageId = images.Add("Art");
+
+        var created = await CreateAsync(controller,
+            new StickerItemRequest(null, imageId, 8, 1, Mount: "BrickStack", BrickHeight: 1.33m));
+        var item = Assert.Single(created.Items);
+        Assert.Equal(1.33m, item.BrickHeight);
+        // 1.33 × 9.6 = 12.768 mm, reported (and printed) as 12.77 mm.
+        Assert.Equal(12.77m, item.DepthMm);
+
+        // More decimals than the label supports are rounded, not refused.
+        var rounded = await CreateAsync(controller,
+            new StickerItemRequest(null, imageId, 4, 1, Mount: "BrickStack", BrickHeight: 2.333m));
+        Assert.Equal(2.33m, Assert.Single(rounded.Items).BrickHeight);
+    }
+
+    [Fact]
+    public async Task ABrickStackForcesADepthOfOneStud()
+    {
+        var (controller, images) = BuildProjectController();
+
+        var created = await CreateAsync(controller,
+            new StickerItemRequest(null, images.Add("Art"), 6, 5, Mount: "BrickStack", BrickHeight: 3m));
+        var item = Assert.Single(created.Items);
+
+        // Only the facade is printed: the depth is normalised, never taken from the client.
+        Assert.Equal(1, item.DepthStuds);
+        Assert.Equal(6 * StickerItem.StudMm, item.WidthMm);
+        Assert.Equal(3 * StickerItem.BrickMm, item.DepthMm);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData(0.0)]
+    [InlineData(-2.5)]
+    public async Task RefusesABrickStackWithoutAPositiveBrickHeight(double? brickHeight)
+    {
+        var (service, images) = BuildProjectService();
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            service.CreateAsync(new StickerProject
+            {
+                Name = "No height",
+                Items =
+                [
+                    new StickerItem
+                    {
+                        ImageId = images.Add("Art"),
+                        Mount = StickerMount.BrickStack,
+                        WidthStuds = 4,
+                        DepthStuds = 1,
+                        BrickHeight = (decimal?)brickHeight,
+                    },
+                ],
+            }));
+
+        Assert.Contains("brick height", error.Message);
+    }
+
+    [Fact]
+    public async Task RefusesABrickStackTallerThanTheSheet()
+    {
+        var (service, images) = BuildProjectService();
+
+        // 100 bricks × 9.6 mm = 960 mm: no A4 page can print it.
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            service.CreateAsync(new StickerProject
+            {
+                Name = "Huge",
+                Items =
+                [
+                    new StickerItem
+                    {
+                        ImageId = images.Add("Tower"),
+                        Mount = StickerMount.BrickStack,
+                        WidthStuds = 8,
+                        DepthStuds = 1,
+                        BrickHeight = 100m,
+                    },
+                ],
+            }));
+
+        Assert.Contains("'Tower'", error.Message);
+        Assert.Contains("64 × 960 mm", error.Message);
+        // The bound itself is named, so the user knows what the limit is.
+        Assert.Contains(StickerRules.MaxLabelHeightMm.ToString(CultureInfo.InvariantCulture), error.Message);
+    }
+
+    [Fact]
+    public async Task ATileAndABrickStackOfTheSameArtworkAndSizeCoexist()
+    {
+        var (controller, images) = BuildProjectController();
+        var imageId = images.Add("Art");
+
+        // 1×8 tile and a 1-stud facade on 8 bricks: the same artwork, the same numbers, two labels.
+        var created = await CreateAsync(controller,
+            new StickerItemRequest(null, imageId, 1, 8),
+            new StickerItemRequest(null, imageId, 1, 1, Mount: "BrickStack", BrickHeight: 8m));
+
+        Assert.Equal(2, created.Items.Count());
+        Assert.Equal(new[] { "Tile", "BrickStack" }, created.Items.Select(i => i.Mount).ToArray());
+    }
+
+    [Fact]
+    public async Task RefusesASecondBrickStackWithTheSameArtworkAndFacade()
+    {
+        var (service, images) = BuildProjectService();
+        var imageId = images.Add("Art");
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            service.CreateAsync(new StickerProject
+            {
+                Name = "Twice",
+                Items =
+                [
+                    new StickerItem
+                    {
+                        ImageId = imageId, Mount = StickerMount.BrickStack,
+                        WidthStuds = 4, BrickHeight = 6m,
+                    },
+                    new StickerItem
+                    {
+                        ImageId = imageId, Mount = StickerMount.BrickStack,
+                        WidthStuds = 4, BrickHeight = 6m, Copies = 3,
+                    },
+                ],
+            }));
+
+        Assert.Contains("already has an item", error.Message);
+    }
+
+    [Fact]
+    public async Task AMissingMountBehavesLikeATile()
+    {
+        var (controller, images) = BuildProjectController();
+
+        // No mount in the request: exactly the payload an older client sends.
+        var created = await CreateAsync(controller,
+            new StickerItemRequest(null, images.Add("Art"), 2, 4));
+        var item = Assert.Single(created.Items);
+
+        Assert.Equal("Tile", item.Mount);
+        Assert.Equal(2, item.WidthStuds);
+        Assert.Equal(4, item.DepthStuds);
+        Assert.Null(item.BrickHeight);
+        Assert.Equal(16m, item.WidthMm);
+        Assert.Equal(32m, item.DepthMm);
+    }
+
+    [Fact]
+    public async Task ATileDropsABrickHeightItWasSent()
+    {
+        var (controller, images) = BuildProjectController();
+
+        var created = await CreateAsync(controller,
+            new StickerItemRequest(null, images.Add("Art"), 1, 2, BrickHeight: 6m));
+        var item = Assert.Single(created.Items);
+
+        Assert.Equal("Tile", item.Mount);
+        Assert.Null(item.BrickHeight);
+        Assert.Equal(2 * StickerItem.StudMm, item.DepthMm);
+    }
+
+    [Fact]
+    public async Task AnUnknownMountInTheRequestIsABadRequest()
+    {
+        var (controller, images) = BuildProjectController();
+
+        var result = await controller.Create(new CreateStickerProjectRequest("Sheet",
+            [new StickerItemRequest(null, images.Add("Art"), 1, 2, Mount: "Glued")]));
+
+        var badRequest = Assert.IsType<BadRequestObjectResult>(result);
+        Assert.Contains("Glued", badRequest.Value?.ToString());
+    }
+
     // ---- helpers ------------------------------------------------------------------------------
 
     private static StickerImageService BuildImageService(FakeStickerImageRepository? repo = null) =>
@@ -471,6 +687,14 @@ public class StickerServiceTests
         var projects = new FakeStickerProjectRepository();
         var images = new FakeStickerImageRepository();
         return (new StickerProjectService(projects, images), images);
+    }
+
+    /// <summary>Creates a project through the controller, i.e. through the request/response mapping.</summary>
+    private static async Task<StickerProjectResponse> CreateAsync(
+        StickerProjectsController controller, params StickerItemRequest[] items)
+    {
+        var result = await controller.Create(new CreateStickerProjectRequest("Sheet", [.. items]));
+        return Assert.IsType<StickerProjectResponse>(Assert.IsType<ObjectResult>(result).Value);
     }
 
     private static (StickerProjectsController Controller, FakeStickerImageRepository Images) BuildProjectController()

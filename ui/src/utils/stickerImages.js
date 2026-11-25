@@ -68,6 +68,48 @@ export function fitLabel(value) {
 }
 
 /**
+ * What the label is mounted on. The values are the backend enum names (`StickerMount`), serialised
+ * as names, so they travel unchanged through the API.
+ *
+ * It is the only thing that decides the SECOND label dimension: a tile is `widthStuds × depthStuds`
+ * studs, a brick stack is `widthStuds` studs of facade by `brickHeight` bricks (9.6 mm each). A
+ * stack ignores the depth — the backend forces it to 1 — and its height is a decimal, so a stack
+ * may be 2 + 1/3 bricks high.
+ */
+export const MOUNT_OPTIONS = [
+  {
+    value: 'Tile',
+    label: 'Tile',
+    hint: 'Flat piece — width × depth in studs',
+  },
+  {
+    value: 'BrickStack',
+    label: 'Brick stack',
+    hint: 'Long side of a stack — length in studs × height in bricks',
+  },
+]
+
+/** The backend default; also what an unknown or missing stored value falls back to. */
+export const DEFAULT_MOUNT = 'Tile'
+
+const MOUNT_VALUES = MOUNT_OPTIONS.map((option) => option.value)
+
+/** True for one of the two backend mount names. */
+export function isStickerMount(value) {
+  return MOUNT_VALUES.includes(value)
+}
+
+/** The mount to use: the given one when it is known, `Tile` otherwise. */
+export function normalizeMount(value) {
+  return isStickerMount(value) ? value : DEFAULT_MOUNT
+}
+
+/** Human label of a mount ("BrickStack" → "Brick stack"), for the read-only views. */
+export function mountLabel(value) {
+  return MOUNT_OPTIONS.find((option) => option.value === normalizeMount(value))?.label ?? DEFAULT_MOUNT
+}
+
+/**
  * How the ARTWORK is turned inside the label. The values are the backend enum names
  * (`StickerOrientation`), serialised as names, so they travel unchanged through the API.
  *

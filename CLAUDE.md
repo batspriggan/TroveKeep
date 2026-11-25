@@ -71,9 +71,18 @@ A Viewer (or a user with no collection) still reads and prints stickers.
   - `StickerProject` = `{ Name (trimmed, 1..80), Items, CreatedAt, UpdatedAt, Version }`; the item
     list is replaced wholesale on update (supplied item `Id`s are kept, new ones get a fresh Guid)
     and may be empty — a project is created first, items are added later.
-  - `StickerItem` = `{ Id, ImageId, WidthStuds, DepthStuds (1..32 each), Copies (1..999), Fit,
-    Orientation, Notes? }`. One stud is 8 mm (`StickerItem.StudMm`), so a 2×4 tile is a 16×32 mm
-    label; the response DTOs send `WidthMm`/`DepthMm` so the SPA never repeats the constant.
+  - `StickerItem` = `{ Id, ImageId, Mount, WidthStuds, DepthStuds (1..32 each), BrickHeight?,
+    Copies (1..999), Fit, Orientation, Notes? }`. One stud is 8 mm (`StickerItem.StudMm`), one brick
+    9.6 mm (`StickerItem.BrickMm`); the response DTOs send `WidthMm`/`DepthMm` **as decimals**, so the
+    SPA never repeats the constant.
+  - `StickerMount` enum `{ Tile (default), BrickStack }`, serialised as its **name** (missing →
+    `Tile`, no migration). `Tile` = `WidthStuds × DepthStuds` studs, so a 2×4 tile is a 16×32 mm
+    label. `BrickStack` = `WidthStuds` (the **facade length**) × `BrickHeight` bricks, so a 1×8 on 6
+    bricks is a 64 × 57.6 mm label: **`DepthStuds` is ignored and forced to 1** (just the facade is
+    printed, so an arbitrary client value is normalised, never an error), and `BrickHeight` is a
+    `decimal` in bricks (`> 0`, 2 decimals, user-chosen — `2.33` is fine, never derived from a piece
+    type, `null` for a tile). A brick-stack label taller than the A4 content area is refused with 400
+    naming the image and the computed size (a sanity bound in `StickerRules`, not the packer).
   - `StickerFit` enum `{ Contain (default), Cover, Fill, Center }` is serialised as its **name** and is
     **orthogonal to rotation**: the footprint is always in studs, `Fit` only says how the artwork
     fills the label graphic area (the sheet engine decides the page rotation).
@@ -86,9 +95,12 @@ A Viewer (or a user with no collection) still reads and prints stickers.
     fixed — **rotate first, then fit** — so `Contain` on a landscape image placed `Portrait`
     letterboxes on the correct axis and `Cover` crops the already-turned image.
   - Rules (`StickerProjectService`, `InvalidOperationException` → 400): an item's `ImageId` must
-    exist, and a second item with the same `ImageId + WidthStuds + DepthStuds` in one project is
-    refused (two rows are indistinguishable to the user). Deleting a `StickerImage` used by project
-    items is refused with 400 naming the usage count (`IStickerProjectRepository.CountUsagesAsync`).
+    exist, and a second item with the same `ImageId + Mount + WidthStuds` plus the dimension that
+    identifies the label — the depth in studs of a tile, the height in bricks of a stack — is refused
+    (two rows are indistinguishable to the user). The mount is therefore enough for a 1×8 tile and a
+    1-stud facade on 8 bricks of the same artwork to coexist. Deleting a `StickerImage` used by
+    project items is refused with 400 naming the usage count
+    (`IStickerProjectRepository.CountUsagesAsync`).
   - Endpoints: `/api/sticker-images` (CRUD + `{id}/image` GET/POST/DELETE) and `/api/sticker-projects`
     (CRUD). Writes need `CanWriteAnywhere` (admin, or Editor/Owner anywhere), reads are open to every
     regular account (`User,Admin`).
@@ -128,8 +140,10 @@ Current chain: `001` baseplate type fields · `002` set images by set id · `003
   (`views/stickers/StickerProjectListView.vue`): name, item count, total labels, created/updated,
   create (name only), delete. `/sticker-projects/:id` — the project editor
   (`views/stickers/StickerProjectView.vue`): rename, add an item (artwork picker
-  `components/stickers/StickerImagePicker.vue`, footprint presets 1×1..2×8 or custom studs, copies,
-  fit, artwork orientation, notes), item list with in-place copies/fit/orientation/notes, remove, and
+  `components/stickers/StickerImagePicker.vue`, mount `Tile`/`BrickStack`, footprint presets
+  1×1..2×8 or custom studs for a tile, facade length + `step="0.01"` brick height for a stack,
+  copies, fit, artwork orientation, notes), item list with in-place copies/fit/orientation/notes,
+  the label dimensions and the computed millimetres, remove, and
   the A4 print panel (`components/stickers/StickerPrintPanel.vue`). All three are hidden to a Guest
   (who only reaches `/table-planner`) and read-only to a Viewer: mutating controls need
   `canWriteAnywhere`. API clients `ui/src/api/stickerImages.js` and `ui/src/api/stickerProjects.js`.
@@ -137,7 +151,8 @@ Current chain: `001` baseplate type fields · `002` set images by set id · `003
   survive), shows a save state and handles a 409 by reloading; the server's 400 for a duplicate
   `image + footprint` and for deleting a still-used image is surfaced verbatim.
   The sheet is composed **client-side at 1:1** (`ui/src/utils/stickerSheets.js` = pure packing and
-  geometry in mm, `stickerPdf.js` = jsPDF drawing, `stickerImages.js` = browser canvas resampling at
+  geometry in mm — `stickerSizeMm` branches on the mount, `STUD_MM = 8` and `STICKER_BRICK_MM = 9.6`,
+  the skyline itself is mount-agnostic, `stickerPdf.js` = jsPDF drawing, `stickerImages.js` = browser canvas resampling at
   600 dpi; `composables/useStickerSheet.js` = layout options in `localStorage` only — the copies are a
   persisted field of the project item, not volatile state). Layout options: sheet margin, cut
   border (stroke inset by half so the outer edge is the cut line), **inner border** (artwork inset =

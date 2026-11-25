@@ -50,8 +50,12 @@ function toUnit(item) {
     id: item.id,
     // The engine sorts and names unfit labels by `name`; a project item names its artwork.
     name: item.imageName ?? item.name ?? '',
+    // The mount is what makes the engine read `brickHeight` instead of `depthStuds`; a missing
+    // one is a tile, exactly like the backend default.
+    mount: item.mount ?? 'Tile',
     widthStuds: item.widthStuds,
     depthStuds: item.depthStuds,
+    brickHeight: item.brickHeight ?? null,
     copies: Math.floor(Number(item.copies) || 0),
     fit: item.fit,
   }

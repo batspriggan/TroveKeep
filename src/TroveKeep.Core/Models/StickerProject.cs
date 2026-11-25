@@ -32,14 +32,26 @@ public class StickerProject
 }
 
 /// <summary>
-/// One entry of a <see cref="StickerProject"/>: which artwork to print, how large (in studs), how
-/// many copies, how the artwork is turned inside the label, and how it fills the label.
+/// One entry of a <see cref="StickerProject"/>: which artwork to print, how large, how many copies,
+/// how the artwork is turned inside the label, and how it fills the label.
 ///
 /// <para>
-/// The footprint is always expressed in studs — never millimetres and never rotated: neither the
-/// fit nor the <see cref="StickerOrientation"/> changes the physical label, they only describe how
-/// the artwork fills the label graphic area. The sheet engine decides the page rotation. One stud
-/// is <see cref="StudMm"/> millimetres, so a 2×4 tile is a 16 mm × 32 mm label.
+/// <b>Two mounts, both expressed in studs on the first axis</b> (<see cref="StickerMount"/>):
+/// <list type="bullet">
+/// <item><see cref="StickerMount.Tile"/> — a flat piece: the label is
+/// <see cref="WidthStuds"/> × <see cref="DepthStuds"/> studs, one stud being <see cref="StudMm"/> mm,
+/// so a 2×4 tile is a 16 mm × 32 mm label.</item>
+/// <item><see cref="StickerMount.BrickStack"/> — the long side of a stack of bricks: the label is
+/// <see cref="WidthStuds"/> studs long and <see cref="BrickHeight"/> bricks high, one brick being
+/// <see cref="BrickMm"/> mm, so a 1×8 on 6 bricks is a 64 mm × 57.6 mm label. The depth is
+/// conceptually one stud and is forced to 1: only the facade is printed.</item>
+/// </list>
+/// </para>
+///
+/// <para>
+/// The label is never rotated: neither the fit nor the <see cref="StickerOrientation"/> changes the
+/// physical label, they only describe how the artwork fills the label graphic area. The sheet
+/// engine decides the page rotation.
 /// </para>
 /// </summary>
 public class StickerItem
@@ -47,17 +59,33 @@ public class StickerItem
     /// <summary>Physical size of one stud in millimetres (the LEGO standard the sheet layout uses).</summary>
     public const int StudMm = 8;
 
+    /// <summary>Height of one brick in millimetres — the second axis of a <see cref="StickerMount.BrickStack"/> label.</summary>
+    public const decimal BrickMm = 9.6m;
+
     /// <summary>Item-local id (no own collection row): kept across updates so a client can track it.</summary>
     public Guid Id { get; set; }
 
     /// <summary>Artwork taken from the global sticker image library.</summary>
     public Guid ImageId { get; set; }
 
-    /// <summary>Footprint width in studs (1..32) — 1 stud = 8 mm.</summary>
+    /// <summary>
+    /// What the label is stuck on; defaults to <see cref="StickerMount.Tile"/>, so an item stored
+    /// before the mounts existed deserialises unchanged.
+    /// </summary>
+    public StickerMount Mount { get; set; } = StickerMount.Tile;
+
+    /// <summary>Width in studs (1..32) — 1 stud = 8 mm. For a brick stack this is the facade length.</summary>
     public int WidthStuds { get; set; }
 
-    /// <summary>Footprint depth in studs (1..32).</summary>
+    /// <summary>Footprint depth in studs (1..32) of a tile; always 1 for a brick stack.</summary>
     public int DepthStuds { get; set; }
+
+    /// <summary>
+    /// Height of a brick stack in bricks (2 decimal places, &gt; 0); <c>null</c> for a tile. The user
+    /// decides the value — it is not derived from a piece type and is not checked against real LEGO
+    /// heights (a stack may be 2 + 1/3 bricks).
+    /// </summary>
+    public decimal? BrickHeight { get; set; }
 
     /// <summary>How many labels of this footprint the sheet prints (1..999).</summary>
     public int Copies { get; set; } = 1;
@@ -73,6 +101,23 @@ public class StickerItem
 
     /// <summary>Free-form remark for the operator (never printed).</summary>
     public string? Notes { get; set; }
+}
+
+/// <summary>
+/// What an item's label is mounted on. Orthogonal to the fit and to the artwork orientation, and
+/// the only thing that decides the second label dimension.
+/// </summary>
+public enum StickerMount
+{
+    /// <summary>A flat piece: <see cref="StickerItem.WidthStuds"/> × <see cref="StickerItem.DepthStuds"/> studs (the default).</summary>
+    Tile,
+
+    /// <summary>
+    /// The long side of a stack of bricks: <see cref="StickerItem.WidthStuds"/> studs ×
+    /// <see cref="StickerItem.BrickHeight"/> bricks. <see cref="StickerItem.DepthStuds"/> is ignored
+    /// and forced to 1 (the stack is one stud deep as far as the label is concerned).
+    /// </summary>
+    BrickStack,
 }
 
 /// <summary>
