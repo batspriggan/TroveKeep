@@ -31,6 +31,16 @@
         <h2>Add an item</h2>
         <StickerImagePicker v-model="draft.imageId" :images="images" />
 
+        <!-- The two dimensions mean different things per mount; the drawing is what makes that
+             unmistakable, so it sits right above the fields it explains. -->
+        <div class="mount-guide">
+          <StickerMountDiagram
+            :mount="draft.mount"
+            :width-studs="clampStuds(draft.widthStuds)"
+            :depth-studs="clampStuds(draft.depthStuds)"
+            :brick-height="clampBrickHeight(draft.brickHeight)" />
+        </div>
+
         <div class="form-row item-form">
           <div class="form-field">
             <label>Mount</label>
@@ -73,6 +83,10 @@
               <input v-model.number="draft.brickHeight" type="number" min="0.01" step="0.01" />
             </div>
           </template>
+          <div class="form-field label-size" title="Printed size of this label: the piece's own millimetres">
+            <label>Label size</label>
+            <span class="label-size-value">{{ draftLabelMm }}</span>
+          </div>
           <div class="form-field small">
             <label>Copies</label>
             <input v-model.number="draft.copies" type="number" min="1" max="999" />
@@ -222,9 +236,10 @@
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import StickerImagePicker from '../../components/stickers/StickerImagePicker.vue'
+import StickerMountDiagram from '../../components/stickers/StickerMountDiagram.vue'
 import StickerPrintPanel from '../../components/stickers/StickerPrintPanel.vue'
 import { useAuth } from '../../composables/useAuth.js'
-import { STUD_MM } from '../../utils/stickerSheets.js'
+import { STICKER_BRICK_MM, STUD_MM } from '../../utils/stickerSheets.js'
 import {
   DEFAULT_FIT,
   DEFAULT_MOUNT,
@@ -290,6 +305,20 @@ const draft = reactive({
 
 /** A brick stack prints only the facade: the depth field and the tile presets are hidden. */
 const draftIsBrickStack = computed(() => draft.mount === 'BrickStack')
+
+/**
+ * Printed size of the label being composed, so a mistyped facade length is visible before the item
+ * is added. Exactly the arithmetic `stickerSizeMm` uses: studs × 8 mm, and on the second axis either
+ * the stud depth or the brick height × 9.6 mm.
+ */
+const draftLabelMm = computed(() => {
+  const round = (value) => Math.round((value + Number.EPSILON) * 100) / 100
+  const w = round(clampStuds(draft.widthStuds) * STUD_MM)
+  const h = draft.mount === 'BrickStack'
+    ? round(clampBrickHeight(draft.brickHeight) * STICKER_BRICK_MM)
+    : clampStuds(draft.depthStuds) * STUD_MM
+  return `${w} × ${h} mm`
+})
 
 const totalLabels = computed(() =>
   (project.value?.items ?? []).reduce((n, item) => n + (Number(item.copies) || 0), 0),
@@ -703,6 +732,19 @@ h1 {
 
 .dims-cell .step-input {
   width: 60px;
+}
+
+.label-size-value {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.mount-guide {
+  margin: 0.5rem 0 0.75rem;
+  padding: 0.6rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  background: #f8fafc;
 }
 
 .copies .step {
