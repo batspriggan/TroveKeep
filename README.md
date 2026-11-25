@@ -341,6 +341,11 @@ docker exec -i trovekeep-mongo-1 mongosh -u admin -p password --authenticationDa
 
 TroveKeep uses a single version line: `vMAJOR.MINOR.PATCH` (semantic versioning).
 
+The git tag is the only version of this project. `ui/package.json` keeps `"version": "0.0.0"` on
+purpose: the SPA is never published as an npm package, nothing reads the field at runtime or at
+build time, and a second number that has to be bumped by hand only drifts (it had fallen four
+releases behind). Do not bump it.
+
 **Pushing a `v*` tag is what triggers a release build.** On tag push, GitHub Actions builds the image and publishes it to `ghcr.io` (see `.github/workflows/docker.yml`).
 
 ```bash
