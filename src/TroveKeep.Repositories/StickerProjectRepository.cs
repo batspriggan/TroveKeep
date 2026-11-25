@@ -95,8 +95,10 @@ public class StickerProjectRepository : IStickerProjectRepository
         {
             Id = i.Id,
             ImageId = i.ImageId,
+            Mount = i.Mount,
             WidthStuds = i.WidthStuds,
             DepthStuds = i.DepthStuds,
+            BrickHeight = i.BrickHeight,
             Copies = i.Copies,
             Fit = i.Fit,
             Orientation = i.Orientation,
@@ -115,8 +117,10 @@ public class StickerProjectRepository : IStickerProjectRepository
         {
             Id = i.Id,
             ImageId = i.ImageId,
+            Mount = i.Mount,
             WidthStuds = i.WidthStuds,
             DepthStuds = i.DepthStuds,
+            BrickHeight = i.BrickHeight,
             Copies = i.Copies,
             Fit = i.Fit,
             Orientation = i.Orientation,

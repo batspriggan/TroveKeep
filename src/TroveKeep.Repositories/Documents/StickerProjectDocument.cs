@@ -32,8 +32,19 @@ public class StickerItemDocument
     [BsonGuidRepresentation(GuidRepresentation.Standard)]
     public Guid ImageId { get; set; }
 
+    /// <summary>
+    /// What the label is mounted on, persisted as its enum NAME like the API does. A missing field
+    /// deserialises to the default <see cref="StickerMount.Tile"/>, so no migration is needed.
+    /// </summary>
+    [BsonRepresentation(BsonType.String)]
+    public StickerMount Mount { get; set; } = StickerMount.Tile;
+
     public int WidthStuds { get; set; }
     public int DepthStuds { get; set; }
+
+    /// <summary>Height of a brick stack in bricks; <c>null</c> for a tile.</summary>
+    public decimal? BrickHeight { get; set; }
+
     public int Copies { get; set; } = 1;
     public StickerFit Fit { get; set; } = StickerFit.Contain;
 

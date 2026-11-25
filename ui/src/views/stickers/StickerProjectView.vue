@@ -33,22 +33,44 @@
 
         <div class="form-row item-form">
           <div class="form-field">
-            <label>Footprint</label>
-            <select v-model="draft.preset">
-              <option v-for="preset in presets" :key="preset.key" :value="preset.key">
-                {{ preset.label }} — {{ preset.widthStuds * STUD_MM }}×{{ preset.depthStuds * STUD_MM }} mm
+            <label>Mount</label>
+            <select v-model="draft.mount">
+              <option v-for="mount in MOUNT_OPTIONS" :key="mount.value" :value="mount.value">
+                {{ mount.label }} — {{ mount.hint }}
               </option>
-              <option value="custom">Custom…</option>
             </select>
           </div>
-          <template v-if="draft.preset === 'custom'">
+          <!-- Tile: the label is width × depth in studs, so the tile presets apply. -->
+          <template v-if="!draftIsBrickStack">
+            <div class="form-field">
+              <label>Footprint</label>
+              <select v-model="draft.preset">
+                <option v-for="preset in presets" :key="preset.key" :value="preset.key">
+                  {{ preset.label }} — {{ preset.widthStuds * STUD_MM }}×{{ preset.depthStuds * STUD_MM }} mm
+                </option>
+                <option value="custom">Custom…</option>
+              </select>
+            </div>
+            <template v-if="draft.preset === 'custom'">
+              <div class="form-field small">
+                <label>Width (studs)</label>
+                <input v-model.number="draft.widthStuds" type="number" min="1" max="32" />
+              </div>
+              <div class="form-field small">
+                <label>Depth (studs)</label>
+                <input v-model.number="draft.depthStuds" type="number" min="1" max="32" />
+              </div>
+            </template>
+          </template>
+          <!-- Brick stack: only the facade is printed, so the second field is the height in bricks. -->
+          <template v-else>
             <div class="form-field small">
-              <label>Width (studs)</label>
-              <input v-model.number="draft.widthStuds" type="number" min="1" max="32" />
+              <label>Facade length (studs)</label>
+              <input v-model.number="draft.widthStuds" type="number" min="1" max="32" step="1" />
             </div>
             <div class="form-field small">
-              <label>Depth (studs)</label>
-              <input v-model.number="draft.depthStuds" type="number" min="1" max="32" />
+              <label>Brick height (bricks)</label>
+              <input v-model.number="draft.brickHeight" type="number" min="0.01" step="0.01" />
             </div>
           </template>
           <div class="form-field small">
@@ -97,7 +119,7 @@
 
             <div class="item-name">
               <strong :title="item.imageName || ''">{{ item.imageName || 'Missing image' }}</strong>
-              <span class="muted">{{ item.widthStuds }}×{{ item.depthStuds }} stud · {{ mmLabel(item) }}</span>
+              <span class="muted">{{ dimsLabel(item) }} · {{ mmLabel(item) }}</span>
             </div>
 
             <div v-if="canWrite" class="copies">
@@ -141,9 +163,11 @@
         </div>
 
         <p v-if="canWrite" class="hint">
-          Changes are saved automatically. The artwork footprint and copy count are what the sheet
-          prints: one label per copy. The artwork orientation only turns the artwork inside the
-          label — the label keeps its millimetres.
+          Changes are saved automatically. The artwork's mount, label size and copy count are what
+          the sheet prints: one label per copy. A tile is sized in studs, a brick stack by its
+          facade length in studs and its height in bricks; a stack ignores the depth, since only the
+          facade is printed. The artwork orientation only turns the artwork inside the label — the
+          label keeps its millimetres.
         </p>
       </section>
 
@@ -162,11 +186,14 @@ import { useAuth } from '../../composables/useAuth.js'
 import { STUD_MM } from '../../utils/stickerSheets.js'
 import {
   DEFAULT_FIT,
+  DEFAULT_MOUNT,
   DEFAULT_ORIENTATION,
   FIT_OPTIONS,
+  MOUNT_OPTIONS,
   ORIENTATION_OPTIONS,
   fitLabel,
   normalizeFit,
+  normalizeMount,
   normalizeOrientation,
   orientationLabel,
   stickerArtworkUrl,
@@ -206,14 +233,21 @@ const presets = [
 
 const draft = reactive({
   imageId: null,
+  /** `Tile` | `BrickStack`: the mount decides the second label dimension. */
+  mount: DEFAULT_MOUNT,
   preset: '2x4',
   widthStuds: 2,
   depthStuds: 4,
+  /** Height of a brick stack in bricks; the presets are tile footprints, so the form has both. */
+  brickHeight: 6,
   copies: 1,
   fit: DEFAULT_FIT,
   orientation: DEFAULT_ORIENTATION,
   notes: '',
 })
+
+/** A brick stack prints only the facade: the depth field and the tile presets are hidden. */
+const draftIsBrickStack = computed(() => draft.mount === 'BrickStack')
 
 const totalLabels = computed(() =>
   (project.value?.items ?? []).reduce((n, item) => n + (Number(item.copies) || 0), 0),
@@ -238,6 +272,15 @@ const artworkUrl = (item) =>
 const mmLabel = (item) =>
   item.widthMm != null && item.depthMm != null ? `${item.widthMm}×${item.depthMm} mm` : '…'
 
+/** The label dimensions as the user thinks of them: studs × studs, or studs × bricks. */
+const dimsLabel = (item) => {
+  if (normalizeMount(item.mount) === 'BrickStack') {
+    const bricks = Number(item.brickHeight) || 0
+    return `${item.widthStuds} stud × ${bricks} brick${bricks === 1 ? '' : 's'}`
+  }
+  return `${item.widthStuds}×${item.depthStuds} stud`
+}
+
 const clampStuds = (value) => {
   const n = Math.floor(Number(value))
   return n >= 1 && n <= 32 ? n : 1
@@ -245,6 +288,11 @@ const clampStuds = (value) => {
 const clampCopies = (value) => {
   const n = Math.floor(Number(value))
   return n >= 1 && n <= 999 ? n : 1
+}
+/** A brick height is a positive decimal in bricks with 2 decimals (e.g. 6 or 2.33). */
+const clampBrickHeight = (value) => {
+  const n = Math.round(Number(value) * 100) / 100
+  return n > 0 ? n : 1
 }
 
 /** A GUID for a row the server has not seen yet (it keeps the id we send). */
@@ -306,6 +354,11 @@ async function runSave() {
       item.imageCached = row.imageCached
       item.widthMm = row.widthMm
       item.depthMm = row.depthMm
+      // These are the fields the server normalises (a stack is always 1 stud deep, a brick height
+      // is rounded to 2 decimals): show what was actually stored.
+      item.mount = normalizeMount(row.mount)
+      item.depthStuds = row.depthStuds
+      item.brickHeight = row.brickHeight ?? null
     }
     current.version = saved.version
     current.updatedAt = saved.updatedAt
@@ -332,15 +385,19 @@ async function addItem() {
     return
   }
 
-  const preset = presets.find((p) => p.key === draft.preset)
+  const isStack = draft.mount === 'BrickStack'
+  const preset = isStack ? null : presets.find((p) => p.key === draft.preset)
   const image = images.value.find((i) => String(i.id) === String(draft.imageId))
   const item = {
     id: newItemId(),
     imageId: draft.imageId,
     imageName: image?.name ?? null,
     imageCached: image?.imageCached ?? false,
+    mount: normalizeMount(draft.mount),
     widthStuds: clampStuds(preset ? preset.widthStuds : draft.widthStuds),
-    depthStuds: clampStuds(preset ? preset.depthStuds : draft.depthStuds),
+    // A brick stack is one stud deep — the server forces it anyway; a tile takes it from the preset.
+    depthStuds: isStack ? 1 : clampStuds(preset ? preset.depthStuds : draft.depthStuds),
+    brickHeight: isStack ? clampBrickHeight(draft.brickHeight) : null,
     copies: clampCopies(draft.copies),
     fit: normalizeFit(draft.fit),
     orientation: normalizeOrientation(draft.orientation),

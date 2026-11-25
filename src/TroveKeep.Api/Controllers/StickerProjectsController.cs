@@ -13,7 +13,8 @@ namespace TroveKeep.Api.Controllers;
 
 /// <summary>
 /// Sticker projects: named print jobs whose embedded items pick artwork from the global
-/// <c>/api/sticker-images</c> library and give it a tile footprint, a copy count and a fit.
+/// <c>/api/sticker-images</c> library and give it a mount (tile or brick stack) with its size, a
+/// copy count and a fit.
 ///
 /// <para>
 /// <b>Reads</b> are open to every regular account. <b>Writes</b> are authorized by
@@ -117,16 +118,19 @@ public class StickerProjectsController : ControllerBase
         (await _images.GetAllAsync()).ToDictionary(i => i.Id);
 
     /// <summary>
-    /// Maps the request items onto domain items, parsing the fit and orientation names (400 on
-    /// garbage; an omitted orientation means <c>Auto</c>, i.e. the artwork as uploaded).
+    /// Maps the request items onto domain items, parsing the mount, fit and orientation names (400 on
+    /// garbage; an omitted mount means <c>Tile</c> and an omitted orientation <c>Auto</c>). The mount
+    /// is only passed through — normalising the depth and checking the label size is the service's job.
     /// </summary>
     private static List<StickerItem> ToModels(List<StickerItemRequest>? items) =>
         (items ?? []).Select(i => new StickerItem
         {
             Id = i.Id ?? Guid.Empty,
             ImageId = i.ImageId,
+            Mount = StickerRules.ParseMount(i.Mount),
             WidthStuds = i.WidthStuds,
             DepthStuds = i.DepthStuds,
+            BrickHeight = i.BrickHeight,
             Copies = i.Copies,
             Fit = StickerRules.ParseFit(i.Fit),
             Orientation = StickerRules.ParseOrientation(i.Orientation),
@@ -146,15 +150,20 @@ public class StickerProjectsController : ControllerBase
         StickerItem item, IReadOnlyDictionary<Guid, StickerImage> images)
     {
         images.TryGetValue(item.ImageId, out var image);
+        // The label size follows the mount: studs × 8 mm for a tile, studs × bricks × 9.6 mm for a
+        // stack, both rounded to the 2 decimals the sheet prints.
+        var (widthMm, depthMm) = StickerRules.LabelSizeMm(item);
         return new StickerItemResponse(
             item.Id,
             item.ImageId,
             image?.Name,
             image?.ImageCached ?? false,
+            item.Mount.ToString(),
             item.WidthStuds,
             item.DepthStuds,
-            item.WidthStuds * StickerItem.StudMm,
-            item.DepthStuds * StickerItem.StudMm,
+            item.BrickHeight,
+            widthMm,
+            depthMm,
             item.Copies,
             item.Fit.ToString(),
             item.Orientation.ToString(),

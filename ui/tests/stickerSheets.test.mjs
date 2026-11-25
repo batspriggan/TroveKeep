@@ -6,6 +6,7 @@ import assert from 'node:assert/strict'
 import {
   DEFAULT_OPTIONS,
   PAGE,
+  STICKER_BRICK_MM,
   STUD_MM,
   StickerFitError,
   cutSpacing,
@@ -65,12 +66,61 @@ function assertNoOverlap(plan, label = '') {
 
 test('a stud is 8 mm, so a 2×4 tile is a 16×32 mm label', () => {
   assert.equal(STUD_MM, 8)
+  assert.equal(STICKER_BRICK_MM, 9.6)
   assert.deepEqual(stickerSizeMm({ widthStuds: 2, depthStuds: 4 }, resolveOptions()), { w: 16, h: 32 })
   // growMm enlarges the cut box on every side.
   assert.deepEqual(
     stickerSizeMm({ widthStuds: 2, depthStuds: 4 }, resolveOptions({ growMm: 0.5 })),
     { w: 17, h: 33 },
   )
+})
+
+test('a brick stack is sized by its facade length and its height in bricks', () => {
+  const options = resolveOptions()
+  const stack = { mount: 'BrickStack', widthStuds: 8, depthStuds: 1, brickHeight: 6 }
+
+  // 8 studs × 64 mm wide, 6 bricks × 9.6 mm = 57.6 mm high.
+  assert.deepEqual(stickerSizeMm(stack, options), { w: 64, h: 57.6 })
+  // growMm still grows it on every side, like a tile.
+  assert.deepEqual(stickerSizeMm(stack, resolveOptions({ growMm: 0.5 })), { w: 65, h: 58.6 })
+
+  // 1.33 bricks × 9.6 mm = 12.768 mm, printed at the 2 decimals the backend reports: 12.77 mm.
+  assert.equal(
+    stickerSizeMm({ mount: 'BrickStack', widthStuds: 4, brickHeight: 1.33 }, options).h,
+    12.77,
+  )
+
+  // The mount decides the second axis: a stack ignores the depth, a tile ignores the brick height.
+  assert.deepEqual(
+    stickerSizeMm({ mount: 'BrickStack', widthStuds: 1, depthStuds: 8, brickHeight: 6 }, options),
+    { w: 8, h: 57.6 },
+  )
+  assert.deepEqual(
+    stickerSizeMm({ mount: 'Tile', widthStuds: 1, depthStuds: 8, brickHeight: 6 }, options),
+    { w: 8, h: 64 },
+  )
+  // A missing mount is a tile, exactly like the backend default.
+  assert.deepEqual(stickerSizeMm({ widthStuds: 2, depthStuds: 4 }, options), { w: 16, h: 32 })
+})
+
+test('a brick-stack plan is packed like a tile of the same size', () => {
+  const plan = planStickerSheet([
+    { id: 'a', name: 'Stack', mount: 'BrickStack', widthStuds: 8, depthStuds: 1, brickHeight: 6, copies: 4 },
+    { id: 'b', name: 'Tile', widthStuds: 2, depthStuds: 4, copies: 4 },
+  ])
+  assert.equal(plan.count, 8)
+  assert.equal(plan.pages.length, 1)
+  assertNoOverlap(plan, 'stack: ')
+
+  const stacks = plan.cells.filter((cell) => cell.stickerId === 'a')
+  assert.equal(stacks.length, 4)
+  for (const cell of stacks) {
+    assert.equal(cell.w, 64)
+    assert.equal(cell.h, 57.6)
+    // The artwork area keeps the same border + padding inset as any other label.
+    assert.equal(cell.graphic.w, cell.w - 2.4)
+    assert.equal(cell.graphic.h, cell.h - 2.4)
+  }
 })
 
 test('1×1 tiles with no border and no gap fill the page 24 × 35', () => {

@@ -6,12 +6,28 @@
 // horizontal segments `{ x, w, y }`, and every label goes where that edge is lowest (then
 // leftmost). No shelves: the space under a short label is reused by the next one.
 //
-// Everything is in millimetres at 1:1 scale: a LEGO stud is 8 mm, so a 2×4 tile is a
-// 16 mm × 32 mm label. The sheet is the physical A4 the operator prints on, and "print at
-// 100%, do not fit to page" is the only way the label really matches the tile.
+// Everything is in millimetres at 1:1 scale: a LEGO stud is 8 mm and a brick is 9.6 mm high,
+// so a 2×4 tile is a 16 mm × 32 mm label and an 8-stud facade on 6 bricks is 64 mm × 57.6 mm.
+// The sheet is the physical A4 the operator prints on, and "print at 100%, do not fit to page"
+// is the only way the label really matches the piece.
 
 /** One LEGO stud in millimetres (the standard the label sizes are derived from). */
 export const STUD_MM = 8
+
+/** Height of one brick in millimetres — the second axis of a brick-stack label. */
+export const STICKER_BRICK_MM = 9.6
+
+/** The two mounts the backend knows (`StickerMount`), serialised as names. */
+export const MOUNT_TILE = 'Tile'
+export const MOUNT_BRICK_STACK = 'BrickStack'
+
+/**
+ * True for an item mounted on the long side of a brick stack. Anything else — including the
+ * missing field an older row has — is a flat tile, exactly like the backend default.
+ */
+export function isBrickStack(sticker) {
+  return sticker?.mount === MOUNT_BRICK_STACK
+}
 
 /** A4 portrait, in millimetres — the sticky sheets the operator uses. */
 export const PAGE = { width: 210, height: 297 }
@@ -79,13 +95,22 @@ export function cutSpacing(options) {
   return Math.max(options.gapMm, 2 * options.borderMm)
 }
 
-/** Printed size of one sticker, in millimetres, `growMm` included. */
+/** Millimetres rounded to two decimals — the precision the backend reports the label size at. */
+const roundMm = (value) => Math.round((value + Number.EPSILON) * 100) / 100
+
+/**
+ * Printed size of one sticker, in millimetres, `growMm` included. The mount decides the second
+ * axis: the stud depth of a tile, or the brick height of a stack (`brickHeight × 9.6`). The first
+ * axis is always the stud width — for a stack that is the facade length, and its depth is
+ * conceptually one stud, so it plays no part here.
+ */
 export function stickerSizeMm(sticker, options = DEFAULT_OPTIONS) {
   const grow = options.growMm ?? 0
-  return {
-    w: sticker.widthStuds * STUD_MM + 2 * grow,
-    h: sticker.depthStuds * STUD_MM + 2 * grow,
-  }
+  const w = sticker.widthStuds * STUD_MM + 2 * grow
+  const h = isBrickStack(sticker)
+    ? roundMm((Number(sticker.brickHeight) || 0) * STICKER_BRICK_MM) + 2 * grow
+    : sticker.depthStuds * STUD_MM + 2 * grow
+  return { w, h }
 }
 
 /**
@@ -234,9 +259,10 @@ function reserveSkyline(segments, x, xEnd, y) {
 /**
  * Lays the requested copies out on as many A4 pages as needed.
  *
- * `items` is the selection: `[{ id, name, widthStuds, depthStuds, copies }]`. Copies of a
- * sticker whose artwork is missing are the caller's business — the plan only places what
- * it is given.
+ * `items` is the selection: `[{ id, name, mount, widthStuds, depthStuds, brickHeight, copies }]`.
+ * Copies of a sticker whose artwork is missing are the caller's business — the plan only places
+ * what it is given. The mount never changes the packing: only `stickerSizeMm` reads it, so a
+ * brick-stack label is packed exactly like a tile of the same size.
  *
  * Returns `{ options, page, content, step, cells, pages, count, perSticker }` where every
  * cell is `{ stickerId, name, copy, page, x, y, w, h, rotated, cut, graphic }`:
@@ -269,8 +295,10 @@ export function planStickerSheet(items, overrides = {}) {
       units.push({
         id: item.id,
         name: item.name ?? '',
+        mount: item.mount ?? MOUNT_TILE,
         widthStuds: item.widthStuds,
         depthStuds: item.depthStuds,
+        brickHeight: item.brickHeight ?? null,
         copy,
         w: size.w,
         h: size.h,

@@ -24,8 +24,12 @@ export function toItemPayload(items) {
   return (items ?? []).map((item) => ({
     id: item.id,
     imageId: item.imageId,
+    // The mount decides the second label dimension: a tile adds its depth in studs, a brick stack
+    // its height in bricks (`brickHeight`); the server ignores whichever one does not apply.
+    mount: item.mount ?? 'Tile',
     widthStuds: item.widthStuds,
     depthStuds: item.depthStuds,
+    brickHeight: item.brickHeight ?? null,
     copies: item.copies,
     fit: item.fit,
     // How the artwork sits inside the label; `null` lets the server apply the `Auto` default.
