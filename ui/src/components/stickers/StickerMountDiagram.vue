@@ -4,8 +4,11 @@
  *
  * The fields of a sticker item are easy to swap (`1 × 6` reads the same either way), so the editor
  * shows the piece and the label on it: the drawing is what tells the operator that a tile measures
- * width × depth on TOP, and a brick stack measures facade × height on the SIDE. Everything is drawn
- * from millimetres, so the proportions are the real ones.
+ * width × depth on TOP, and a brick stack measures facade × height on the SIDE.
+ *
+ * Everything is derived from one uniform scale for BOTH axes and both dimensions are labelled with
+ * the same format (`6 stud` / `48 mm`), so what the fields say and what the drawing says cannot
+ * disagree. The axes are labelled outside the drawing box, never rotated or clipped.
  */
 import { computed } from 'vue'
 import { STICKER_BRICK_MM, STUD_MM } from '../../utils/stickerSheets.js'
@@ -13,7 +16,7 @@ import { STICKER_BRICK_MM, STUD_MM } from '../../utils/stickerSheets.js'
 const props = defineProps({
   /** `Tile` | `BrickStack`. */
   mount: { type: String, default: 'Tile' },
-  /** Studs along the long side. */
+  /** Studs along the long side (width, or the facade length of a stack). */
   widthStuds: { type: Number, default: 6 },
   /** Studs across a tile (ignored by a brick stack). */
   depthStuds: { type: Number, default: 2 },
@@ -23,109 +26,120 @@ const props = defineProps({
 
 const isStack = computed(() => props.mount === 'BrickStack')
 
-/** Real millimetres of the drawn face: width × depth for a tile, facade × height for a stack. */
-const face = computed(() => {
-  const w = Math.max(1, Number(props.widthStuds) || 1) * STUD_MM
-  const h = isStack.value
-    ? Math.max(0.01, Number(props.brickHeight) || 0.01) * STICKER_BRICK_MM
-    : Math.max(1, Number(props.depthStuds) || 1) * STUD_MM
-  return { w, h }
-})
-
-/** Drawing box: 260 × 120; the piece is scaled down to fit with room for the measuring arrows. */
-const BOX = { w: 260, h: 120 }
-const PAD = 34
-
-const scale = computed(() =>
-  Math.min((BOX.w - 2 * PAD) / face.value.w, (BOX.h - 2 * PAD) / face.value.h),
+/** The two discrete counts the piece is made of — one per axis. */
+const countX = computed(() => Math.max(1, Math.round(Number(props.widthStuds) || 1)))
+const countY = computed(() =>
+  isStack.value ? Math.max(1, Math.round(Number(props.brickHeight) || 1)) : Math.max(1, Math.round(Number(props.depthStuds) || 1)),
 )
 
+/** Dimensions in the user's own unit: studs on both axes for a tile, studs × bricks for a stack. */
+const unitX = computed(() => `${countX.value} stud`)
+const unitY = computed(() => (isStack.value ? `${countY.value} brick` : `${countY.value} stud`))
+
+/** The resulting millimetres, rounded exactly like `stickerSizeMm` does. */
+const round = (value) => Math.round((value + Number.EPSILON) * 100) / 100
+const mmX = computed(() => round(countX.value * STUD_MM))
+const mmY = computed(() =>
+  isStack.value ? round(countY.value * STICKER_BRICK_MM) : round(countY.value * STUD_MM),
+)
+
+/**
+ * The SVG is drawn in its own units and the aspect ratio follows the piece, so a 6 × 1 brick prints
+ * as a long, low box and a 2 × 4 tile as a tall one. `height` is fixed and the viewBox width grows
+ * with the piece, up to a point: beyond that the drawing gets shorter instead of wider.
+ */
+const MAX_W = 420
+const MIN_H = 90
+const H = 96
+const PAD = 14
+
+/** Pixels per millimetre, the same on both axes. */
+const scale = computed(() => {
+  const sx = (MAX_W - 2 * PAD) / Math.max(1, mmX.value)
+  const sy = (H - 2 * PAD) / Math.max(1, mmY.value)
+  return Math.min(sx, sy)
+})
+
 const rect = computed(() => {
-  const w = face.value.w * scale.value
-  const h = face.value.h * scale.value
-  return { x: PAD, y: (BOX.h - h) / 2, w, h }
+  const w = Math.max(8, mmX.value * scale.value)
+  const h = Math.max(6, mmY.value * scale.value)
+  const width = Math.min(MAX_W, Math.max(120, w + 2 * PAD))
+  return {
+    x: (width - w) / 2,
+    y: (H - h) / 2,
+    w,
+    h,
+    width,
+  }
 })
 
-/** One stud or one brick, in drawing units — the pitch of the tick marks. */
-const pitch = computed(() => (isStack.value ? STICKER_BRICK_MM * scale.value : STUD_MM * scale.value))
+const viewBox = computed(() => `0 0 ${rect.value.width} ${H}`)
 
-const studs = computed(() => Math.max(1, Math.round(Number(props.widthStuds) || 1)))
-const levels = computed(() => Math.max(1, Math.round(Number(props.brickHeight) || 1)))
+/** Stud pitch and brick pitch in drawing units, at that same scale. */
+const pitchX = computed(() => (rect.value.w / countX.value))
+const pitchY = computed(() => (rect.value.h / countY.value))
 
-/** Vertical tick positions: one per brick, laid out from the bottom edge upwards. */
-const levelTicks = computed(() => {
-  const r = rect.value
-  const out = []
-  for (let i = 1; i < levels.value; i++) out.push(r.y + r.h - i * pitch.value)
-  return out
-})
+/** One tick per stud (top view) or per brick edge (side view). */
+const studCentres = computed(() =>
+  Array.from({ length: countX.value }, (_, i) => rect.value.x + (i + 0.5) * pitchX.value),
+)
+const brickEdges = computed(() =>
+  Array.from({ length: Math.max(0, countY.value - 1) }, (_, i) => rect.value.y + rect.value.h - (i + 1) * pitchY.value),
+)
 
-const studTicks = computed(() => {
-  const r = rect.value
-  const out = []
-  for (let i = 1; i < studs.value; i++) out.push(r.x + i * pitch.value)
-  return out
-})
-
-const widthMm = computed(() => Math.round(face.value.w * 100) / 100)
-const heightMm = computed(() => Math.round(face.value.h * 100) / 100)
+/** The label text, in one place so both axes read the same. */
+const labelX = computed(() => `${unitX.value} · ${mmX.value} mm`)
+const labelY = computed(() => `${unitY.value} · ${mmY.value} mm`)
 </script>
 
 <template>
   <figure class="mount-diagram">
-    <svg :viewBox="`0 0 ${BOX.w} ${BOX.h}`" role="img"
+    <svg :viewBox="viewBox" role="img" preserveAspectRatio="xMidYMid meet"
          :aria-label="isStack
-           ? `A brick stack seen from the side: width is the facade, height is the number of bricks`
-           : `A flat piece seen from above: width and depth are in studs`">
+           ? `Brick stack seen from the side: width is ${labelX}, height is ${labelY}`
+           : `Flat piece seen from above: width is ${labelX}, depth is ${labelY}`">
       <defs>
         <marker id="mount-arrow" viewBox="0 0 10 10" refX="9" refY="5"
-                markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                markerWidth="5" markerHeight="5" orient="auto-start-reverse">
           <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor" />
         </marker>
       </defs>
 
-      <!-- The piece: its face is the label itself. -->
+      <!-- The piece: its face IS the label, so the box is the sticker's exact shape. -->
       <rect class="face" :x="rect.x" :y="rect.y" :width="rect.w" :height="rect.h" />
 
-      <!-- Studs on a tile (top view): circles at the stud pitch. -->
-      <template v-if="!isStack">
-        <circle v-for="i in studs" :key="`s${i}`"
-                class="stud"
-                :cx="rect.x + (i - 0.5) * pitch"
-                :cy="rect.y + rect.h / 2"
-                r="2.4" />
-      </template>
-      <!-- Bricks on a stack (side view): a line per brick edge. -->
-      <template v-else>
-        <line v-for="(y, i) in levelTicks" :key="`l${i}`"
-              class="level" :x1="rect.x" :x2="rect.x + rect.w" :y1="y" :y2="y" />
-      </template>
+      <!-- A tile is seen from above: one circle per stud. -->
+      <circle v-for="(cx, i) in studCentres" v-show="!isStack" :key="`s${i}`"
+              class="stud" :cx="cx" :cy="rect.y + rect.h / 2"
+              :r="Math.min(3, pitchX / 3)" />
 
-      <!-- Horizontal measure (width / facade length). -->
-      <line class="arrow" :x1="rect.x" :x2="rect.x + rect.w" :y1="rect.y - 16" :y2="rect.y - 16"
-            marker-start="url(#mount-arrow)" marker-end="url(#mount-arrow)" />
-      <text class="measure" :x="rect.x + rect.w / 2" :y="rect.y - 22" text-anchor="middle">
-        {{ widthStuds }} stud → {{ widthMm }} mm
-      </text>
+      <!-- A stack is seen from the side: one dashed edge per brick. -->
+      <line v-for="(y, i) in brickEdges" v-show="isStack" :key="`b${i}`"
+            class="brick-edge" :x1="rect.x" :x2="rect.x + rect.w" :y1="y" :y2="y" />
 
-      <!-- Vertical measure (depth / brick height). -->
-      <line class="arrow" :x1="rect.x + rect.w + 16" :x2="rect.x + rect.w + 16"
-            :y1="rect.y" :y2="rect.y + rect.h"
+      <!-- Width / facade length, above the piece. -->
+      <line class="arrow" :x1="rect.x" :x2="rect.x + rect.w"
+            :y1="rect.y - 7" :y2="rect.y - 7"
             marker-start="url(#mount-arrow)" marker-end="url(#mount-arrow)" />
-      <text class="measure" :x="rect.x + rect.w + 22" :y="rect.y + rect.h / 2"
-            text-anchor="start" dominant-baseline="middle">
-        <tspan x="0" y="0">{{ isStack ? `${brickHeight} brick` : `${depthStuds} stud` }}</tspan>
-        <tspan x="0" dy="12">→ {{ heightMm }} mm</tspan>
+      <text class="measure" :x="rect.x + rect.w / 2" :y="rect.y - 12" text-anchor="middle">
+        {{ labelX }}
       </text>
     </svg>
 
+    <!-- The second axis is written beside the drawing, never rotated: a rotated tspan is what made
+         the earlier version unreadable and cut off. -->
+    <p class="vertical-measure">
+      <span class="axis-name">{{ isStack ? 'Height' : 'Depth' }}</span>
+      <strong>{{ labelY }}</strong>
+    </p>
+
     <figcaption>
       <template v-if="isStack">
-        The label goes on the <strong>side</strong> of the stack: width is the facade length in
-        studs, height is how many bricks are stacked (9.6 mm each).
+        Label on the <strong>side</strong> of the stack: width is the facade length in studs,
+        height is the stacked bricks (9.6 mm each).
       </template>
       <template v-else>
-        The label goes on <strong>top</strong>: width and depth are both in studs (8 mm each).
+        Label on <strong>top</strong>: width and depth are both in studs (8 mm each).
       </template>
     </figcaption>
   </figure>
@@ -134,16 +148,21 @@ const heightMm = computed(() => Math.round(face.value.h * 100) / 100)
 <style scoped>
 .mount-diagram {
   margin: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-areas:
+    'drawing vertical'
+    'caption caption';
+  gap: 0.2rem 0.6rem;
+  align-items: center;
   color: #475569;
 }
 
 .mount-diagram svg {
+  grid-area: drawing;
   width: 100%;
-  max-width: 260px;
-  height: auto;
+  max-width: 420px;
+  height: 96px;
   color: #64748b;
 }
 
@@ -159,7 +178,7 @@ const heightMm = computed(() => Math.round(face.value.h * 100) / 100)
   stroke-width: 0.6;
 }
 
-.level {
+.brick-edge {
   stroke: #94a3b8;
   stroke-width: 0.7;
   stroke-dasharray: 3 2;
@@ -172,11 +191,33 @@ const heightMm = computed(() => Math.round(face.value.h * 100) / 100)
 
 .measure {
   font-size: 9px;
-  fill: #334155;
+  fill: #1e293b;
   font-variant-numeric: tabular-nums;
 }
 
+.vertical-measure {
+  grid-area: vertical;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  color: #1e293b;
+  border-left: 2px solid #cbd5e1;
+  padding-left: 0.5rem;
+}
+
+.axis-name {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #64748b;
+}
+
 figcaption {
+  grid-area: caption;
   font-size: 0.78rem;
   line-height: 1.35;
   color: #64748b;
