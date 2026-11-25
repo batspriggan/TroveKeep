@@ -33,11 +33,6 @@
         <input type="number" step="0.1" min="0" max="10" :value="options.gapMm"
                @input="setOption('gapMm', $event.target.value)" />
       </label>
-      <label title="Grows (+) or shrinks (−) the label on every side, in mm; use it when the printer is slightly off scale">
-        Size trim
-        <input type="number" step="0.1" min="-0.5" max="1" :value="options.growMm"
-               @input="setOption('growMm', $event.target.value)" />
-      </label>
       <label class="check" title="Turn a label 90° when it is the only way it fits the sheet">
         <input type="checkbox" :checked="options.allowRotate"
                @change="setOption('allowRotate', $event.target.checked)" />

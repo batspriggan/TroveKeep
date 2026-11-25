@@ -68,10 +68,10 @@ test('a stud is 8 mm, so a 2×4 tile is a 16×32 mm label', () => {
   assert.equal(STUD_MM, 8)
   assert.equal(STICKER_BRICK_MM, 9.6)
   assert.deepEqual(stickerSizeMm({ widthStuds: 2, depthStuds: 4 }, resolveOptions()), { w: 16, h: 32 })
-  // growMm enlarges the cut box on every side.
+  // The label size is not an option: no sheet setting can change it.
   assert.deepEqual(
-    stickerSizeMm({ widthStuds: 2, depthStuds: 4 }, resolveOptions({ growMm: 0.5 })),
-    { w: 17, h: 33 },
+    stickerSizeMm({ widthStuds: 2, depthStuds: 4 }, resolveOptions({ borderMm: 3, paddingMm: 3, gapMm: 10 })),
+    { w: 16, h: 32 },
   )
 })
 
@@ -81,8 +81,11 @@ test('a brick stack is sized by its facade length and its height in bricks', () 
 
   // 8 studs × 64 mm wide, 6 bricks × 9.6 mm = 57.6 mm high.
   assert.deepEqual(stickerSizeMm(stack, options), { w: 64, h: 57.6 })
-  // growMm still grows it on every side, like a tile.
-  assert.deepEqual(stickerSizeMm(stack, resolveOptions({ growMm: 0.5 })), { w: 65, h: 58.6 })
+  // Still exactly the piece when the sheet options change around it.
+  assert.deepEqual(
+    stickerSizeMm(stack, resolveOptions({ borderMm: 3, paddingMm: 3, gapMm: 10 })),
+    { w: 64, h: 57.6 },
+  )
 
   // 1.33 bricks × 9.6 mm = 12.768 mm, printed at the 2 decimals the backend reports: 12.77 mm.
   assert.equal(
@@ -117,9 +120,10 @@ test('a brick-stack plan is packed like a tile of the same size', () => {
   for (const cell of stacks) {
     assert.equal(cell.w, 64)
     assert.equal(cell.h, 57.6)
-    // The artwork area keeps the same border + padding inset as any other label.
-    assert.equal(cell.graphic.w, cell.w - 2.4)
-    assert.equal(cell.graphic.h, cell.h - 2.4)
+    // The artwork area keeps the same inner-border inset as any other label: the black cut
+    // border is drawn outside the label, so it steals nothing from the artwork.
+    assert.equal(cell.graphic.w, cell.w - 1.2)
+    assert.equal(cell.graphic.h, cell.h - 1.2)
   }
 })
 
@@ -226,24 +230,26 @@ test('rotation is off by default and used only as a fallback when enabled', () =
   }
 })
 
-test('the artwork area is the cut box inset by border + padding', () => {
+test('the artwork area is the label inset by the inner border only', () => {
   const plan = planStickerSheet([{ ...oneByOne, copies: 1 }], {
     borderMm: 0.6,
     paddingMm: 0.6,
   })
   const cell = plan.cells[0]
   const near = (actual, expected) => assert.ok(Math.abs(actual - expected) < EPS, `${actual} ≉ ${expected}`)
-  near(cell.graphic.x - cell.x, 1.2)
-  near(cell.graphic.y - cell.y, 1.2)
-  near(cell.w - cell.graphic.w, 2.4)
-  near(cell.h - cell.graphic.h, 2.4)
+  // The black cut border is drawn OUTSIDE the label (a cutting guide, not sticker), so it steals
+  // no room from the artwork: only the inner border insets it.
+  near(cell.graphic.x - cell.x, 0.6)
+  near(cell.graphic.y - cell.y, 0.6)
+  near(cell.w - cell.graphic.w, 1.2)
+  near(cell.h - cell.graphic.h, 1.2)
 
-  // The inner border is the configurable part: 0 means the artwork runs to the black border.
+  // The inner border is the configurable part: 0 means the artwork runs to the cut line.
   const tight = planStickerSheet([{ ...oneByOne, copies: 1 }], { borderMm: 0.6, paddingMm: 0 })
-  near(tight.cells[0].graphic.x - tight.cells[0].x, 0.6)
-  near(tight.cells[0].graphic.w - tight.cells[0].w, -1.2)
+  near(tight.cells[0].graphic.x - tight.cells[0].x, 0)
+  near(tight.cells[0].graphic.w - tight.cells[0].w, 0)
 
-  // The cut box itself is the label: nothing is drawn outside it.
+  // The cut box itself is the label: nothing is drawn inside it beyond the artwork.
   assert.deepEqual(cell.cut, { x: cell.x, y: cell.y, w: cell.w, h: cell.h })
 })
 
@@ -264,26 +270,25 @@ test('options are clamped to their accepted range and rounded to a tenth', () =>
     borderMm: 99,
     paddingMm: -3,
     gapMm: 40,
-    growMm: 5,
     allowRotate: 1,
   })
   assert.equal(opts.marginMm, 5)
   assert.equal(opts.borderMm, 3)
   assert.equal(opts.paddingMm, 0)
   assert.equal(opts.gapMm, 10)
-  assert.equal(opts.growMm, 1)
   assert.equal(opts.allowRotate, true)
   assert.equal(resolveOptions({ gapMm: 1.237 }).gapMm, 1.2)
   assert.deepEqual(resolveOptions(), DEFAULT_OPTIONS)
 })
 
-test('growMm enlarges the labels and therefore fits fewer per page', () => {
-  const plain = planStickerSheet([{ ...oneByOne, copies: 5000 }], { growMm: 0 })
-  const grown = planStickerSheet([{ ...oneByOne, copies: 5000 }], { growMm: 0.5 })
-  const perPage = (plan) => plan.pages[0].cells.length
-  assert.ok(perPage(grown) < perPage(plain), `${perPage(grown)} vs ${perPage(plain)}`)
+test('no sheet option can change the label size', () => {
+  const plain = planStickerSheet([{ ...oneByOne, copies: 5000 }], { borderMm: 0, paddingMm: 0 })
+  const padded = planStickerSheet([{ ...oneByOne, copies: 5000 }], { borderMm: 3, paddingMm: 3 })
   assert.equal(plain.cells[0].w, 8)
-  assert.equal(grown.cells[0].w, 9)
+  assert.equal(padded.cells[0].w, 8)
+  // Only the artwork area shrinks, and therefore fewer labels fit.
+  assert.ok(padded.cells[0].graphic.w < plain.cells[0].graphic.w)
+  assert.ok(padded.pages[0].cells.length <= plain.pages[0].cells.length)
 })
 
 test('a label that cannot fit the sheet is refused with its name', () => {
@@ -341,8 +346,8 @@ test('the reproducing sheet fits one page as a tight block instead of three shel
   // Every label keeps its own footprint and the artwork inset of the default options.
   for (const cell of plan.cells) {
     assert.equal(cell.cut.x, cell.x)
-    assert.equal(cell.graphic.w, cell.w - 2.4)
-    assert.equal(cell.graphic.h, cell.h - 2.4)
+    assert.equal(cell.graphic.w, cell.w - 1.2)
+    assert.equal(cell.graphic.h, cell.h - 1.2)
   }
 })
 
@@ -358,14 +363,14 @@ test('the no-overlap / gap invariant holds on mixed datasets, including a pagina
       ],
       options: { borderMm: 0, paddingMm: 0, gapMm: 0 },
     },
-    // Rotation allowed, grown labels and a wide margin.
+    // Rotation allowed, a thick border and a wide margin.
     {
       items: [
         { id: 'a', name: 'A', widthStuds: 2, depthStuds: 8, copies: 12 },
         { id: 'b', name: 'B', widthStuds: 3, depthStuds: 3, copies: 7 },
         { id: 'c', name: 'C', widthStuds: 8, depthStuds: 2, copies: 9 },
       ],
-      options: { allowRotate: true, growMm: 0.4, marginMm: 12, gapMm: 1.5 },
+      options: { allowRotate: true, borderMm: 0.4, marginMm: 12, gapMm: 1.5 },
     },
     // Must span two pages (192 × 256 mm labels, a single one per sheet).
     {
@@ -385,7 +390,7 @@ test('the no-overlap / gap invariant holds on mixed datasets, including a pagina
         { id: 'b', name: 'B', widthStuds: 7, depthStuds: 1, copies: 8 },
         { id: 'c', name: 'C', widthStuds: 1, depthStuds: 1, copies: 6 },
       ],
-      options: { gapMm: 5.5, marginMm: 15, growMm: 1 },
+      options: { gapMm: 5.5, marginMm: 15, borderMm: 1 },
     },
   ]
 
@@ -494,7 +499,6 @@ test('a deterministic pseudo-random sweep never breaks the packing invariants', 
       borderMm: random() * 3,
       paddingMm: random() * 3,
       gapMm: random() * 10,
-      growMm: -0.5 + random() * 1.5,
       allowRotate: random() > 0.5,
     }
 

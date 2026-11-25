@@ -28,12 +28,14 @@ export function drawStickerSheet(doc, plan, images = {}) {
 }
 
 function drawCell(doc, cell, images, border) {
-  // The black cut border is stroked INSET by half its width, so the outer edge of the
-  // stroke falls exactly on the cutting line (no black bleeding outside the label).
+  // The black cut border is a cutting GUIDE drawn OUTSIDE the label: the sticker keeps exactly the
+  // piece's millimetres and the stroke sits in the scrap around it. Its inner edge therefore falls
+  // on the cutting line (`x - border/2 … x + w + border/2`), which is what the operator's knife
+  // follows. The packer keeps two labels `2 × border` apart so two strokes never overlap.
   if (border > 0) {
     doc.setDrawColor?.(0, 0, 0)
     doc.setLineWidth?.(border)
-    doc.rect(cell.x + border / 2, cell.y + border / 2, cell.w - border, cell.h - border, 'S')
+    doc.rect(cell.x - border / 2, cell.y - border / 2, cell.w + border, cell.h + border, 'S')
   }
 
   const image = images[String(cell.stickerId)]

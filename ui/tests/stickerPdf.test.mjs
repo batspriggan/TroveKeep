@@ -54,14 +54,15 @@ test('every label gets one black cut rectangle and one image placement', () => {
   assert.equal(doc.calls.rect.length, plan.count)
   assert.equal(doc.calls.addImage.length, plan.count)
 
-  // The stroke is inset by half the border so its outer edge is the cutting line.
+  // The stroke is drawn OUTSIDE the label, so its inner edge is the cutting line: the sticker
+  // keeps exactly the piece's millimetres and the black sits in the scrap around it.
   for (const [index, rect] of doc.calls.rect.entries()) {
     const cell = plan.cells[index]
     assert.equal(rect.style, 'S')
-    assert.equal(rect.x, cell.x + 0.3)
-    assert.equal(rect.y, cell.y + 0.3)
-    assert.equal(rect.w, cell.w - 0.6)
-    assert.equal(rect.h, cell.h - 0.6)
+    assert.equal(rect.x, cell.x - 0.3)
+    assert.equal(rect.y, cell.y - 0.3)
+    assert.equal(rect.w, cell.w + 0.6)
+    assert.equal(rect.h, cell.h + 0.6)
   }
 
   // The artwork fills the graphic area (the raster already has that aspect ratio), and the

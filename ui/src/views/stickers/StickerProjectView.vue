@@ -122,6 +122,47 @@
               <span class="muted">{{ dimsLabel(item) }} · {{ mmLabel(item) }}</span>
             </div>
 
+            <!-- The mount is editable like `fit` and `orientation`: a wrong choice must be
+                 repairable without deleting the row. Its own two fields follow it. -->
+            <div v-if="canWrite" class="mount-cell">
+              <select :value="normalizeMount(item.mount)"
+                      @change="setMount(item, $event.target.value)">
+                <option v-for="mount in MOUNT_OPTIONS" :key="mount.value" :value="mount.value">
+                  {{ mount.label }}
+                </option>
+              </select>
+            </div>
+            <div v-else class="mount-cell">
+              <span class="muted">{{ mountLabel(item.mount) }}</span>
+            </div>
+
+            <div class="dims-cell">
+              <template v-if="normalizeMount(item.mount) === 'BrickStack'">
+                <input v-if="canWrite" class="step-input" type="number" min="1" max="32" step="1"
+                       :value="item.widthStuds" title="Facade length in studs"
+                       @change="setWidthStuds(item, $event.target.value)" />
+                <span v-else>{{ item.widthStuds }}</span>
+                <span class="muted">stud ×</span>
+                <input v-if="canWrite" class="step-input" type="number" min="0.01" step="0.01"
+                       :value="item.brickHeight" title="Height in bricks"
+                       @change="setBrickHeight(item, $event.target.value)" />
+                <span v-else>{{ item.brickHeight }}</span>
+                <span class="muted">bricks</span>
+              </template>
+              <template v-else>
+                <input v-if="canWrite" class="step-input" type="number" min="1" max="32" step="1"
+                       :value="item.widthStuds" title="Width in studs"
+                       @change="setWidthStuds(item, $event.target.value)" />
+                <span v-else>{{ item.widthStuds }}</span>
+                <span class="muted">×</span>
+                <input v-if="canWrite" class="step-input" type="number" min="1" max="32" step="1"
+                       :value="item.depthStuds" title="Depth in studs"
+                       @change="setDepthStuds(item, $event.target.value)" />
+                <span v-else>{{ item.depthStuds }}</span>
+                <span class="muted">studs</span>
+              </template>
+            </div>
+
             <div v-if="canWrite" class="copies">
               <button class="step" :disabled="item.copies <= 1" @click="stepCopies(item, -1)">−</button>
               <input class="step-input" type="number" min="1" max="999" :value="item.copies"
@@ -192,6 +233,7 @@ import {
   MOUNT_OPTIONS,
   ORIENTATION_OPTIONS,
   fitLabel,
+  mountLabel,
   normalizeFit,
   normalizeMount,
   normalizeOrientation,
@@ -436,6 +478,39 @@ function setFit(item, value) {
   scheduleSave()
 }
 
+/**
+ * Switches the mount of an existing row. A brick stack is one stud deep and needs a height, a tile
+ * needs its depth back, so the fields that do not apply are reset to a printable value instead of
+ * being left stale.
+ */
+function setMount(item, value) {
+  const mount = normalizeMount(value)
+  item.mount = mount
+  if (mount === 'BrickStack') {
+    item.depthStuds = 1
+    if (!(Number(item.brickHeight) > 0)) item.brickHeight = clampBrickHeight(item.brickHeight)
+  } else {
+    item.brickHeight = null
+    item.depthStuds = clampStuds(item.depthStuds)
+  }
+  scheduleSave()
+}
+
+function setWidthStuds(item, value) {
+  item.widthStuds = clampStuds(value)
+  scheduleSave()
+}
+
+function setDepthStuds(item, value) {
+  item.depthStuds = clampStuds(value)
+  scheduleSave()
+}
+
+function setBrickHeight(item, value) {
+  item.brickHeight = clampBrickHeight(value)
+  scheduleSave()
+}
+
 function setOrientation(item, value) {
   item.orientation = normalizeOrientation(value)
   scheduleSave()
@@ -612,6 +687,22 @@ h1 {
   display: flex;
   align-items: center;
   gap: 0.25rem;
+}
+
+/* The mount and its own two dimensions: the second field changes meaning with the mount. */
+.mount-cell select {
+  max-width: 130px;
+}
+
+.dims-cell {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  white-space: nowrap;
+}
+
+.dims-cell .step-input {
+  width: 60px;
 }
 
 .copies .step {

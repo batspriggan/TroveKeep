@@ -40,16 +40,18 @@ export const PAGE = { width: 210, height: 297 }
  *   paddingMm — the configurable inner border: gap between the black cut border and the
  *               artwork, i.e. how much room the graphics keep from the cut (0..3)
  *   gapMm     — wanted distance between two cut lines (0..10)
- *   growMm    — grows/shrinks the label box on every side (−0.5..1), to compensate a
- *               printer that is a hair off scale
  *   allowRotate — let the engine turn a label 90° when that is the only way it fits
+ *
+ * The label size itself is NOT an option: a tile is width × depth × 8 mm and a brick stack is
+ * facade × brickHeight × 9.6 mm, always. Only the space INSIDE it (the padding) and the space
+ * around it (the cut border, the gap, the sheet margin) are configurable — an option that
+ * resized the label would make it stop matching the piece it is stuck on.
  */
 export const DEFAULT_OPTIONS = {
   marginMm: 8,
   borderMm: 0.6,
   paddingMm: 0.6,
   gapMm: 2.5,
-  growMm: 0,
   allowRotate: false,
 }
 
@@ -59,7 +61,6 @@ const LIMITS = {
   borderMm: [0, 3],
   paddingMm: [0, 3],
   gapMm: [0, 10],
-  growMm: [-0.5, 1],
 }
 
 /** Resolution of the numeric fields (10 = one decimal). */
@@ -88,8 +89,9 @@ export function resolveOptions(overrides = {}) {
 }
 
 /**
- * Distance between two neighbouring cut boxes: the wanted gap, but never so small that the
- * two black borders would overlap (each label owns borderMm of black outside its artwork).
+ * Distance between two neighbouring labels. The black cut border is drawn OUTSIDE the label
+ * (it is a cutting guide, not part of the sticker), so two labels must stay `gapMm` apart — and
+ * at least far enough that their two strokes do not overlap: `2 × borderMm`.
  */
 export function cutSpacing(options) {
   return Math.max(options.gapMm, 2 * options.borderMm)
@@ -99,34 +101,35 @@ export function cutSpacing(options) {
 const roundMm = (value) => Math.round((value + Number.EPSILON) * 100) / 100
 
 /**
- * Printed size of one sticker, in millimetres, `growMm` included. The mount decides the second
- * axis: the stud depth of a tile, or the brick height of a stack (`brickHeight × 9.6`). The first
- * axis is always the stud width — for a stack that is the facade length, and its depth is
- * conceptually one stud, so it plays no part here.
+ * Printed size of one sticker, in millimetres. This is the piece and nothing else: the stud
+ * width on the first axis, and on the second the stud depth of a tile or the brick height of a
+ * stack (`brickHeight × 9.6`). No sheet option may change it — the black cut border is drawn
+ * outside this rectangle (see `drawCell`), the padding eats into it from the inside, and neither
+ * moves its edges.
  */
 export function stickerSizeMm(sticker, options = DEFAULT_OPTIONS) {
-  const grow = options.growMm ?? 0
-  const w = sticker.widthStuds * STUD_MM + 2 * grow
+  const w = sticker.widthStuds * STUD_MM
   const h = isBrickStack(sticker)
-    ? roundMm((Number(sticker.brickHeight) || 0) * STICKER_BRICK_MM) + 2 * grow
-    : sticker.depthStuds * STUD_MM + 2 * grow
+    ? roundMm((Number(sticker.brickHeight) || 0) * STICKER_BRICK_MM)
+    : sticker.depthStuds * STUD_MM
   return { w, h }
 }
 
 /**
- * Inset that separates the cutting line from the artwork: the black cut border plus the
- * configurable inner border, capped so a tiny label still keeps a drawable area.
+ * Inset that separates the cutting line from the artwork: the configurable inner border only.
+ * The black cut border does NOT count here — it is stroked outside the label, so it never steals
+ * room from the artwork. Capped so a tiny label still keeps a drawable area.
  *
  * Single source of truth for the `graphic` rectangle: the packer uses it per cell and
  * `stickerGraphicMm` uses it for the artwork raster, so the rasterised pixels always have the
  * aspect ratio the PDF draws into.
  */
 function insetOf(options, widthMm, heightMm) {
-  return Math.min(options.borderMm + options.paddingMm, Math.max(0, (Math.min(widthMm, heightMm) - 0.1) / 2))
+  return Math.min(options.paddingMm, Math.max(0, (Math.min(widthMm, heightMm) - 0.1) / 2))
 }
 
 /**
- * The box of one label and the artwork area inside it, in millimetres (`growMm` included).
+ * The box of one label and the artwork area inside it, in millimetres.
  *
  * This is what the packer puts in `cell.cut`/`cell.graphic`; exposing it separately lets the
  * raster loader compute the very same rectangle before (or without) a plan, so the loader and
@@ -266,7 +269,7 @@ function reserveSkyline(segments, x, xEnd, y) {
  *
  * Returns `{ options, page, content, step, cells, pages, count, perSticker }` where every
  * cell is `{ stickerId, name, copy, page, x, y, w, h, rotated, cut, graphic }`:
- *   cut     — the box to cut around (this is the label itself, `growMm` included)
+ *   cut     — the box to cut around: the label itself, i.e. the piece
  *   graphic — the area the artwork may use: `cut` inset by `borderMm + paddingMm`
  * and every page is `{ index, cells }`: the cells of that page, in the order they were placed.
  * There are no rows (shelves): a page is the flat list of its labels.
@@ -307,8 +310,9 @@ export function planStickerSheet(items, overrides = {}) {
   }
   units.sort(sortUnits)
 
-  // Artwork is centred in its own cut box: the inset is the black border plus the
-  // configurable inner border, capped so a tiny label still has a drawable area.
+  // Artwork is centred in its own cut box: the inset is the configurable inner border only,
+  // because the black cut border is stroked outside the label (see `drawCell`), capped so a
+  // tiny label still has a drawable area.
   const artworkInset = (w, h) => insetOf(options, w, h)
 
   const pages = []

@@ -154,10 +154,13 @@ Current chain: `001` baseplate type fields · `002` set images by set id · `003
   geometry in mm — `stickerSizeMm` branches on the mount, `STUD_MM = 8` and `STICKER_BRICK_MM = 9.6`,
   the skyline itself is mount-agnostic, `stickerPdf.js` = jsPDF drawing, `stickerImages.js` = browser canvas resampling at
   600 dpi; `composables/useStickerSheet.js` = layout options in `localStorage` only — the copies are a
-  persisted field of the project item, not volatile state). Layout options: sheet margin, cut
-  border (stroke inset by half so the outer edge is the cut line), **inner border** (artwork inset =
-  border + padding), gap between labels (`max(gapMm, 2 × borderMm)`), a size trim, and an optional
-  90° rotation used only as a fallback. A label larger than the printable area is a
+  persisted field of the project item, not volatile state). **The label size is fixed and is not an
+  option**: a tile is `width × depth × 8 mm`, a brick stack `facade × brickHeight × 9.6 mm`, so the
+  sticker always matches the piece it is stuck on. Layout options only move the space around and
+  inside it: sheet margin, cut border (a cutting **guide stroked OUTSIDE the label**, its inner edge
+  on the cut line — it steals no room from the artwork), **inner border** (the only artwork inset),
+  gap between labels (`max(gapMm, 2 × borderMm)`, so two outside strokes never overlap), and an
+  optional 90° rotation used only as a fallback. A label larger than the printable area is a
   `StickerFitError` naming it, never a silently dropped copy.
   **Packing** (`planStickerSheet`) is a **2D bottom-left skyline**, not shelves: the free edge of the
   page is a list of `{ x, w, y }` plateaus starting as one segment over the content width, and each
